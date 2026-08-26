@@ -288,7 +288,7 @@ export async function buildGenuinenessWorkbook({
             qualifications,
             genuinenessDocs: genuinenessRecords.filter((g) => !g.isCanonicalCompany),
             queryTextById,
-            options: { verifiedOnly: true, includeDirectoryListings: true, limit: null },
+            options: { verifiedOnly: true, includeDirectoryListings: false, limit: null },
         });
         // If caller already passed canonical items, use decision-sheet fallback
         if (!genuinenessRecords.some((g) => g.isCanonicalCompany) && (captures.length || genuinenessRecords.length)) {

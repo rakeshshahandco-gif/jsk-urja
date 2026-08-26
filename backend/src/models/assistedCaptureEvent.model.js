@@ -28,7 +28,7 @@ const assistedCaptureEventSchema = new mongoose.Schema(
         failureMessage: { type: String, default: '', trim: true, maxlength: 500 },
         createdByAgentId: { type: String, default: '', trim: true, maxlength: 120 },
     },
-    { timestamps: true, collection: 'assisted_capture_events' },
+    { timestamps: true, collection: 'assisted_capture_events', autoCreate: false, autoIndex: false },
 );
 
 assistedCaptureEventSchema.index({ companyId: 1, sessionId: 1, eventIdempotencyKey: 1 }, { unique: true });

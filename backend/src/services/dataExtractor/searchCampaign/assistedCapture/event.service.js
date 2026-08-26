@@ -3,6 +3,8 @@ import { AssistedCaptureEvent } from '../../../../models/assistedCaptureEvent.mo
 import { AssistedCaptureSession } from '../../../../models/assistedCaptureSession.model.js';
 import { ApiError } from '../../../../utils/ApiError.js';
 import { ingestRawCaptures } from '../rawCapture/rawCapture.ingestion.service.js';
+import { attachBilingualToRecord } from '../simpleLeadSearch/chinaBilingual.util.js';
+import { SearchQuery } from '../../../../models/searchQuery.model.js';
 import { ASSISTED_IDEMPOTENCY_REUSED_CODE } from './constants.js';
 
 function hashText(value) {
@@ -26,7 +28,17 @@ function sanitizeResult(r = {}) {
         resultPosition: r.resultPosition == null ? null : Number(r.resultPosition),
         resultTypeHint: String(r.resultTypeHint || 'unknown').slice(0, 40),
         sourceRecordId: r.sourceRecordId == null ? '' : String(r.sourceRecordId).slice(0, 300),
+        notes: r.notes == null ? '' : String(r.notes).slice(0, 2000),
     };
+}
+
+function ingestSourceFromSession(session) {
+    const s = String(session?.source || session?.sourceHint || '').toLowerCase();
+    if (s === 'baidu') return 'baidu';
+    if (s === '1688') return '1688';
+    if (s === 'sogou') return 'sogou';
+    if (s === 'so360' || s === '360') return 'so360';
+    return 'google';
 }
 
 function throwIdempotencyReuse() {
@@ -254,6 +266,7 @@ export async function submitAssistedCaptureEvent({ companyId, session, agentInst
     if (results.length > 100) throw new ApiError(400, 'results must be at most 100');
 
     const eventFingerprint = buildFingerprint({ eventSequence, visibleResultCount, results });
+    let event = null;
     const existing = await AssistedCaptureEvent.findOne({ companyId, sessionId: session._id, eventIdempotencyKey });
     if (existing) {
         if (existing.eventFingerprint !== eventFingerprint) throwIdempotencyReuse();
@@ -293,10 +306,24 @@ export async function submitAssistedCaptureEvent({ companyId, session, agentInst
                 bookkeepingWarning: 'repaired_failed_event_with_accepted_counts',
             };
         }
-        return { event: existing.toObject(), idempotentReplay: true };
+        // Failed with 0 accepted, or still processing: retry ingest. Never treat as success.
+        await AssistedCaptureEvent.updateOne(
+            { _id: existing._id },
+            {
+                $set: {
+                    status: 'processing',
+                    failureCode: '',
+                    failureMessage: '',
+                    visibleResultCount,
+                    submittedResultCount: results.length,
+                    eventFingerprint,
+                },
+            },
+        );
+        event = existing;
     }
 
-    let event;
+    if (!event) {
     try {
         event = await AssistedCaptureEvent.create({
             companyId,
@@ -316,9 +343,37 @@ export async function submitAssistedCaptureEvent({ companyId, session, agentInst
         const raced = await AssistedCaptureEvent.findOne({ companyId, sessionId: session._id, eventIdempotencyKey });
         if (raced) {
             if (raced.eventFingerprint !== eventFingerprint) throwIdempotencyReuse();
-            return { event: raced.toObject(), idempotentReplay: true };
+            if (['completed', 'partially_completed'].includes(raced.status) && Number(raced.acceptedCount || 0) > 0) {
+                await recalculateAssistedSessionTotals(session._id, companyId).catch(() => null);
+                return {
+                    event: raced.toObject(),
+                    ingest: {
+                        batchId: raced.rawCaptureBatchId,
+                        acceptedCount: raced.acceptedCount,
+                        rejectedCount: raced.rejectedCount,
+                        status: raced.status,
+                    },
+                    idempotentReplay: true,
+                    bookkeepingWarning: null,
+                };
+            }
+            await AssistedCaptureEvent.updateOne(
+                { _id: raced._id },
+                {
+                    $set: {
+                        status: 'processing',
+                        failureCode: '',
+                        failureMessage: '',
+                        visibleResultCount,
+                        submittedResultCount: results.length,
+                    },
+                },
+            );
+            event = raced;
+        } else {
+            throw err;
         }
-        throw err;
+    }
     }
 
     if (Number.isFinite(googlePageIndex) && googlePageIndex > 0) {
@@ -330,6 +385,22 @@ export async function submitAssistedCaptureEvent({ companyId, session, agentInst
 
     let ingestResponse = null;
     try {
+        let ingestRecords = results;
+        try {
+            const qdoc = await SearchQuery.findById(session.queryId).select('queryText selectedCriteria sourceHint').lean();
+            const sourceName = ingestSourceFromSession(session);
+            ingestRecords = results.map((r) => {
+                const bilingual = attachBilingualToRecord(r, {
+                    sourceName,
+                    sourceQuery: qdoc?.queryText || '',
+                    relatedKeyword: qdoc?.selectedCriteria?.relatedKeyword || '',
+                });
+                const { _china, ...rest } = bilingual;
+                return rest;
+            });
+        } catch {
+            ingestRecords = results;
+        }
         ingestResponse = await ingestRawCaptures({
             companyId,
             user: {
@@ -345,10 +416,11 @@ export async function submitAssistedCaptureEvent({ companyId, session, agentInst
             campaignId: session.campaignId,
             body: {
                 queryId: String(session.queryId),
-                source: 'google',
+                source: ingestSourceFromSession(session),
+                querySourceHint: ingestSourceFromSession(session),
                 captureMethod: 'assisted_visible',
                 idempotencyKey: childIdempotencyKey(session._id, eventSequence, results),
-                records: results,
+                records: ingestRecords,
             },
         });
     } catch (err) {
@@ -358,7 +430,9 @@ export async function submitAssistedCaptureEvent({ companyId, session, agentInst
                 $set: {
                     status: 'failed',
                     failureCode: 'EVENT_INGEST_FAILED',
-                    failureMessage: 'Assisted capture event ingestion failed',
+                    failureMessage: String(err?.message || 'Assisted capture event ingestion failed')
+                        .replace(/[\r\n]+/g, ' ')
+                        .slice(0, 500),
                 },
             },
         ).catch(() => null);
@@ -408,7 +482,9 @@ export async function submitAssistedCaptureEvent({ companyId, session, agentInst
                 $set: {
                     status: 'failed',
                     failureCode: 'EVENT_INGEST_FAILED',
-                    failureMessage: 'Assisted capture event ingestion failed',
+                    failureMessage: String(err?.message || 'Assisted capture event ingestion failed')
+                        .replace(/[\r\n]+/g, ' ')
+                        .slice(0, 500),
                 },
             },
         ).catch(() => null);

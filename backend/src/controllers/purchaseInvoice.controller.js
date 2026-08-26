@@ -28,6 +28,16 @@ import { assertSourceCancelAllowedForRcm } from '../services/rcmLiabilityPosting
 const r2 = (n) => Math.round((n || 0) * 100) / 100;
 const r2v = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
+/** Import valuation incoming rate from saved Purchase landed snapshot. Domestic / missing → supplier INR rate. */
+const resolveImportStockIncomingRate = (piItem, inwardPurchaseType, importLandedCost) => {
+    const supplierRate = Number(piItem.rate) || 0;
+    if (inwardPurchaseType !== 'Import') return supplierRate;
+    const itemId = String(piItem.itemId || '');
+    const match = (importLandedCost?.itemAllocations || []).find((a) => String(a.itemId || '') === itemId);
+    const landed = Number(match?.landedUnitCost) || 0;
+    return landed > 0 ? landed : supplierRate;
+};
+
 /**
  * PI bill TDS — same confirm/skip/disable pattern as PaymentEntry / expense voucher.
  */
@@ -355,6 +365,29 @@ const createPISchema = Joi.object({
     tdsUserConfirmed: Joi.boolean().optional().default(false),
     tdsPopupSkipped: Joi.boolean().optional().default(false),
     tdsDisabledReason: Joi.string().optional().allow(''),
+    inwardPurchaseType: Joi.string().valid('Domestic', 'Import').optional().default('Domestic'),
+    importLandedCost: Joi.object({
+        billOfEntryNo: Joi.string().optional().allow(''),
+        billOfEntryDate: Joi.date().optional().allow(null, ''),
+        portCha: Joi.string().optional().allow(''),
+        assessableValue: Joi.number().min(0).optional().default(0),
+        oceanAirFreight: Joi.number().min(0).optional().default(0),
+        insurance: Joi.number().min(0).optional().default(0),
+        customsDuty: Joi.number().min(0).optional().default(0),
+        socialWelfareSurcharge: Joi.number().min(0).optional().default(0),
+        clearingChaCharges: Joi.number().min(0).optional().default(0),
+        localTransport: Joi.number().min(0).optional().default(0),
+        otherCharges: Joi.number().min(0).optional().default(0),
+        allocationMethod: Joi.string().valid('By Taxable Value', 'By Quantity').optional().default('By Taxable Value'),
+        totalAdditionalLandedCharges: Joi.number().min(0).optional().default(0),
+        totalLandedCost: Joi.number().min(0).optional().default(0),
+        itemAllocations: Joi.array().items(Joi.object({
+            itemId: Joi.string().optional().allow('', null),
+            itemName: Joi.string().optional().allow(''),
+            allocatedLandedCharges: Joi.number().min(0).optional().default(0),
+            landedUnitCost: Joi.number().min(0).optional().default(0),
+        })).optional(),
+    }).optional(),
 });
 
 const parseDate = (val) => {
@@ -546,12 +579,22 @@ export const createPurchaseInvoice = asyncHandler(async (req, res) => {
         }
 
         if (isDirectStock) {
+            const isImportPurchase = value.inwardPurchaseType === 'Import';
             const stockItems = value.items
                 .filter(i => !i.isConsumable && i.purchaseType !== 'CONSUMABLE_PURCHASE') // SKIP consumables from hitting inventory
-                .map(i => ({
-                    itemId: i.itemId, itemCode: i.itemCode || '', itemName: i.itemName,
-                    receivedQty: i.qty, rate: i.rate, warehouse: '',
-                }));
+                .map(i => {
+                    const supplierRate = Number(i.rate) || 0;
+                    const incomingRate = resolveImportStockIncomingRate(i, value.inwardPurchaseType, value.importLandedCost);
+                    const alloc = (value.importLandedCost?.itemAllocations || []).find((a) => String(a.itemId || '') === String(i.itemId || ''));
+                    return {
+                        itemId: i.itemId, itemCode: i.itemCode || '', itemName: i.itemName,
+                        receivedQty: i.qty, rate: incomingRate, warehouse: '',
+                        invoiceRate: supplierRate,
+                        costRemarks: isImportPurchase && incomingRate !== supplierRate
+                            ? `PURCHASE_INVOICE: ${invoice.invoiceNumber} | landedUnitCost=${incomingRate} | allocated=${Number(alloc?.allocatedLandedCharges) || 0} | supplierRate=${supplierRate}`
+                            : undefined,
+                    };
+                });
             
             if (stockItems.length > 0) {
                 await updateStockForItems(stockItems, invoice.invoiceNumber, invoice._id, 'PURCHASE_INVOICE', req.user._id, session, fy, {
@@ -580,7 +623,13 @@ export const createPurchaseInvoice = asyncHandler(async (req, res) => {
 
         res.status(201).json(new ApiResponse(201, invoice, `Invoice ${invoiceNumber} posted`));
 
-        syncPurchaseRatesToBOMs(value.items, req.user._id).catch((err) => {
+        syncPurchaseRatesToBOMs(
+            value.items.map((i) => ({
+                ...i,
+                useInventoryValuationForBom: value.inwardPurchaseType === 'Import',
+            })),
+            req.user._id,
+        ).catch((err) => {
             logger.error(`[BOM Sync] Failed after PI ${invoice.invoiceNumber}: ${err.message}`);
         });
 

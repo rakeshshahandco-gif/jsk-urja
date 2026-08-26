@@ -1105,3 +1105,144 @@
     grid-template-columns: 1fr;
   }
 }
+
+.liveActivityCard {
+  background: var(--sls-card);
+  border: 1px solid var(--sls-border);
+  border-radius: var(--sls-radius);
+  box-shadow: var(--sls-shadow);
+  padding: 16px;
+  margin: 0 0 16px;
+}
+.liveHeadline {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 650;
+  color: #0f172a;
+}
+.liveActivityHint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--sls-muted);
+}
+.liveActivityToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.liveFilterRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.liveFilterBtn {
+  border: 1px solid var(--sls-border);
+  background: #fff;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  color: #334155;
+}
+.liveFilterBtnOn {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+.liveLimitLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--sls-muted);
+}
+.liveLimitSelect {
+  border: 1px solid var(--sls-border);
+  border-radius: 6px;
+  padding: 3px 6px;
+  font-size: 12px;
+}
+.liveActivityTableWrap {
+  overflow-x: auto;
+  border: 1px solid var(--sls-border);
+  border-radius: 8px;
+}
+.liveActivityTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.liveActivityTable th,
+.liveActivityTable td {
+  text-align: left;
+  padding: 8px 10px;
+  border-top: 1px solid #f1f5f9;
+  vertical-align: top;
+}
+.liveActivityTable thead th {
+  background: #f8fafc;
+  border-top: none;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #64748b;
+}
+.liveCompany {
+  font-weight: 650;
+  color: #0f172a;
+}
+.liveDomain {
+  color: #64748b;
+  font-size: 11px;
+}
+.liveDup {
+  margin-top: 4px;
+  color: #7c3aed;
+  font-size: 11px;
+  font-weight: 600;
+}
+.liveContact {
+  max-width: 220px;
+  word-break: break-word;
+}
+.liveStage {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-weight: 700;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.liveStageVerified { background: #ecfdf5; color: #047857; }
+.liveStageReview { background: #fffbeb; color: #b45309; }
+.liveStageRejected { background: #fef2f2; color: #b91c1c; }
+.liveStageFailed { background: #fef2f2; color: #9f1239; }
+.liveStageActive { background: #eff6ff; color: #1d4ed8; }
+.liveStageNeutral { background: #f1f5f9; color: #334155; }
+.liveJourneyBtn {
+  border: none;
+  background: none;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  padding: 0;
+}
+.liveJourneyList {
+  margin: 0 0 14px;
+  padding-left: 18px;
+}
+.liveJourneyList li {
+  margin: 0 0 10px;
+}
+.liveJourneyTime {
+  display: inline-block;
+  min-width: 76px;
+  color: #64748b;
+  font-size: 12px;
+  margin-right: 8px;
+}

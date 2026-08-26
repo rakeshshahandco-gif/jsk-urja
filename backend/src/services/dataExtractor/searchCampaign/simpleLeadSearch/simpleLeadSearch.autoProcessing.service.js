@@ -8,8 +8,13 @@ import { RawCapture } from '../../../../models/rawCapture.model.js';
 import { RawCaptureEnrichment, RawCaptureEnrichmentJob } from '../../../../models/rawCaptureEnrichment.model.js';
 import { RawCaptureQualification, RawCaptureQualificationJob } from '../../../../models/rawCaptureQualification.model.js';
 import { RawCaptureGenuineness, RawCaptureGenuinenessJob } from '../../../../models/rawCaptureGenuineness.model.js';
+import {
+    isJobProcessedComplete,
+    resolveGenuinenessJobTerminalStatus,
+} from '../rawCaptureGenuineness/jobTerminal.util.js';
 import { ApiError } from '../../../../utils/ApiError.js';
 import { assertAssistedCaptureStart, assertAssistedCaptureView } from '../assistedCapture/permissions.util.js';
+import { pickIdsAwaitingDownstream } from './downstreamBacklogPicker.util.js';
 
 const PROCESSED_IDS_CAP = 5000;
 const TICK_LOCK_MS = 2500;
@@ -383,6 +388,10 @@ export function isOwnerWorkflowActive(ap) {
  * Never overrides Pause or Stop All. Never creates CRM leads.
  */
 export async function ensureAutoResumeBacklog(session, ap) {
+    const ac = session?.autoCollection || {};
+    if (ac.ownerStoppedAt || ac.stopRequested === true || String(ac.summary?.stopReason || '') === 'owner_stop' || session?.status === 'cancelled') {
+        return { resumed: false, backlog: 0, halted: true };
+    }
     await refreshCounts(session);
     const backlog = Number(ap.counts?.processingBacklog || 0);
     if (backlog <= 0) {
@@ -797,42 +806,48 @@ async function loadJobStatus(Model, id) {
 
 /**
  * Enrichments that finished CP6 but have no qualification yet (downstream backlog).
+ * Exclude already-qualified first, then apply batchSize — do not cap the scan
+ * at the oldest N which may already have CP7.
  */
 async function findEnrichmentsAwaitingQualification(companyId, campaignId, limit = 10) {
     const enrichDocs = await RawCaptureEnrichment.find({
         companyId,
         campaignId,
         enrichmentStatus: { $in: ENRICH_DONE },
-    }).select('_id').sort({ createdAt: 1 }).limit(Math.max(limit * 5, 50)).lean();
+    }).select('_id').sort({ createdAt: 1 }).lean();
     if (!enrichDocs.length) return [];
-    const ids = enrichDocs.map((d) => d._id);
     const existing = await RawCaptureQualification.find({
         companyId,
         campaignId,
-        enrichmentId: { $in: ids },
     }).select('enrichmentId').lean();
-    const done = new Set(existing.map((e) => String(e.enrichmentId)));
-    return ids.filter((id) => !done.has(String(id))).slice(0, limit);
+    return pickIdsAwaitingDownstream(
+        enrichDocs.map((d) => d._id),
+        existing.map((e) => e.enrichmentId),
+        limit,
+    );
 }
 
 /**
  * Eligible qualifications waiting for genuineness/verification.
+ * Exclude already-verified first, then apply batchSize — do not cap the scan
+ * at the oldest N which may already have CP8.
  */
 async function findQualificationsAwaitingVerification(companyId, campaignId, limit = 10) {
     const quals = await RawCaptureQualification.find({
         companyId,
         campaignId,
         systemDecision: { $in: QUALIFY_ELIGIBLE },
-    }).select('_id').sort({ createdAt: 1 }).limit(Math.max(limit * 5, 50)).lean();
+    }).select('_id').sort({ createdAt: 1 }).lean();
     if (!quals.length) return [];
-    const ids = quals.map((d) => d._id);
     const existing = await RawCaptureGenuineness.find({
         companyId,
         campaignId,
-        qualificationId: { $in: ids },
     }).select('qualificationId').lean();
-    const done = new Set(existing.map((e) => String(e.qualificationId)));
-    return ids.filter((id) => !done.has(String(id))).slice(0, limit);
+    return pickIdsAwaitingDownstream(
+        quals.map((d) => d._id),
+        existing.map((e) => e.qualificationId),
+        limit,
+    );
 }
 
 /**
@@ -1269,6 +1284,13 @@ async function advanceAfterQualify(session, user, ap, qualifyJob) {
 }
 
 async function advanceAfterVerify(session, ap, verifyJob) {
+    if (verifyJob && isJobActive(verifyJob.status) && isJobProcessedComplete(verifyJob)) {
+        const status = resolveGenuinenessJobTerminalStatus(verifyJob);
+        await RawCaptureGenuinenessJob.findByIdAndUpdate(verifyJob._id, {
+            $set: { status, finishedAt: new Date(), currentDomain: '' },
+        });
+        verifyJob = { ...verifyJob, status };
+    }
     if (isJobActive(verifyJob?.status)) {
         if (isStaleActiveJob(verifyJob, STALE_DOWNSTREAM_MS)) {
             await markJobStopped(RawCaptureGenuinenessJob, verifyJob._id, 'Stale verification job released (>15m)');
@@ -1308,6 +1330,24 @@ export async function tickAutoProcessing({ companyId, user, sessionId }) {
     assertAssistedCaptureView(user);
     const session = await loadOwnedSession(cid, sessionId);
     const ap = ensureAp(session);
+    const ac = session.autoCollection || {};
+    if (ac.ownerStoppedAt || ac.stopRequested === true || String(ac.summary?.stopReason || '') === 'owner_stop' || session.status === 'cancelled') {
+        if (ap.status !== 'stopped') {
+            ap.status = 'stopped';
+            ap.enabled = false;
+            ap.ownerWorkflowEnabled = false;
+            ap.currentStage = 'done';
+            ap.autoResumeNotice = false;
+            ap.flushRequested = false;
+        }
+        await refreshCounts(session);
+        await session.save();
+        return {
+            autoProcessing: progressView(session.toObject()),
+            advanced: false,
+            stopped: true,
+        };
+    }
 
     const resumeInfo = await ensureAutoResumeBacklog(session, ap);
 
@@ -1454,6 +1494,10 @@ export async function recoverStaleAutoProcessingOnStartup({ maxAgeMs = STALE_ENR
         }).limit(100);
         summary.sessionsScanned = sessions.length;
         for (const session of sessions) {
+            const ac = session.autoCollection || {};
+            if (ac.ownerStoppedAt || ac.stopRequested === true || session.status === 'cancelled') {
+                continue;
+            }
             const ap = ensureAp(session);
             const before = {
                 e: ap.currentEnrichJobId,

@@ -64,7 +64,7 @@ export const syncPurchaseRatesToBOMs = async (items, userId) => {
 
             const objectId = new mongoose.Types.ObjectId(itemId);
 
-            // 1. Update Item's purchaseRate
+            // 1. Update Item's purchaseRate (always supplier/basic INR — never overwrite with landed cost)
             const item = await Item.findById(objectId);
             if (item) {
                 logger.info(`Updating Item ${item.itemCode} purchaseRate to ${rate}`);
@@ -73,11 +73,15 @@ export const syncPurchaseRatesToBOMs = async (items, userId) => {
                 item.updatedBy = userId;
                 await item.save();
 
+                const bomComponentRate = (piItem.useInventoryValuationForBom && Number(item.valuationRate) > 0)
+                    ? Number(item.valuationRate)
+                    : rate;
+
                 await logCostingAudit({
                     action: 'RM_COST_UPDATE',
                     itemId: item._id,
                     userId,
-                    details: { purchaseRate: rate, source: 'purchase_invoice_sync' },
+                    details: { purchaseRate: rate, source: 'purchase_invoice_sync', bomComponentRate },
                 });
 
                 // 2. Find all BOMs containing this item
@@ -89,7 +93,7 @@ export const syncPurchaseRatesToBOMs = async (items, userId) => {
                     let modified = false;
                     for (const comp of bom.components) {
                         if (comp.itemId.toString() === objectId.toString()) {
-                            comp.rate = rate;
+                            comp.rate = bomComponentRate;
                             modified = true;
                         }
                     }

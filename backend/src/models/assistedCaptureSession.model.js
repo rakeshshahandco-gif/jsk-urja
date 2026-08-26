@@ -21,7 +21,7 @@ const assistedCaptureSessionSchema = new mongoose.Schema(
         campaignId: { type: mongoose.Schema.Types.ObjectId, ref: 'SearchCampaign', required: true, index: true },
         queryId: { type: mongoose.Schema.Types.ObjectId, ref: 'SearchQuery', required: true, index: true },
         discoveryAgentJobId: { type: mongoose.Schema.Types.ObjectId, ref: 'DiscoveryAgentJob', default: null },
-        source: { type: String, default: 'google', enum: ['google'] },
+        source: { type: String, default: 'google', enum: ['google', 'baidu', '1688', 'sogou', 'so360', 'facebook', 'instagram', 'linkedin', 'x'] },
         sourceHint: { type: String, default: 'google', trim: true, maxlength: 80 },
         searchUrl: { type: String, required: true, trim: true, maxlength: 2048 },
         searchUrlHash: { type: String, required: true, trim: true, maxlength: 64 },
@@ -129,7 +129,8 @@ const assistedCaptureSessionSchema = new mongoose.Schema(
             resumeQueryIndex: { type: Number, default: 1, min: 1 },
             resumeMessage: { type: String, default: '', maxlength: 300 },
             batchMessage: { type: String, default: '', maxlength: 500 },
-            maxQueries: { type: Number, default: 24, min: 1, max: 24 },
+            /** Cap matches China model planner (MAX_MODEL_CHINA_QUERIES = 110). */
+            maxQueries: { type: Number, default: 24, min: 1, max: 110 },
             delayMinSec: { type: Number, default: 20, min: 5, max: 120 },
             delayMaxSec: { type: Number, default: 40, min: 5, max: 180 },
             stopAtUnique: { type: Number, default: 0, min: 0 },
@@ -145,6 +146,7 @@ const assistedCaptureSessionSchema = new mongoose.Schema(
             nextPageToken: { type: String, default: '', maxlength: 500 },
             lastDiscoveryAt: { type: Date, default: null },
             pauseReason: { type: String, default: '', maxlength: 80 },
+            stopRequested: { type: Boolean, default: false },
             ownerStoppedAt: { type: Date, default: null },
             discoveryStatus: {
                 type: String,

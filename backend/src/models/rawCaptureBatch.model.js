@@ -40,7 +40,7 @@ const rawCaptureBatchSchema = new mongoose.Schema(
         failureCode: { type: String, trim: true, default: '', maxlength: 80 },
         failureMessage: { type: String, trim: true, default: '', maxlength: 500 },
     },
-    { timestamps: true, collection: 'raw_capture_batches' },
+    { timestamps: true, collection: 'raw_capture_batches', autoCreate: false, autoIndex: false },
 );
 
 rawCaptureBatchSchema.index(

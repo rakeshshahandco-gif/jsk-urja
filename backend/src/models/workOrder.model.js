@@ -147,6 +147,33 @@ const workOrderSchema = new mongoose.Schema({
     bomSectionNo: { type: Number, default: null, min: 1 },
     bomSectionName: { type: String, default: '', trim: true },
 
+    /**
+     * Additive Section / Subassembly WO (Phase 1 process tracking).
+     * Legacy documents omit woKind and behave as main finished-product WOs.
+     */
+    woKind: {
+        type: String,
+        enum: ['main', 'section'],
+        default: 'main',
+    },
+    parentWorkOrderId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'WorkOrder',
+        default: null,
+    },
+    requiredQtyPerFinishedUnit: { type: Number, default: 1, min: 0 },
+    isMandatorySection: { type: Boolean, default: false },
+    /** Parent-only. Missing/false = legacy WO (no complete-set gate). */
+    sectionConfig: {
+        enabled: { type: Boolean, default: false },
+        sections: [{
+            bomSectionNo: { type: Number, required: true, min: 1 },
+            bomSectionName: { type: String, default: '', trim: true },
+            requiredQtyPerFinishedUnit: { type: Number, default: 1, min: 0 },
+            isMandatory: { type: Boolean, default: true },
+        }],
+    },
+
     targetQty: { type: Number, required: true, default: 1 },
     priority: {
         type: String,
@@ -169,6 +196,7 @@ const workOrderSchema = new mongoose.Schema({
             'On Hold',
             'Completed',
             'Closed',
+            'Cancelled',
         ], */
         default: 'Draft',
     },
@@ -216,6 +244,8 @@ workOrderSchema.index({ status: 1 });
 workOrderSchema.index({ bomId: 1 });
 workOrderSchema.index({ createdAt: -1 });
 workOrderSchema.index({ financialYear: 1 });
+workOrderSchema.index({ woKind: 1 });
+workOrderSchema.index({ parentWorkOrderId: 1, bomSectionNo: 1 });
 
 const WorkOrder = mongoose.model('WorkOrder', workOrderSchema);
 export { WorkOrder, PRODUCTION_STAGES };

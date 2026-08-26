@@ -58,7 +58,7 @@ const searchQuerySchema = new mongoose.Schema(
         archivedAt: { type: Date, default: null },
         archivedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     },
-    { timestamps: true, collection: 'search_queries' },
+    { timestamps: true, collection: 'search_queries', autoCreate: false, autoIndex: false },
 );
 
 searchQuerySchema.index({ companyId: 1, campaignId: 1, status: 1, updatedAt: -1 });

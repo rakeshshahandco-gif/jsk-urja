@@ -2,13 +2,19 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
     getWorkOrderById, releaseWorkOrder, updateWorkOrder, updateStage, updateMaterialStatus, refreshMaterialStock,
-    addProductionLog, deleteProductionLog
+    addProductionLog, deleteProductionLog, cancelSectionWorkOrder
 } from '@/services/workOrderApi';
 import { PATHS } from '@/routes/paths';
 import { useCompany } from '@/contexts/CompanyContext';
 import { isTextileIndustryCompany } from '@/utils/industryInventoryLabels';
 import { getWorkOrderLabels, isTextileWorkOrder } from '@/utils/textileWorkOrder';
 import toast from 'react-hot-toast';
+import WorkOrderSectionPanel from '@/features/production/WorkOrderSectionPanel';
+import {
+    buildProductionSheetPrintHtml,
+    openProductionSheetPrintWindow,
+    isSectionWorkOrderForPrint,
+} from '@/features/production/buildProductionSheetPrintHtml';
 
 // ─── Status Colors ───────────────────────────────────────────────────────────
 const WO_STATUS_COLORS = {
@@ -19,6 +25,7 @@ const WO_STATUS_COLORS = {
     'On Hold': { color: '#000000', bg: '#e9d5ff' },
     'Completed': { color: '#000000', bg: '#6ee7b7' },
     'Closed': { color: '#000000', bg: '#cbd5e1' },
+    'Cancelled': { color: '#000000', bg: '#fecaca' },
 };
 
 const STAGE_STATUS_COLORS = {
@@ -39,6 +46,15 @@ const inp = {
     borderRadius: '6px', color: '#1e293b', fontSize: '13px', outline: 'none', width: '100%', boxSizing: 'border-box',
 };
 
+function woProductDisplay(wo) {
+    const fp = wo?.finishedProductId && typeof wo.finishedProductId === 'object' ? wo.finishedProductId : {};
+    return {
+        productName: wo?.finishedProductName || fp.itemName || fp.name || '—',
+        modelNo: fp.modelNo || wo?.finishedProductModelNo || wo?.modelNo || '—',
+        itemCode: fp.itemCode || wo?.finishedProductItemCode || '—',
+    };
+}
+
 import { BrandedLoader } from '@/components/ui/BrandedLoading';
 
 
@@ -51,7 +67,7 @@ export default function WorkOrderDetailPage() {
     const [loading, setLoading] = useState(true);
     const initialTab = (() => {
         const raw = parseInt(searchParams.get('tab') || '0', 10);
-        return Number.isFinite(raw) && raw >= 0 && raw <= 5 ? raw : 0;
+        return Number.isFinite(raw) && raw >= 0 ? raw : 0;
     })();
     const [tab, setTab] = useState(initialTab);
     const [saving, setSaving] = useState(false);
@@ -72,6 +88,14 @@ export default function WorkOrderDetailPage() {
         finally { setSaving(false); }
     };
 
+    const handleCancelSection = async () => {
+        if (!window.confirm('Cancel this Section Work Order? Parent and sibling section WOs will not be cancelled.')) return;
+        setSaving(true);
+        try { await cancelSectionWorkOrder(id); toast.success('Section WO cancelled'); load(); }
+        catch (e) { toast.error(e.response?.data?.message || e.message); }
+        finally { setSaving(false); }
+    };
+
     if (loading) return <BrandedLoader size={120} />;
     if (!wo) return <div style={{ padding: '60px', textAlign: 'center', color: '#ef4444', background: '#f8f9fa', minHeight: '100vh' }}>Work Order not found</div>;
 
@@ -80,152 +104,19 @@ export default function WorkOrderDetailPage() {
     const TABS = isTextile ? TEXTILE_TABS : ELECTRONICS_TABS;
 
     const handlePrintProductionSheet = () => {
-        const printWindow = window.open('', '', 'width=900,height=800');
-
-        let emptyRows1 = '';
-        for (let i = 0; i < 5; i++) {
-            emptyRows1 += `<tr style="height:45px">
-                <td style="border:1px solid #000; padding:4px;"></td>
-                <td style="border:1px solid #000; padding:4px;"></td>
-                <td style="border:1px solid #000; padding:4px;"></td>
-                <td style="border:1px solid #000; padding:4px;"></td>
-                <td style="border:1px solid #000; padding:4px;"></td>
-                <td style="border:1px solid #000; padding:4px;"></td>
-            </tr>`;
-        }
-
-        let emptyRows2 = '';
-        for (let i = 0; i < 6; i++) {
-            emptyRows2 += `<tr style="height:35px">
-                <td style="border:1px solid #000; padding:4px;"></td>
-                <td style="border:1px solid #000; padding:4px;"></td>
-                <td style="border:1px solid #000; padding:4px;"></td>
-                <td style="border:1px solid #000; padding:4px;"></td>
-                <td style="border:1px solid #000; padding:4px; border-left: 2px solid #000;"></td>
-                <td style="border:1px solid #000; padding:4px;"></td>
-                <td style="border:1px solid #000; padding:4px;"></td>
-                <td style="border:1px solid #000; padding:4px;"></td>
-            </tr>`;
-        }
-
-        const textileProcessRows = (wo.stages || []).map(s => `
-            <tr><td style="font-weight:bold; height:45px;">${s.stageName}</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-        `).join('');
-
-        const html = `
-            <html>
-            <head>
-                <title>${isTextile ? 'Textile Job Sheet' : 'Production Sheet'} - ${wo.woNumber}</title>
-                <style>
-                    body { font-family: sans-serif; font-size: 11px; margin: 0; padding: 20px; box-sizing: border-box; }
-                    .header-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; border: 1px solid #000; }
-                    .header-table td { border: 1px solid #000; padding: 6px; }
-                    .grid-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; border: 1px solid #000; text-align: center; }
-                    .grid-table th { background: #f8f9fa; border: 1px solid #000; padding: 6px; font-weight: bold; }
-                    .grid-table td { border: 1px solid #000; padding: 6px; }
-                    .section-title { font-weight: bold; font-size: 12px; background: #f8f9fa; text-align: center; padding: 6px; border: 1px solid #000; text-transform: uppercase; }
-                    @media print {
-                        @page { size: A4 portrait; margin: 10mm; }
-                        body { margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; width: 190mm; }
-                    }
-                </style>
-            </head>
-            <body>
-                <table class="header-table">
-                    <tr>
-                        <td>Status : ${wo.status}</td>
-                        <td>Company : ${selectedCompany?.companyName || '—'}</td>
-                    </tr>
-                    <tr>
-                        <td>${isTextile ? 'Finished Item' : 'Item to Manufacture'} : ${wo.finishedProductName || wo.finishedProductId?.name || wo.finishedProductId?.itemCode || '—'}</td>
-                        <td>${isTextile ? 'Order Qty (PCS)' : 'Qty to Manufacture'} : ${wo.targetQty}</td>
-                    </tr>
-                    ${isTextile ? `
-                    <tr>
-                        <td>Design No : ${wo.textile?.designNo || '—'}</td>
-                        <td>Colour / Size : ${wo.textile?.colour || '—'} / ${wo.textile?.size || '—'}</td>
-                    </tr>
-                    <tr>
-                        <td>Fabric Required : ${wo.textile?.requiredFabricMeter || '—'} Meter</td>
-                        <td>Fabric Item : ${wo.textile?.fabricItemName || '—'}</td>
-                    </tr>
-                    <tr>
-                        <td>Lot / Than / Roll : ${wo.textile?.lotNo || '—'} / ${wo.textile?.thanNo || '—'} / ${wo.textile?.rollNo || '—'}</td>
-                        <td>Process Route : ${wo.textile?.processRoute || '—'}</td>
-                    </tr>
-                    <tr>
-                        <td>Vendor / Worker : ${wo.textile?.assignedVendorWorker || wo.supervisor || '—'}</td>
-                        <td>Expected Completion : ${wo.plannedEnd ? new Date(wo.plannedEnd).toLocaleDateString() : '—'}</td>
-                    </tr>
-                    ` : `
-                    <tr>
-                        <td>Bom No : ${wo.bomVersion || '—'}</td>
-                        <td>Target Warehouse : ${wo.targetWarehouse || 'Finished Goods'}</td>
-                    </tr>
-                    <tr>
-                        <td>Planned Start Date : ${wo.plannedStart ? new Date(wo.plannedStart).toLocaleString() : 'None'}</td>
-                        <td>Actual Start Date : ${wo.actualStart ? new Date(wo.actualStart).toLocaleString() : 'None'}</td>
-                    </tr>
-                    `}
-                </table>
-
-                ${isTextile ? `
-                <table class="grid-table">
-                    <tr>
-                        <th style="width:120px;">Process</th>
-                        <th>Issue Date</th><th>Return Date</th><th>Issue Qty</th><th>Return Qty</th><th>Worker</th><th>Sign</th>
-                    </tr>
-                    ${textileProcessRows || '<tr><td colspan="7">No process stages</td></tr>'}
-                </table>
-                ` : `
-                <table class="grid-table">
-                    <tr>
-                        <th style="width:120px;"></th>
-                        <th>Wo No</th><th>Date</th><th>Qty-Panel</th><th>Qty</th><th>Sign</th><th>Ent.</th>
-                    </tr>
-                    <tr><td style="font-weight:bold; height:60px;">SMD</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-                    <tr><td style="font-weight:bold; height:60px;">Wave/Reflow</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-                    <tr><td style="font-weight:bold; height:60px;">Lac/Clean</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-                    <tr><td style="font-weight:bold; height:60px;">Dummy</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-                    <tr><td style="font-weight:bold; height:60px;">Faulty</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-                </table>
-
-                <table class="grid-table" style="margin-top:20px;">
-                    <tr>
-                        <td colspan="4" class="section-title">TH-MOUNTING</td>
-                        <td colspan="4" class="section-title" style="border-left: 2px solid #000;">TOUCH-UP</td>
-                    </tr>
-                    <tr>
-                        <th>DATE</th><th>NAME</th><th>QTY</th><th>SIGN</th>
-                        <th style="border-left: 2px solid #000;">DATE</th><th>NAME</th><th>QTY</th><th>SIGN</th>
-                    </tr>
-                    ${emptyRows2}
-                    <tr>
-                        <td colspan="4" class="section-title">1ST QC</td>
-                        <td colspan="4" class="section-title" style="border-left: 2px solid #000;">FINAL QC</td>
-                    </tr>
-                    <tr>
-                        <th>DATE</th><th>NAME</th><th>QTY</th><th>SIGN</th>
-                        <th style="border-left: 2px solid #000;">DATE</th><th>NAME</th><th>QTY</th><th>SIGN</th>
-                    </tr>
-                    ${emptyRows2}
-                </table>
-                `}
-            </body>
-            </html>
-        `;
-        printWindow.document.write(html);
-        printWindow.document.close();
-        printWindow.focus();
-        setTimeout(() => {
-            printWindow.print();
-            printWindow.close();
-        }, 250);
+        const html = buildProductionSheetPrintHtml({
+            wo,
+            companyName: selectedCompany?.companyName,
+            isTextile,
+        });
+        openProductionSheetPrintWindow(html);
     };
 
     const sc = WO_STATUS_COLORS[wo.status] || WO_STATUS_COLORS['Draft'];
     const pct = wo.stages?.length ? Math.round((wo.stages.filter(s => s.status === 'Completed').length / wo.stages.length) * 100) : 0;
     const mandatoryShortages = (wo.materialStatus || []).filter(m => m.isMandatory && m.shortQty > 0);
+    const isSectionWo = isSectionWorkOrderForPrint(wo);
+    const parentRef = wo.parentWorkOrderId && typeof wo.parentWorkOrderId === 'object' ? wo.parentWorkOrderId : null;
 
     return (
         <div style={{ fontFamily: "'Inter', sans-serif", background: '#f8f9fa', minHeight: '100vh', color: '#1e293b' }}>
@@ -239,13 +130,27 @@ export default function WorkOrderDetailPage() {
                     <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                             <h1 style={{ margin: 0, fontSize: '22px', fontWeight: 700 }}>{wo.woNumber}</h1>
+                            {isSectionWo && (
+                                <span style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 800, background: '#fef3c7', color: '#92400e', letterSpacing: 0.3 }}>SECTION WORK ORDER</span>
+                            )}
                             <span style={{ padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 600, background: sc.bg, color: sc.color }}>{wo.status}</span>
                             <span style={{ fontSize: '13px', color: '#94a3b8' }}>Priority: <strong style={{ color: '#f59e0b' }}>{wo.priority}</strong></span>
                         </div>
                         <div style={{ color: '#64748b', fontSize: '13px', marginTop: '4px' }}>
-                            {wo.finishedProductName || wo.finishedProductId?.name || wo.finishedProductId?.itemCode || '—'}
+                            {isSectionWo && (
+                                <span>
+                                    Parent:{' '}
+                                    {parentRef?._id ? (
+                                        <button type="button" onClick={() => navigate(PATHS.PRODUCTION.WO_DETAIL(parentRef._id))} style={{ background: 'none', border: 'none', color: '#2563eb', padding: 0, cursor: 'pointer', fontWeight: 700 }}>{parentRef.woNumber}</button>
+                                    ) : '—'}
+                                    {' · '}Section: <strong>{wo.bomSectionName || '—'}</strong>
+                                    {' · '}
+                                </span>
+                            )}
+                            {(() => { const p = woProductDisplay(wo); return `${p.productName} · Model No: ${p.modelNo} · Item Code: ${p.itemCode}`; })()}
                             {isTextile && wo.textile?.designNo ? ` · Design: ${wo.textile.designNo}` : ''}
                             {' · '}{isTextile ? 'Qty' : 'Target'}: {wo.targetQty}{isTextile ? ' PCS' : ' pcs'}
+                            {isSectionWo ? ` · Completed: ${wo.completedQty ?? 0} · Stage: ${wo.currentStageName || '—'}` : ''}
                             {' · '}{labels.detailSupervisor}: {wo.textile?.assignedVendorWorker || wo.supervisor || '—'}
                         </div>
                     </div>
@@ -259,6 +164,12 @@ export default function WorkOrderDetailPage() {
                                 onClick={handleRelease} disabled={saving}
                                 style={{ padding: '9px 18px', borderRadius: '8px', background: '#1d4ed8', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '13px' }}
                             >{saving ? '...' : '▶ Release WO'}</button>
+                        )}
+                        {isSectionWo && wo.status !== 'Cancelled' && wo.status !== 'Closed' && (
+                            <button
+                                onClick={handleCancelSection} disabled={saving}
+                                style={{ padding: '9px 18px', borderRadius: '8px', background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca', cursor: 'pointer', fontWeight: 600, fontSize: '13px' }}
+                            >Cancel Section WO</button>
                         )}
                     </div>
                 </div>
@@ -274,8 +185,14 @@ export default function WorkOrderDetailPage() {
                 </div>
             </div>
 
+            {isSectionWo && (
+                <div style={{ background: '#fffbeb', borderBottom: '1px solid #fcd34d', padding: '12px 28px', fontSize: 13, color: '#92400e' }}>
+                    Process / progress tracking only. Completing this section does <strong>not</strong> create finished product {woProductDisplay(wo).productName} in stock. Stock and FG posting stay on the parent Work Order.
+                </div>
+            )}
+
             {/* Mandatory shortage banner */}
-            {mandatoryShortages.length > 0 && (
+            {!isSectionWo && mandatoryShortages.length > 0 && (
                 <div style={{ background: '#450a0a', borderBottom: '1px solid #dc2626', padding: '12px 28px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <span style={{ fontSize: '16px' }}>⚠️</span>
                     <div>
@@ -308,7 +225,7 @@ export default function WorkOrderDetailPage() {
             {/* Tab Content */}
             <div style={{ padding: '28px' }}>
                 {tab === 0 && <OverviewTab wo={wo} load={load} isTextile={isTextile} labels={labels} />}
-                {tab === 1 && <BomMaterialTab wo={wo} load={load} />}
+                {tab === 1 && <BomMaterialTab wo={wo} load={load} readOnly={wo.woKind === 'section'} />}
                 {tab === 2 && <ProcessExecutionTab wo={wo} load={load} />}
                 {tab === 3 && <QcTestingTab wo={wo} load={load} />}
                 {tab === 4 && <WipTab wo={wo} />}
@@ -414,8 +331,17 @@ function OverviewTab({ wo, load, isTextile, labels }) {
     const rows = [
         ['WO Number', wo.woNumber],
         ['Status', wo.status],
+        ...(wo.woKind === 'section' ? [
+            ['Type', 'SECTION WORK ORDER'],
+            ['Parent WO', wo.parentWorkOrderId?.woNumber || '—'],
+            ['Section', wo.bomSectionName || '—'],
+            ['Completed Qty', wo.completedQty ?? 0],
+            ['Current Stage', wo.currentStageName || '—'],
+        ] : []),
         ['BOM Version', wo.bomVersion || '—'],
-        ['Finished Product', wo.finishedProductName || wo.finishedProductId?.name || wo.finishedProductId?.itemCode || '—'],
+        ['Finished Product', woProductDisplay(wo).productName],
+        ['Model No.', woProductDisplay(wo).modelNo],
+        ['Item Code', woProductDisplay(wo).itemCode],
         ...textileRows,
         [isTextile ? 'Order Qty (PCS)' : 'Target Qty', editing ? (
             <div>
@@ -460,12 +386,13 @@ function OverviewTab({ wo, load, isTextile, labels }) {
                     </div>
                 ))}
             </div>
+            {!isTextile && wo.woKind !== 'section' && <WorkOrderSectionPanel wo={wo} load={load} />}
         </div>
     );
 }
 
 // ─── BOM & Material Tab ───────────────────────────────────────────────────────
-function BomMaterialTab({ wo, load }) {
+function BomMaterialTab({ wo, load, readOnly = false }) {
     const [updates, setUpdates] = useState({});
     const [saving, setSaving] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
@@ -568,7 +495,9 @@ function BomMaterialTab({ wo, load }) {
     return (
         <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
-                <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>BOM Components & Availability</h2>
+                <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>
+                    {readOnly && wo.bomSectionName ? `BOM Components — ${wo.bomSectionName} (read-only)` : 'BOM Components & Availability'}
+                </h2>
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                     <button onClick={handleExportExcel}
                         style={{ padding: '8px 16px', borderRadius: '8px', background: '#e2e8f0', color: '#475569', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -578,6 +507,8 @@ function BomMaterialTab({ wo, load }) {
                         style={{ padding: '8px 16px', borderRadius: '8px', background: '#e2e8f0', color: '#475569', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         📥 PDF
                     </button>
+                    {!readOnly && (
+                        <>
                     <button onClick={handleRefreshStock} disabled={refreshing}
                         style={{ padding: '8px 16px', borderRadius: '8px', background: '#334155', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         {refreshing ? '↻ Refreshing...' : '↻ Refresh Stock'}
@@ -586,8 +517,15 @@ function BomMaterialTab({ wo, load }) {
                         style={{ padding: '8px 16px', borderRadius: '8px', background: '#1d4ed8', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '13px' }}>
                         {saving ? 'Saving...' : 'Save Changes'}
                     </button>
+                        </>
+                    )}
                 </div>
             </div>
+            {readOnly && (
+                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: 12, color: '#475569' }}>
+                    Showing only {wo.bomSectionName || 'this section'} components. Phase 1 does not reserve or consume stock from Section WOs.
+                </div>
+            )}
             <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                     <thead>
@@ -612,28 +550,28 @@ function BomMaterialTab({ wo, load }) {
                                     <td style={{ padding: '10px 12px', color: '#6b7280', borderBottom: '1px solid #e5e7eb' }}>{m.uom || '—'}</td>
                                     <td style={{ padding: '10px 12px', color: '#1e293b', borderBottom: '1px solid #e5e7eb' }}>{m.requiredQty}</td>
                                     <td style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb' }}>
-                                        <input type="number" defaultValue={m.availableStock}
+                                        <input type="number" defaultValue={m.availableStock} disabled={readOnly}
                                             onChange={e => setUpd(m._id, 'availableStock', Number(e.target.value))}
                                             style={{ ...inp, width: '80px' }} />
                                     </td>
                                     <td style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb' }}>
-                                        <input type="number" defaultValue={m.shortQty}
+                                        <input type="number" defaultValue={m.shortQty} disabled={readOnly}
                                             onChange={e => setUpd(m._id, 'shortQty', Number(e.target.value))}
                                             style={{ ...inp, width: '70px', color: isShort ? '#dc2626' : '#1e293b' }} />
                                     </td>
                                     <td style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb' }}>
-                                        <input type="checkbox" defaultChecked={m.isMandatory}
+                                        <input type="checkbox" defaultChecked={m.isMandatory} disabled={readOnly}
                                             onChange={e => setUpd(m._id, 'isMandatory', e.target.checked)} />
                                     </td>
                                     <td style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb' }}>
-                                        <select defaultValue={m.procurementStatus}
+                                        <select defaultValue={m.procurementStatus} disabled={readOnly}
                                             onChange={e => setUpd(m._id, 'procurementStatus', e.target.value)}
                                             style={{ ...inp, width: '140px', cursor: 'pointer' }}>
                                             {['Not Ordered', 'Ordered', 'In Transit', 'Received'].map(s => <option key={s}>{s}</option>)}
                                         </select>
                                     </td>
                                     <td style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb' }}>
-                                        <input type="text" defaultValue={m.remarks}
+                                        <input type="text" defaultValue={m.remarks} disabled={readOnly}
                                             onChange={e => setUpd(m._id, 'remarks', e.target.value)}
                                             placeholder="Notes..." style={{ ...inp, width: '120px' }} />
                                     </td>

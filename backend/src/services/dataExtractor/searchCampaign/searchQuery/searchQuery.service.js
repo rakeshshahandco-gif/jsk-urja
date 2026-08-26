@@ -333,6 +333,7 @@ export async function ensureSimpleLeadSearchQuery({
     priorityScore = 50,
     selectedCriteria = null,
     queryLanguage = '',
+    sourceHint = 'google',
 }) {
     assertQueryGenerate(user);
     const cid = requireCompanyId(companyId);
@@ -340,7 +341,7 @@ export async function ensureSimpleLeadSearchQuery({
 
     const payload = validateManualCreateBody({
         queryText,
-        sourceHint: 'google',
+        sourceHint: sourceHint || 'google',
         queryType: 'manual',
     });
     const userId = actorUserId(user);

@@ -3,6 +3,7 @@ import { DiscoveryJob } from '../../../../models/discoveryJob.model.js';
 import { ApiError } from '../../../../utils/ApiError.js';
 import { preferNonEmpty } from '../mergeNormalize.service.js';
 import { computeDataQuality } from '../normalization/dataQuality.service.js';
+import { mergeTwoPreviewRecords } from '../phase2/smartMerge.util.js';
 
 function audit(doc, action, detail = {}) {
     doc.auditLog = [...(doc.auditLog || []), { at: new Date().toISOString(), action, ...detail }].slice(-100);
@@ -106,7 +107,7 @@ function snapshotForAudit(record = {}) {
 
 export async function resolveMergeReview(companyId, id, userId, payload = {}) {
     const action = payload.action;
-    const allowed = ['keep_a', 'keep_b', 'merge_selected_fields', 'mark_separate', 'ignore', 'link_existing'];
+    const allowed = ['keep_a', 'keep_b', 'merge_selected_fields', 'mark_separate', 'ignore', 'link_existing', 'merge', 'keep_separate'];
     if (!allowed.includes(action)) throw new ApiError(400, 'Invalid resolution action');
 
     const doc = await DiscoveryMergeReview.findOne({ _id: id, companyId, isDeleted: { $ne: true } });
@@ -130,6 +131,27 @@ export async function resolveMergeReview(companyId, id, userId, payload = {}) {
         };
     }
     audit(doc, 'resolved', { action, by: userId });
+
+    if (String(doc.reviewKind || '') === 'cross_source_identity') {
+        if (action === 'merge' && payload.keepId && payload.mergeId) {
+            const { manualMergeIdentities } = await import('../phase5/identity.service.js');
+            await manualMergeIdentities(companyId, userId, {
+                keepId: payload.keepId,
+                mergeId: payload.mergeId,
+                reason: payload.notes || 'duplicate review merge',
+            });
+        }
+        if ((action === 'keep_separate' || action === 'mark_separate') && (payload.idA || payload.keepId)) {
+            const { keepSeparateIdentities } = await import('../phase5/identity.service.js');
+            await keepSeparateIdentities(companyId, userId, {
+                idA: payload.idA || payload.keepId,
+                idB: payload.idB || payload.mergeId,
+                reason: payload.notes || 'keep separate',
+            });
+        }
+        await doc.save();
+        return doc.toObject();
+    }
 
     // Apply to discovery job preview when present — never auto without explicit action
     if (doc.discoveryJobId != null && doc.previewIndex != null) {
@@ -178,16 +200,53 @@ export async function resolveMergeReview(companyId, id, userId, payload = {}) {
                     merged.dataQuality = dq;
                     merged.dataQualityScore = dq.score;
                     preview[idx] = merged;
-                } else if (action === 'mark_separate') {
+                } else if (action === 'merge') {
+                    const idxB = Number(doc.candidateRef?.previewIndexB);
+                    if (Number.isInteger(idxB) && preview[idxB] && idxB !== idx) {
+                        const next = mergeTwoPreviewRecords(preview, idx, idxB);
+                        preview.length = 0;
+                        preview.push(...next);
+                    } else {
+                        const merged = { ...current };
+                        for (const k of ['email', 'phone', 'mobile', 'website', 'address', 'city', 'gstin', 'businessDescription']) {
+                            merged[k] = preferNonEmpty(merged[k], doc.recordB?.[k]);
+                        }
+                        merged.entityResolution = {
+                            ...(current.entityResolution || {}),
+                            resolutionAction: 'merge',
+                            resolvedAt: new Date().toISOString(),
+                            requiresManualReview: false,
+                        };
+                        preview[idx] = merged;
+                    }
+                    if (preview[idx]) {
+                        preview[idx].entityResolution = {
+                            ...(preview[idx].entityResolution || {}),
+                            resolutionAction: 'merge',
+                            resolvedAt: new Date().toISOString(),
+                            requiresManualReview: false,
+                        };
+                        preview[idx].phase2Merge = {
+                            ...(preview[idx].phase2Merge || {}),
+                            duplicateStatus: 'merged',
+                            manualMerged: true,
+                        };
+                    }
+                } else if (action === 'mark_separate' || action === 'keep_separate') {
                     current.entityResolution = {
                         ...(current.entityResolution || {}),
                         decision: 'UNIQUE',
-                        resolutionAction: 'mark_separate',
+                        resolutionAction: action,
                         resolvedAt: new Date().toISOString(),
                         requiresManualReview: false,
                     };
                     current.duplicateStatus = 'none';
                     current.duplicateDisplayLabel = 'NEW';
+                    current.phase2Merge = {
+                        ...(current.phase2Merge || {}),
+                        duplicateStatus: 'kept_separate',
+                        mergeConfidence: doc.matchScore || 0,
+                    };
                     preview[idx] = current;
                 } else if (action === 'link_existing') {
                     current.entityResolution = {

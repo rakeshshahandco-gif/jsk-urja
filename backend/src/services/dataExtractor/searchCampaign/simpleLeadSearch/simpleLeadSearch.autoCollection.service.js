@@ -18,10 +18,15 @@ import {
     buildCampaignProgress,
     refreshQueryCaptureStats,
 } from './simpleLeadSearch.multiQuery.service.js';
+import { MAX_MODEL_CHINA_QUERIES } from './queryBuilder.util.js';
 
 const ACTIVE_AUTO = ['running', 'paused_owner', 'paused_manual', 'paused_batch'];
 const READY = new Set(['awaiting_user', 'ready_to_capture']);
 const ENDED = new Set(['completed', 'cancelled', 'expired', 'failed']);
+const LIVE_SESSION = [
+    'queued', 'agent_assigned', 'opening', 'awaiting_user',
+    'ready_to_capture', 'capturing', 'manual_action_required',
+];
 export const CAPTURE_TARGET_OPTIONS = Object.freeze([25, 50, 100, 250, 500]);
 const DEFAULT_FIXED_CAPTURE_TARGET = 100;
 const DEFAULT_COLLECTION_MODE = 'unlimited';
@@ -68,7 +73,7 @@ function defaultAuto() {
         sourceResultsFound: 0, rawRecordsCaptured: 0, lastQueryIndex: 1,
         queriesCompleted: 0, totalApprovedQueries: 0,
         lastCursor: '', nextPageToken: '', lastDiscoveryAt: null, discoveryStatus: 'idle',
-        pauseReason: '', ownerStoppedAt: null,
+        pauseReason: '', stopRequested: false, ownerStoppedAt: null,
         autoEnrichAfter: false, autoQualifyAfterEnrich: false, autoVerifyAfterQualify: false,
         nextActionAt: null, tickLockUntil: null,
         pagesCapturedThisQuery: 0, pagesProcessedTotal: 0, queriesProcessedTotal: 0,
@@ -142,7 +147,7 @@ function readSettings(body = {}) {
         pagesPerBatch,
         maxSafetyPagesPerQuery,
         pauseAfterEachBatch: !(body.pauseAfterEachBatch === false || body.pauseAfterEachBatch === 'false' || body.pauseAfterEachBatch === 0),
-        maxQueries: clampInt(body.maxQueries ?? body.maxGeneratedQueries, 1, 24, 24),
+        maxQueries: clampInt(body.maxQueries ?? body.maxGeneratedQueries, 1, MAX_MODEL_CHINA_QUERIES, 24),
         delayMinSec, delayMaxSec,
         // Unique-company rules must never terminate source discovery
         stopAtUnique: 0,
@@ -217,6 +222,7 @@ function progressView(session, campaignProgress = null) {
         discoveryStatus: ac.discoveryStatus || ac.status || 'idle',
         pauseReason: ac.pauseReason || '',
         ownerStoppedAt: ac.ownerStoppedAt || null,
+        stopRequested: Boolean(ac.stopRequested),
         lastDiscoveryAt: ac.lastDiscoveryAt || session.lastCaptureAt || null,
         lastQueryIndex: Number(ac.lastQueryIndex || ac.resumeQueryIndex || campaignProgress?.queryIndex || 1),
         queriesCompleted: Number(ac.queriesCompleted || ac.queriesProcessedTotal || 0),
@@ -236,9 +242,11 @@ function progressView(session, campaignProgress = null) {
         canResumeCheckpoint: ['paused_owner', 'paused_manual', 'paused_batch', 'stopped', 'failed'].includes(ac.status)
             && Number(ac.lastSuccessfullyCapturedPage || 0) > 0,
         queryIndex: campaignProgress?.queryIndex || 1,
-        queryTotal: Math.min(Number(ac.maxQueries || 24), campaignProgress?.queryTotal || Number(ac.maxQueries || 24)),
+        queryTotal: Number(campaignProgress?.queryTotal || ac.totalApprovedQueries || ac.maxQueries || 0),
         businessType: campaignProgress?.currentBusinessType || '',
         locationLabel: campaignProgress?.currentLocationLabel || '',
+        searchLabel: campaignProgress?.searchLabel || '',
+        ownerDisplayLabel: campaignProgress?.currentOwnerDisplayLabel || campaignProgress?.searchLabel || '',
         googlePage: Number(session.googlePageIndex || campaignProgress?.googlePage || 1),
         maxPagesPerQuery: ac.maxPagesPerQuery,
         pagesCapturedThisQuery: Number(ac.pagesCapturedThisQuery || 0),
@@ -264,6 +272,126 @@ async function loadOwnedSession(companyId, sessionId) {
     if (!session) throw new ApiError(404, 'Assisted capture session not found');
     return session;
 }
+export function isOwnerStopped(session) {
+    const ac = session?.autoCollection || {};
+    // Child source sessions are cancelled on Google→next-query handoff.
+    // That is not an owner Stop — only explicit owner-stop flags are.
+    return Boolean(ac.ownerStoppedAt)
+        || ac.stopRequested === true
+        || String(ac.summary?.stopReason || '') === 'owner_stop';
+}
+async function ownerStopAborted(session) {
+    const latest = await AssistedCaptureSession.findById(session._id)
+        .select('status autoCollection.ownerStoppedAt autoCollection.stopRequested autoCollection.status autoCollection.summary.stopReason')
+        .lean();
+    return !latest || isOwnerStopped(latest) || latest.autoCollection?.status !== 'running';
+}
+function ownerStopSet(now, user) {
+    return {
+        status: 'cancelled',
+        cancelledAt: now,
+        cancelledBy: actorId(user),
+        updatedBy: actorId(user),
+        pendingCaptureStatus: 'none',
+        pendingCaptureAckedAt: null,
+        pendingNavigationStatus: 'none',
+        pendingNavigationTargetUrl: '',
+        pendingNavigationAckedAt: null,
+        'autoCollection.status': 'stopped',
+        'autoCollection.phase': 'done',
+        'autoCollection.enabled': false,
+        'autoCollection.stopRequested': true,
+        'autoCollection.ownerStoppedAt': now,
+        'autoCollection.stoppedAt': now,
+        'autoCollection.stoppedBy': actorId(user),
+        'autoCollection.discoveryStatus': 'stopped',
+        'autoCollection.pauseReason': '',
+        'autoCollection.summary.stopReason': 'owner_stop',
+        'autoCollection.nextActionAt': null,
+        'autoCollection.tickLockUntil': null,
+        'autoCollection.lastErrorCode': 'owner_stop',
+        'autoCollection.lastErrorMessage': 'Stopped by user. Collected results are preserved.',
+        'autoProcessing.status': 'stopped',
+        'autoProcessing.enabled': false,
+        'autoProcessing.ownerWorkflowEnabled': false,
+        'autoProcessing.currentStage': 'done',
+        'autoProcessing.flushRequested': false,
+        'autoProcessing.autoResumeNotice': false,
+        'autoProcessing.retryTemporaryFailures': false,
+        'autoProcessing.stoppedAt': now,
+        'autoProcessing.stoppedBy': actorId(user),
+        'autoProcessing.lastErrorCode': 'owner_stop',
+        'autoProcessing.lastErrorMessage': 'Stopped by owner. Completed work is preserved.',
+    };
+}
+/**
+ * Owner Stop: persist immediately, cancel Discovery Agent session, halt AC/AP,
+ * stop sibling query sessions in the same campaign run. Never deletes captures.
+ */
+export async function ownerStopPersistentRun({ companyId, user, sessionId, reason = 'owner_stop' }) {
+    const cid = requireCompanyId(companyId);
+    assertAssistedCaptureStart(user);
+    const session = await loadOwnedSession(cid, sessionId);
+    const now = new Date();
+    const rootId = session.autoCollection?.rootSessionId || session._id;
+    const campaignId = session.campaignId;
+    const siblingFilter = {
+        companyId: cid,
+        $or: [
+            { _id: session._id },
+            {
+                campaignId,
+                $or: [
+                    { _id: rootId },
+                    { 'autoCollection.rootSessionId': rootId },
+                    { 'autoCollection.rootSessionId': session._id },
+                ],
+                $or: [
+                    { 'autoCollection.status': { $in: ACTIVE_AUTO } },
+                    { 'autoProcessing.status': 'running' },
+                    { 'autoProcessing.enabled': true },
+                    { status: { $in: LIVE_SESSION } },
+                ],
+            },
+        ],
+    };
+    const ids = await AssistedCaptureSession.find(siblingFilter).select('_id').lean();
+    const idList = ids.map((d) => d._id);
+    if (!idList.some((id) => String(id) === String(session._id))) idList.push(session._id);
+    await AssistedCaptureSession.updateMany(
+        { _id: { $in: idList }, companyId: cid },
+        { $set: ownerStopSet(now, user) },
+    );
+    try {
+        const { stopAutoProcessing } = await import('./simpleLeadSearch.autoProcessing.service.js');
+        for (const id of idList) {
+            try {
+                await stopAutoProcessing({
+                    companyId: cid,
+                    user,
+                    sessionId: String(id),
+                    body: { stopJobs: true },
+                });
+            } catch { /* jobs may already be idle */ }
+        }
+    } catch { /* soft */ }
+    const fresh = await AssistedCaptureSession.findById(session._id);
+    const campaignProgress = await buildCampaignProgress({
+        companyId: cid,
+        campaignId: fresh.campaignId,
+        session: fresh.toObject(),
+    });
+    return {
+        session: sanitizeSession(fresh.toObject()),
+        autoCollection: progressView(fresh.toObject(), campaignProgress),
+        campaignProgress,
+        sessionEnded: true,
+        sessionEndedMessage: 'STOPPED BY USER. Collected results are preserved. Start a new search.',
+        message: 'STOPPED BY USER. Collected results are preserved.',
+        preserved: { rawCaptures: true, campaign: true, searchQuery: true, sessionHistory: true },
+        reason,
+    };
+}
 async function finalizeStop(session, { status, reason, user }) {
     const summary = await buildSummary(session);
     summary.stopReason = reason;
@@ -287,6 +415,17 @@ async function finalizeStop(session, { status, reason, user }) {
     };
     session.autoCollection.discoveryStatus = discoveryMap[reason]
         || (status === 'failed' ? 'failed' : status === 'stopped' ? 'stopped' : 'completed');
+    if (status === 'failed') {
+        const existing = String(session.autoCollection.lastErrorMessage || '').trim();
+        if (!existing) {
+            session.autoCollection.lastErrorCode = String(
+                session.autoCollection.lastErrorCode || session.failCode || reason || 'failed',
+            ).slice(0, 80);
+            session.autoCollection.lastErrorMessage = String(
+                session.failMessage || session.safeFailureMessage || reason || 'Discovery failed',
+            ).replace(/[\r\n]+/g, ' ').slice(0, 500);
+        }
+    }
     if (reason === 'owner_stop') {
         session.autoCollection.ownerStoppedAt = new Date();
         session.autoCollection.pauseReason = '';
@@ -493,17 +632,20 @@ export async function startAutoCollection({ companyId, user, sessionId, body = {
     const base = defaultAuto();
     const pausedManual = session.status === 'manual_action_required';
     const campaignProgressSeed = await buildCampaignProgress({ companyId: cid, campaignId: session.campaignId, session: session.toObject() });
-    const totalApprovedQueries = Math.min(
-        Number(settings.maxQueries || 24),
-        Number(campaignProgressSeed?.queryTotal || settings.maxQueries || 24),
-    );
+    const persistedQueryTotal = Number(campaignProgressSeed?.queryTotal || 0);
+    // Never truncate a persisted China/model plan (e.g. 103) down to the UI default of 24.
+    if (persistedQueryTotal > 0) {
+        settings.maxQueries = Math.min(persistedQueryTotal, MAX_MODEL_CHINA_QUERIES);
+    }
+    const totalApprovedQueries = Number(settings.maxQueries || persistedQueryTotal || 24);
     session.autoCollection = {
         ...base, ...settings, enabled: true,
         status: pausedManual ? 'paused_manual' : 'running',
         phase: pausedManual ? 'none' : 'delay',
         discoveryStatus: pausedManual ? 'paused' : 'running',
         pauseReason: pausedManual ? 'provider_block' : '',
-        ownerStoppedAt: null,
+            ownerStoppedAt: null,
+            stopRequested: false,
         collectionMode: settings.collectionMode,
         requestedCaptureTarget: settings.requestedCaptureTarget,
         sourceResultsFound: Number(session.visibleResultCount || 0),
@@ -544,6 +686,7 @@ export async function pauseAutoCollection({ companyId, user, sessionId }) {
     const cid = requireCompanyId(companyId);
     assertAssistedCaptureStart(user);
     const session = await loadOwnedSession(cid, sessionId);
+    if (isOwnerStopped(session)) throw new ApiError(400, 'STOPPED BY USER. This search will not resume. Start a new search.');
     if ((session.autoCollection?.status || 'idle') !== 'running') throw new ApiError(400, 'Auto Collection is not running');
     session.autoCollection.status = 'paused_owner';
     session.autoCollection.enabled = true;
@@ -566,6 +709,7 @@ export async function resumeAutoCollection({ companyId, user, sessionId }) {
     assertAssistedCaptureStart(user);
     const session = await loadOwnedSession(cid, sessionId);
     const st = session.autoCollection?.status || 'idle';
+    if (isOwnerStopped(session)) throw new ApiError(400, 'STOPPED BY USER. This search will not resume. Start a new search.');
     if (st === 'paused_manual') throw new ApiError(400, 'Resolve the Google window issue first, then click Continue Auto Collection.');
     if (st !== 'paused_owner') throw new ApiError(400, 'Auto Collection is not paused');
     if (session.status === 'manual_action_required') {
@@ -590,39 +734,29 @@ export async function resumeAutoCollection({ companyId, user, sessionId }) {
 }
 
 export async function stopAutoCollection({ companyId, user, sessionId, reason = 'owner_stop' }) {
-    const cid = requireCompanyId(companyId);
-    assertAssistedCaptureStart(user);
-    const session = await loadOwnedSession(cid, sessionId);
-    if (!session.autoCollection || session.autoCollection.status === 'idle') {
-        const campaignProgress = await buildCampaignProgress({ companyId: cid, campaignId: session.campaignId, session: session.toObject() });
-        return {
-            session: sanitizeSession(session.toObject()),
-            autoCollection: progressView(session.toObject(), campaignProgress),
-            campaignProgress,
-            message: 'Auto Collection was not active. Existing captures remain saved.',
-        };
-    }
-    await finalizeStop(session, { status: 'stopped', reason, user });
-    const campaignProgress = await buildCampaignProgress({ companyId: cid, campaignId: session.campaignId, session: session.toObject() });
-    return {
-        session: sanitizeSession(session.toObject()),
-        autoCollection: progressView(session.toObject(), campaignProgress),
-        campaignProgress,
-        message: 'Auto Collection stopped. All completed captures remain saved.',
-        preserved: { rawCaptures: true },
-    };
+    return ownerStopPersistentRun({ companyId, user, sessionId, reason: reason || 'owner_stop' });
 }
 
 export async function continueAutoCollectionAfterManual({ companyId, user, sessionId }) {
     const cid = requireCompanyId(companyId);
     assertAssistedCaptureStart(user);
+    const probe = await loadOwnedSession(cid, sessionId);
+    if (isOwnerStopped(probe)) {
+        throw new ApiError(400, 'STOPPED BY USER. This search will not resume. Start a new search.');
+    }
     const { continueSimpleLeadSearchAfterManual } = await import('./simpleLeadSearch.service.js');
     await continueSimpleLeadSearchAfterManual({ companyId: cid, user, sessionId });
     const session = await loadOwnedSession(cid, sessionId);
+    const src = String(session.source || session.sourceHint || '').toLowerCase();
+    const stillBlockedMsg = src === '1688'
+        ? '1688 still needs verification. Complete it in the Discovery Agent browser, then click Continue After Manual Action.'
+        : (['baidu', 'sogou', 'so360'].includes(src)
+            ? `${src === 'so360' ? '360 Search' : (src === 'sogou' ? 'Sogou' : 'Baidu')} still needs verification in the Discovery Agent browser, then click Continue After Manual Action.`
+            : 'Google is still not Ready. Finish CAPTCHA/consent in the managed browser, then try again.');
     if (session.status === 'manual_action_required') {
-        throw new ApiError(400, 'Google is still not Ready. Finish CAPTCHA/consent in the managed browser, then try again.');
+        throw new ApiError(400, stillBlockedMsg);
     }
-    if (!READY.has(session.status)) throw new ApiError(400, `Wait until Google Ready (current: ${session.status})`);
+    if (!READY.has(session.status)) throw new ApiError(400, stillBlockedMsg);
     session.autoCollection = session.autoCollection || defaultAuto();
     session.autoCollection.status = 'running';
     session.autoCollection.enabled = true;
@@ -639,6 +773,7 @@ export async function continueAutoCollectionAfterManual({ companyId, user, sessi
     };
 }
 async function runPhase(session, user, cid) {
+    if (await ownerStopAborted(session)) return {};
     const ac = session.autoCollection;
     const now = Date.now();
 
@@ -698,6 +833,7 @@ async function runPhase(session, user, cid) {
             await session.save();
             return {};
         }
+        if (await ownerStopAborted(session)) return {};
         ac.uniqueBeforeLastCapture = await campaignUnique(cid, session.campaignId);
         ac.captureEventsAtLastRequest = Number(session.captureEventCount || 0);
         ac.insertedAtLastRequest = Number(session.insertedCount || 0);
@@ -707,9 +843,16 @@ async function runPhase(session, user, cid) {
             companyId: cid, user, campaignId: session.campaignId, queryId: session.queryId, sessionId: session._id,
             body: { idempotencyKey: `sls-auto-${session._id}-${Date.now()}` },
         });
-        const fresh = await AssistedCaptureSession.findById(session._id);
-        fresh.autoCollection.phase = 'await_capture';
-        await fresh.save();
+        await AssistedCaptureSession.updateOne(
+            {
+                _id: session._id,
+                'autoCollection.status': 'running',
+                'autoCollection.stopRequested': { $ne: true },
+                'autoCollection.ownerStoppedAt': null,
+                status: { $nin: [...ENDED] },
+            },
+            { $set: { 'autoCollection.phase': 'await_capture' } },
+        );
         return { reload: true };
     }
 
@@ -728,6 +871,30 @@ async function runPhase(session, user, cid) {
         const captureDone = terminalEvents > baseline
             || acceptedDelta > 0
             || (READY.has(session.status) && !['pending', 'acked'].includes(pending) && events > baseline);
+
+        const failedIngest = await AssistedCaptureEvent.countDocuments({
+            companyId: cid,
+            sessionId: session._id,
+            status: 'failed',
+            acceptedCount: { $lte: 0 },
+        });
+        if (['pending', 'acked'].includes(pending) && failedIngest > 0 && !captureDone) {
+            session.pendingCaptureStatus = 'none';
+            session.pendingCaptureAckedAt = null;
+            const alreadyRetried = ac.lastErrorCode === 'capture_ingest_failed';
+            ac.lastErrorCode = 'capture_ingest_failed';
+            if (alreadyRetried) {
+                ac.status = 'paused_owner';
+                ac.pauseReason = 'capture_ingest_failed';
+                ac.lastErrorMessage = 'Capture ingest failed. Automatic collection paused. Captured count stayed 0.';
+                await session.save();
+                return {};
+            }
+            ac.lastErrorMessage = 'Capture ingest failed. Retrying visible capture.';
+            ac.phase = 'capture';
+            await session.save();
+            return { reload: true };
+        }
 
         if (['pending', 'acked'].includes(pending) && !captureDone) {
             if (session.status === 'capturing') {
@@ -845,6 +1012,7 @@ async function runPhase(session, user, cid) {
     }
 
     if (ac.phase === 'next_page') {
+        if (await ownerStopAborted(session)) return {};
         if (!READY.has(session.status)) { await session.save(); return {}; }
         try {
             await openNextGooglePage({ companyId: cid, user, sessionId: session._id });
@@ -859,9 +1027,16 @@ async function runPhase(session, user, cid) {
             await finalizeStop(session, { status: 'completed', reason: 'google_no_more_pages', user });
             return { reload: true };
         }
-        const fresh = await AssistedCaptureSession.findById(session._id);
-        fresh.autoCollection.phase = 'await_nav';
-        await fresh.save();
+        await AssistedCaptureSession.updateOne(
+            {
+                _id: session._id,
+                'autoCollection.status': 'running',
+                'autoCollection.stopRequested': { $ne: true },
+                'autoCollection.ownerStoppedAt': null,
+                status: { $nin: [...ENDED] },
+            },
+            { $set: { 'autoCollection.phase': 'await_nav' } },
+        );
         return { reload: true };
     }
 
@@ -881,16 +1056,30 @@ async function runPhase(session, user, cid) {
     }
 
     if (ac.phase === 'next_query') {
+        if (await ownerStopAborted(session)) return {};
         const snapshot = session.toObject();
         let next;
         try {
             next = await openNextGeneratedQuery({ companyId: cid, user, sessionId: session._id, headers: {} });
         } catch (err) {
+            const latest = await AssistedCaptureSession.findById(session._id).lean();
+            if (isOwnerStopped(latest)) return {};
             if (Number(err?.statusCode) === 400) {
                 await startPostCollectionJobs(session, user);
                 return { reload: true };
             }
             throw err;
+        }
+        const afterOpen = await AssistedCaptureSession.findById(session._id).lean();
+        if (isOwnerStopped(afterOpen)) {
+            const newIdEarly = next?.session?._id;
+            if (newIdEarly) {
+                await AssistedCaptureSession.updateMany(
+                    { _id: { $in: [session._id, newIdEarly] }, companyId: cid },
+                    { $set: ownerStopSet(new Date(), user) },
+                );
+            }
+            return { reload: true };
         }
         const newId = next.session?._id;
 
@@ -978,6 +1167,18 @@ export async function tickAutoCollection({ companyId, user, sessionId }) {
 
     // Soft-reclaim discovery when a prior race marked session/AC failed after accepted ingest
     const probe = await AssistedCaptureSession.findOne({ _id: sessionId, companyId: cid }).lean();
+    if (probe && isOwnerStopped(probe)) {
+        const campaignProgress = await buildCampaignProgress({ companyId: cid, campaignId: probe.campaignId, session: probe });
+        return {
+            session: sanitizeSession(probe),
+            autoCollection: progressView(probe, campaignProgress),
+            campaignProgress,
+            sessionId: String(sessionId),
+            advanced: false,
+            skipped: true,
+            stopped: true,
+        };
+    }
     if (probe) {
         const accepted = Math.max(
             Number(probe.acceptedCount || 0),
@@ -989,6 +1190,7 @@ export async function tickAutoCollection({ companyId, user, sessionId }) {
         const targetMet = collectionMode === 'fixed_target' && target > 0 && accepted >= target;
         const canReclaim = accepted > 0
             && !targetMet
+            && !isOwnerStopped(probe)
             && (
                 probe.status === 'failed'
                 || probe.autoCollection?.status === 'failed'
@@ -1024,6 +1226,9 @@ export async function tickAutoCollection({ companyId, user, sessionId }) {
     let session = await AssistedCaptureSession.findOneAndUpdate(
         {
             _id: sessionId, companyId: cid, 'autoCollection.status': 'running',
+            'autoCollection.stopRequested': { $ne: true },
+            'autoCollection.ownerStoppedAt': null,
+            status: { $nin: ['cancelled', 'completed', 'expired'] },
             $or: [
                 { 'autoCollection.tickLockUntil': null },
                 { 'autoCollection.tickLockUntil': { $lte: new Date() } },
@@ -1063,6 +1268,7 @@ export async function tickAutoCollection({ companyId, user, sessionId }) {
         const stopReason = String(session.autoCollection?.summary?.stopReason || '');
         const recoverableFail = !targetMet
             && accepted > 0
+            && !isOwnerStopped(session)
             && (
                 session.status === 'failed'
                 || stopReason === 'session_failed'
@@ -1070,7 +1276,45 @@ export async function tickAutoCollection({ companyId, user, sessionId }) {
                 || ['ASSISTED_SESSION_FAILED', 'EVENT_INGEST_FAILED', 'AGENT_FAILED', ''].includes(String(session.failCode || ''))
             )
             && !['owner_stop', 'capture_target_reached', 'google_no_more_pages', 'all_queries_exhausted'].includes(stopReason);
-        if (recoverableFail) {
+        const failCode = String(session.failCode || '');
+        const failMessage = String(session.failMessage || '').trim();
+        const moreQueriesRemain = Number(session.autoCollection?.queriesProcessedTotal || 0) + 1
+            < Number(session.autoCollection?.totalApprovedQueries || session.autoCollection?.maxQueries || 1);
+        const emptyParserSkip = !targetMet
+            && accepted === 0
+            && !isOwnerStopped(session)
+            && session.status === 'failed'
+            && ['UNSUPPORTED_LAYOUT', 'NO_ORGANIC_RESULTS', 'NO_PARSER_RESULTS'].includes(failCode)
+            && moreQueriesRemain;
+        if (emptyParserSkip) {
+            session.status = 'awaiting_user';
+            session.failCode = '';
+            session.failMessage = '';
+            session.failedAt = undefined;
+            session.pendingCaptureStatus = 'none';
+            session.autoCollection = session.autoCollection || defaultAuto();
+            session.autoCollection.discoveryStatus = 'running';
+            session.autoCollection.lastErrorCode = failCode || 'no_parser_results';
+            session.autoCollection.lastErrorMessage = failMessage || 'No parser results on this page. Continuing to the next query.';
+            session.autoCollection.phase = 'complete_query';
+            session.autoCollection.status = 'running';
+            session.autoCollection.enabled = true;
+            session.autoCollection.summary = {
+                ...(session.autoCollection.summary || {}),
+                stopReason: '',
+            };
+            await session.save();
+            try {
+                const outcome = await runPhase(session, user, cid);
+                if (outcome?.sessionId && String(outcome.sessionId) !== String(session._id)) {
+                    switchedSessionId = String(outcome.sessionId);
+                }
+            } catch (err) {
+                session.autoCollection.lastErrorCode = 'tick_error';
+                session.autoCollection.lastErrorMessage = String(err?.message || 'Auto Collection step failed').slice(0, 500);
+                await session.save();
+            }
+        } else if (recoverableFail) {
             session.status = 'awaiting_user';
             session.failCode = '';
             session.failMessage = '';
@@ -1163,6 +1407,9 @@ export async function continueNextBatch({ companyId, user, sessionId }) {
     const cid = requireCompanyId(companyId);
     assertAssistedCaptureStart(user);
     const session = await loadOwnedSession(cid, sessionId);
+    if (isOwnerStopped(session)) {
+        throw new ApiError(400, 'STOPPED BY USER. This search will not resume. Start a new search.');
+    }
     const ac = session.autoCollection;
     if (!ac || ac.status !== 'paused_batch') {
         throw new ApiError(400, 'No completed batch waiting to continue');
@@ -1199,6 +1446,9 @@ export async function resumeAutoCollectionCheckpoint({ companyId, user, sessionI
     const cid = requireCompanyId(companyId);
     assertAssistedCaptureStart(user);
     const session = await loadOwnedSession(cid, sessionId);
+    if (isOwnerStopped(session)) {
+        throw new ApiError(400, 'STOPPED BY USER. This search will not resume. Start a new search.');
+    }
     const ac = session.autoCollection || defaultAuto();
     if (!ac.lastSuccessfullyCapturedPage && !['paused_owner', 'paused_manual', 'paused_batch', 'stopped', 'failed', 'running'].includes(ac.status)) {
         throw new ApiError(400, 'No Auto Collection checkpoint to resume');

@@ -415,7 +415,7 @@ export async function runExcelImportJob({
 
 export async function listSearchJobs(companyId, query = {}) {
     const { page = 1, limit = 20, jobType } = query;
-    const q = { companyId };
+    const q = { companyId, 'metadata.historyClearedAt': { $exists: false } };
     if (jobType) q.jobType = jobType;
 
     const skip = (Math.max(1, Number(page)) - 1) * Math.min(100, Number(limit) || 20);

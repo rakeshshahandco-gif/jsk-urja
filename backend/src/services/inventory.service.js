@@ -13,6 +13,8 @@ import { createProductionCostSnapshot } from './productCostEngine.service.js';
 export const syncWorkOrderToInventory = async (wo, session, userId) => {
     // 1. Safety check
     if (wo.status !== 'Completed' || wo.inventorySynced) return;
+    // Phase 1: Section / Subassembly WOs must never post FG or consume RM
+    if (wo.woKind === 'section') return;
     if (!wo.finishedProductId) return;
 
     // 2. Identify quantity (Use output of Final QC stage, fallback to targetQty if stage output is 0)

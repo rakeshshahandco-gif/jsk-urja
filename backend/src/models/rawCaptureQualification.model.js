@@ -59,6 +59,8 @@ const rawCaptureQualificationSchema = new mongoose.Schema(
         servesSelectedCity: { type: Boolean, default: false },
         locationEvidenceUrl: { type: String, trim: true, default: '', maxlength: 2048 },
         selectedCity: { type: String, trim: true, default: '', maxlength: 120 },
+        selectedState: { type: String, trim: true, default: '', maxlength: 120 },
+        selectedCountry: { type: String, trim: true, default: '', maxlength: 120 },
         addressCount: { type: Number, default: 0, min: 0 },
         previousLocationMatch: { type: String, trim: true, default: '', maxlength: 40 },
         previousLocationClassification: { type: String, trim: true, default: '', maxlength: 120 },
@@ -66,6 +68,17 @@ const rawCaptureQualificationSchema = new mongoose.Schema(
         contactQualityScore: { type: Number, default: 0, min: 0, max: 100 },
         contactQualityBreakdown: { type: mongoose.Schema.Types.Mixed, default: {} },
         sourceEvidence: { type: [evidenceSchema], default: [] },
+        requestedBusinessType: { type: String, trim: true, default: '', maxlength: 160 },
+        requestedBusinessTypes: { type: [String], default: [] },
+        detectedBusinessType: { type: String, trim: true, default: '', maxlength: 160 },
+        detectedBusinessTypes: { type: [String], default: [] },
+        entityType: { type: String, trim: true, default: '', maxlength: 40 },
+        qualificationMode: { type: String, trim: true, default: '', maxlength: 40 },
+        canonicalCompanyName: { type: String, trim: true, default: '', maxlength: 300 },
+        companyEntityConfidence: { type: String, trim: true, default: '', maxlength: 20 },
+        companyNameEvidence: { type: String, trim: true, default: '', maxlength: 500 },
+        businessTypeMatch: { type: String, enum: ['yes', 'possibly', 'no', ''], default: '' },
+        businessTypeMatchReason: { type: String, trim: true, default: '', maxlength: 500 },
 
         qualificationStatus: { type: String, enum: QUALIFICATION_STATUSES, default: 'queued', index: true },
         qualificationMethod: { type: String, enum: ['rule_based', 'ollama_local', 'rule_based_fallback'], default: 'rule_based' },
@@ -87,7 +100,7 @@ const rawCaptureQualificationSchema = new mongoose.Schema(
         createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
         updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     },
-    { timestamps: true, collection: 'raw_capture_qualifications' },
+    { timestamps: true, collection: 'raw_capture_qualifications', autoCreate: false, autoIndex: false },
 );
 
 rawCaptureQualificationSchema.index(
@@ -122,7 +135,7 @@ const qualificationJobSchema = new mongoose.Schema(
         finishedAt: { type: Date, default: null },
         createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     },
-    { timestamps: true, collection: 'raw_capture_qualification_jobs' },
+    { timestamps: true, collection: 'raw_capture_qualification_jobs', autoCreate: false, autoIndex: false },
 );
 
 qualificationJobSchema.index({ companyId: 1, sessionId: 1, createdAt: -1 });
@@ -166,7 +179,7 @@ const locationRecheckJobSchema = new mongoose.Schema(
         finishedAt: { type: Date, default: null },
         createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     },
-    { timestamps: true, collection: 'raw_capture_location_recheck_jobs' },
+    { timestamps: true, collection: 'raw_capture_location_recheck_jobs', autoCreate: false, autoIndex: false },
 );
 
 locationRecheckJobSchema.index({ companyId: 1, sessionId: 1, createdAt: -1 });

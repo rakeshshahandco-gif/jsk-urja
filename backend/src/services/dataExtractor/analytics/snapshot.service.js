@@ -1,9 +1,15 @@
 import { AiAnalyticsSnapshot } from '../../../models/aiAnalyticsSnapshot.model.js';
+import { ensureModelIndexes } from '../../../utils/ensureModelIndexes.js';
 import { getExecutiveSummary } from './aggregate.service.js';
 import { fingerprint } from './filters.util.js';
 import { getAnalyticsSettings, settingsFingerprint } from './settings.service.js';
 
+async function ensureAnalyticsSnapshotStore() {
+    await ensureModelIndexes(AiAnalyticsSnapshot);
+}
+
 export async function getOrRefreshExecutiveSnapshot(companyId, filters, user, { force = false } = {}) {
+    await ensureAnalyticsSnapshotStore();
     const settings = await getAnalyticsSettings(companyId);
     const fp = `${fingerprint(filters)}:${settingsFingerprint(settings)}`;
     if (!force) {

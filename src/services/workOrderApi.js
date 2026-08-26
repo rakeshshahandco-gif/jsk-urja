@@ -62,3 +62,23 @@ export const deleteProductionLog = async (id, seq, logId) => {
     const response = await api.delete(`${BASE}/${id}/stages/${seq}/production-logs/${logId}`);
     return response.data;
 };
+
+export const getSectionWorkOrders = async (parentId) => {
+    const response = await api.get(`${BASE}/${parentId}/section-work-orders`);
+    return response.data.data;
+};
+
+export const createSectionWorkOrder = async (parentId, data) => {
+    const response = await api.post(`${BASE}/${parentId}/section-work-orders`, data);
+    return response.data.data;
+};
+
+export const updateSectionConfig = async (parentId, data) => {
+    const response = await api.patch(`${BASE}/${parentId}/section-config`, data);
+    return response.data.data;
+};
+
+export const cancelSectionWorkOrder = async (id) => {
+    const response = await api.patch(`${BASE}/${id}/cancel`);
+    return response.data.data;
+};

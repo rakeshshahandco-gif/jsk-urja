@@ -1,44 +1,27 @@
 /**
  * Checkpoint 6A — bounded public page fetch (robots + SSRF + page limits).
  */
-import { isUrlAllowedByRobots } from '../../robotsCheck.js';
+import { fetchPublicHtml } from '../chinaWebsiteCrawler/safeFetch.util.js';
 import { assertResolvedPublicUrl } from '../../discovery/ssrfGuard.js';
-import { MAX_PAGES_PER_DOMAIN, PAGE_FETCH_TIMEOUT_MS } from './constants.js';
+import { MAX_PAGES_PER_DOMAIN } from './constants.js';
 import { dedupeAddresses } from './addressExtract.util.js';
 import { normalizeDomain, parsePageBundle } from './parse.util.js';
-
-const USER_AGENT = 'CRM-Data-Extractor-CP6/1.0 (+localhost; public-business-enrichment-only)';
+import { isGenericSeoCompanyTitle } from '../simpleLeadSearch/entityClassification.util.js';
 
 async function fetchHtml(url) {
-    const allowed = await isUrlAllowedByRobots(url, 5000);
-    if (!allowed) return { ok: false, error: 'Blocked by robots.txt', html: '', finalUrl: url };
-
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), PAGE_FETCH_TIMEOUT_MS);
-    try {
-        const safeUrl = await assertResolvedPublicUrl(url);
-        const res = await fetch(safeUrl, {
-            signal: controller.signal,
-            headers: { Accept: 'text/html,application/xhtml+xml', 'User-Agent': USER_AGENT },
-            redirect: 'follow',
-        });
-        if (!res.ok) return { ok: false, error: `HTTP ${res.status}`, html: '', finalUrl: safeUrl };
-        const contentType = res.headers.get('content-type') || '';
-        if (!contentType.includes('text/html') && !contentType.includes('text/plain')) {
-            return { ok: false, error: 'Non-HTML response', html: '', finalUrl: safeUrl };
-        }
-        const html = await res.text();
-        if (html.length > 2_000_000) return { ok: false, error: 'Response too large', html: '', finalUrl: safeUrl };
-        return { ok: true, html, error: '', finalUrl: res.url || safeUrl };
-    } catch (err) {
-        return { ok: false, error: err?.message || 'Fetch failed', html: '', finalUrl: url };
-    } finally {
-        clearTimeout(timer);
-    }
+    return fetchPublicHtml(url);
 }
 
 function mergePage(acc, page) {
-    if (!acc.companyName && page.companyName) acc.companyName = page.companyName;
+    if (page.canonicalCompanyName) acc.canonicalCompanyName = page.canonicalCompanyName;
+    if (page.companyNameEvidence) acc.companyNameEvidence = page.companyNameEvidence;
+    if (page.companyEntityConfidence) acc.companyEntityConfidence = page.companyEntityConfidence;
+    const incomingName = page.companyName || '';
+    if (incomingName && !isGenericSeoCompanyTitle(incomingName)) {
+        if (!acc.companyName || isGenericSeoCompanyTitle(acc.companyName)) acc.companyName = incomingName;
+    } else if (!acc.companyName && incomingName && !isGenericSeoCompanyTitle(incomingName)) {
+        acc.companyName = incomingName;
+    }
     if (!acc.legalOrDisplayedName && page.legalOrDisplayedName) acc.legalOrDisplayedName = page.legalOrDisplayedName;
     acc.emails = [...(acc.emails || []), ...(page.emails || [])];
     acc.phones = [...(acc.phones || []), ...(page.phones || [])];
@@ -61,6 +44,9 @@ function mergePage(acc, page) {
     }
     if (page.social?.youtube?.url && !acc.youtube?.url) {
         acc.youtube = { ...page.social.youtube, matchConfidence: page.social.youtube.matchConfidence || 'verified', evidence: page.social.youtube.evidence || ['official website link'] };
+    }
+    if (page.social?.twitter?.url && !acc.twitter?.url) {
+        acc.twitter = { ...page.social.twitter, matchConfidence: page.social.twitter.matchConfidence || 'verified', evidence: page.social.twitter.evidence || ['official website link'] };
     }
     if (!acc.gstin && page.gstin) { acc.gstin = page.gstin; acc.gstinSourceUrl = page.gstinSourceUrl || ''; }
     if (Array.isArray(page.rejectedPhones) && page.rejectedPhones.length) {
@@ -121,6 +107,7 @@ export async function enrichDomainFromWebsite(seedUrl, opts = {}) {
         instagram: {},
         linkedin: {},
         youtube: {},
+        twitter: {},
         businessType: 'unknown',
         manufacturerEvidence: '',
     };

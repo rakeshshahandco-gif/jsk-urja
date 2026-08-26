@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { AiSalesAssistantSession } from '../../../models/aiSalesAssistantSession.model.js';
 import { AiSalesAssistantMessage } from '../../../models/aiSalesAssistantMessage.model.js';
+import { ensureModelIndexes } from '../../../utils/ensureModelIndexes.js';
 import { AiSalesAssistantSavedPrompt } from '../../../models/aiSalesAssistantSavedPrompt.model.js';
 import { AiSalesAssistantQueryAudit } from '../../../models/aiSalesAssistantQueryAudit.model.js';
 import { ApiError } from '../../../utils/ApiError.js';
@@ -10,6 +11,10 @@ import {
 } from './permissions.util.js';
 import { PERMS, SUGGESTED_QUESTIONS } from './constants.js';
 import { getAssistantSettings } from './settings.service.js';
+
+async function ensureSalesAssistantMessageStore() {
+    await ensureModelIndexes(AiSalesAssistantMessage);
+}
 
 function oid(id) {
     if (!id || !mongoose.Types.ObjectId.isValid(String(id))) return null;
@@ -31,6 +36,7 @@ async function loadOwnedSession(companyId, sessionId, userId) {
 }
 
 export async function listSessions(companyId, userId, user, query = {}) {
+    await ensureSalesAssistantMessageStore();
     assertView(user);
     rejectTenantOverrides(query);
     const status = query.status || 'ACTIVE';
@@ -44,6 +50,7 @@ export async function listSessions(companyId, userId, user, query = {}) {
 }
 
 export async function createSession(companyId, userId, body = {}, user = null) {
+    await ensureSalesAssistantMessageStore();
     assertAsk(user);
     rejectTenantOverrides(body);
     assertNoSecrets(body);
@@ -61,11 +68,13 @@ export async function createSession(companyId, userId, body = {}, user = null) {
 }
 
 export async function getSession(companyId, sessionId, userId, user) {
+    await ensureSalesAssistantMessageStore();
     assertView(user);
     return loadOwnedSession(companyId, sessionId, userId);
 }
 
 export async function updateSession(companyId, sessionId, userId, body = {}, user = null) {
+    await ensureSalesAssistantMessageStore();
     assertAsk(user);
     rejectTenantOverrides(body);
     assertNoSecrets(body);
@@ -82,6 +91,7 @@ export async function updateSession(companyId, sessionId, userId, body = {}, use
 }
 
 export async function deleteSession(companyId, sessionId, userId, user) {
+    await ensureSalesAssistantMessageStore();
     assertAsk(user);
     await loadOwnedSession(companyId, sessionId, userId);
     await AiSalesAssistantSession.updateOne(
@@ -96,6 +106,7 @@ export async function deleteSession(companyId, sessionId, userId, user) {
 }
 
 export async function archiveSession(companyId, sessionId, userId, user) {
+    await ensureSalesAssistantMessageStore();
     assertAsk(user);
     await loadOwnedSession(companyId, sessionId, userId);
     return AiSalesAssistantSession.findOneAndUpdate(
@@ -106,6 +117,7 @@ export async function archiveSession(companyId, sessionId, userId, user) {
 }
 
 export async function clearSessionContext(companyId, sessionId, userId, user) {
+    await ensureSalesAssistantMessageStore();
     assertAsk(user);
     await loadOwnedSession(companyId, sessionId, userId);
     return AiSalesAssistantSession.findOneAndUpdate(
@@ -122,6 +134,7 @@ export async function clearSessionContext(companyId, sessionId, userId, user) {
 }
 
 export async function listMessages(companyId, sessionId, userId, user) {
+    await ensureSalesAssistantMessageStore();
     assertView(user);
     await loadOwnedSession(companyId, sessionId, userId);
     const items = await AiSalesAssistantMessage.find({
@@ -134,6 +147,7 @@ export async function listMessages(companyId, sessionId, userId, user) {
 }
 
 export async function appendMessage(companyId, sessionId, userId, payload) {
+    await ensureSalesAssistantMessageStore();
     assertNoSecrets(payload);
     const settings = await getAssistantSettings(companyId);
     const session = await loadOwnedSession(companyId, sessionId, userId);
@@ -163,6 +177,7 @@ export async function appendMessage(companyId, sessionId, userId, payload) {
 }
 
 export async function updateSessionContext(companyId, sessionId, userId, contextPatch) {
+    await ensureSalesAssistantMessageStore();
     const session = await loadOwnedSession(companyId, sessionId, userId);
     const next = { ...(session.context || {}), ...contextPatch };
     assertNoSecrets(next);
@@ -174,6 +189,7 @@ export async function updateSessionContext(companyId, sessionId, userId, context
 }
 
 export async function writeAudit(companyId, userId, payload) {
+    await ensureSalesAssistantMessageStore();
     assertNoSecrets(payload);
     return AiSalesAssistantQueryAudit.create({
         companyId,
@@ -183,6 +199,7 @@ export async function writeAudit(companyId, userId, payload) {
 }
 
 export async function listAudit(companyId, userId, user, query = {}) {
+    await ensureSalesAssistantMessageStore();
     assertAudit(user);
     rejectTenantOverrides(query);
     const q = { companyId, isDeleted: { $ne: true } };
@@ -194,6 +211,7 @@ export async function listAudit(companyId, userId, user, query = {}) {
 }
 
 export async function listSavedPrompts(companyId, userId, user) {
+    await ensureSalesAssistantMessageStore();
     assertSavedPrompts(user);
     const items = await AiSalesAssistantSavedPrompt.find({
         companyId,
@@ -207,6 +225,7 @@ export async function listSavedPrompts(companyId, userId, user) {
 }
 
 export async function createSavedPrompt(companyId, userId, body = {}, user = null) {
+    await ensureSalesAssistantMessageStore();
     assertSavedPrompts(user);
     rejectTenantOverrides(body);
     assertNoSecrets(body);
@@ -231,6 +250,7 @@ export async function createSavedPrompt(companyId, userId, body = {}, user = nul
 }
 
 export async function updateSavedPrompt(companyId, userId, id, body = {}, user = null) {
+    await ensureSalesAssistantMessageStore();
     assertSavedPrompts(user);
     rejectTenantOverrides(body);
     assertNoSecrets(body);
@@ -257,6 +277,7 @@ export async function updateSavedPrompt(companyId, userId, id, body = {}, user =
 }
 
 export async function deleteSavedPrompt(companyId, userId, id, user) {
+    await ensureSalesAssistantMessageStore();
     assertSavedPrompts(user);
     const _id = oid(id);
     const existing = await AiSalesAssistantSavedPrompt.findOne({ _id, companyId, isDeleted: { $ne: true } }).lean();
@@ -272,6 +293,7 @@ export async function deleteSavedPrompt(companyId, userId, id, user) {
 }
 
 export async function touchSavedPrompt(companyId, userId, id, user) {
+    await ensureSalesAssistantMessageStore();
     assertSavedPrompts(user);
     const _id = oid(id);
     const existing = await AiSalesAssistantSavedPrompt.findOne({

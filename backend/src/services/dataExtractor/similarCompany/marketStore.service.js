@@ -1,4 +1,5 @@
 import { AiMarketIntelligence } from '../../../models/aiMarketIntelligence.model.js';
+import { ensureModelIndexes } from '../../../utils/ensureModelIndexes.js';
 import { ExtractedLead } from '../../../models/extractedLead.model.js';
 import { AiIndustryClassification } from '../../../models/aiIndustryClassification.model.js';
 import { AiLeadRelevance } from '../../../models/aiLeadRelevance.model.js';
@@ -15,6 +16,10 @@ import {
 } from './marketIntelligence.service.js';
 import { getSimilaritySettings } from './settings.service.js';
 import { ENGINE_VERSION } from './constants.js';
+
+async function ensureMarketIntelligenceStore() {
+    await ensureModelIndexes(AiMarketIntelligence);
+}
 
 function rejectTenantOverrides(payload = {}) {
     if (payload.companyId != null || payload.tenantId != null) {
@@ -113,6 +118,7 @@ async function upsertIntel(companyId, userId, item, settingsVersion = '') {
 }
 
 export async function listMarketIntel(companyId, query = {}) {
+    await ensureMarketIntelligenceStore();
     const q = { companyId, isDeleted: { $ne: true } };
     if (query.intelType) q.intelType = query.intelType;
     if (query.status) q.status = query.status;
@@ -126,6 +132,7 @@ export async function listMarketIntel(companyId, query = {}) {
 }
 
 export async function getMarketIntel(companyId, id) {
+    await ensureMarketIntelligenceStore();
     const doc = await AiMarketIntelligence.findOne({ _id: id, companyId, isDeleted: { $ne: true } }).lean();
     if (!doc) throw new ApiError(404, 'Market intelligence not found');
     return doc;
@@ -136,6 +143,7 @@ export async function getMarketIntel(companyId, id) {
  * Never invents market totals. Never auto-runs paid providers.
  */
 export async function runMarketIntelligence(companyId, userId, payload = {}) {
+    await ensureMarketIntelligenceStore();
     rejectTenantOverrides(payload);
     if (payload.executePaidProvider === true && payload.confirmPaidProvider !== true) {
         throw new ApiError(400, 'Paid provider requires explicit confirmation');

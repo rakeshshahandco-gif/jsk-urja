@@ -48,7 +48,7 @@ const rawCaptureSchema = new mongoose.Schema(
         archivedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
         updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     },
-    { timestamps: true, collection: 'raw_captures' },
+    { timestamps: true, collection: 'raw_captures', autoCreate: false, autoIndex: false },
 );
 
 rawCaptureSchema.index({ companyId: 1, campaignId: 1, inboxStatus: 1, lastSeenAt: -1 });

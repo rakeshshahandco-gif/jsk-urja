@@ -66,6 +66,8 @@ const searchCampaignSchema = new mongoose.Schema(
         updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
         archivedAt: { type: Date, default: null },
         archivedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+        /** Embedded Facebook Group Member Collector checkpoint. Not a new collection. */
+        facebookMemberCollector: { type: mongoose.Schema.Types.Mixed, default: undefined },
     },
     {
         timestamps: true,

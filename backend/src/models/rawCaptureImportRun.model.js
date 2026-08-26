@@ -94,7 +94,7 @@ const rawCaptureImportRunSchema = new mongoose.Schema(
         failureCode: { type: String, default: '', maxlength: 80 },
         failureMessage: { type: String, default: '', maxlength: 500 },
     },
-    { timestamps: true, collection: 'raw_capture_import_runs' },
+    { timestamps: true, collection: 'raw_capture_import_runs', autoCreate: false, autoIndex: false },
 );
 
 rawCaptureImportRunSchema.index(

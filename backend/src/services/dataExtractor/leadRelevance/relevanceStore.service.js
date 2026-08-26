@@ -1,11 +1,16 @@
 import mongoose from 'mongoose';
 import { AiLeadRelevance } from '../../../models/aiLeadRelevance.model.js';
+import { ensureModelIndexes } from '../../../utils/ensureModelIndexes.js';
 import { AiIndustryClassification } from '../../../models/aiIndustryClassification.model.js';
 import { ExtractedLead } from '../../../models/extractedLead.model.js';
 import { ApiError } from '../../../utils/ApiError.js';
 import { getOrCreateExtractorSettings } from '../extractor.service.js';
 import { loadLeadIntelligenceMasters } from '../aiLeadIntelligence.service.js';
 import { scoreLeadRelevance } from './relevanceEngine.service.js';
+
+async function ensureLeadRelevanceStore() {
+    await ensureModelIndexes(AiLeadRelevance);
+}
 
 function rejectTenantOverrides(payload = {}) {
     if (payload.companyId != null || payload.tenantId != null) {
@@ -35,6 +40,7 @@ function recordKeyOf({ classificationId, extractedLeadId, discoveryJobId, previe
 }
 
 export async function listRelevance(companyId, query = {}) {
+    await ensureLeadRelevanceStore();
     const q = { companyId, isDeleted: { $ne: true } };
     if (query.status) q.status = query.status;
     if (query.excluded === 'true') q.excluded = true;
@@ -52,12 +58,14 @@ export async function listRelevance(companyId, query = {}) {
 }
 
 export async function getRelevance(companyId, id) {
+    await ensureLeadRelevanceStore();
     const doc = await AiLeadRelevance.findOne({ _id: id, companyId, isDeleted: { $ne: true } }).lean();
     if (!doc) throw new ApiError(404, 'Relevance record not found');
     return doc;
 }
 
 export async function evaluateRelevance(companyId, userId, payload = {}) {
+    await ensureLeadRelevanceStore();
     rejectTenantOverrides(payload);
     const settings = await getOrCreateExtractorSettings(companyId);
     const masters = await loadLeadIntelligenceMasters(companyId);
@@ -197,6 +205,7 @@ export async function evaluateRelevance(companyId, userId, payload = {}) {
 }
 
 export async function excludeRelevance(companyId, userId, id, payload = {}) {
+    await ensureLeadRelevanceStore();
     rejectTenantOverrides(payload);
     const doc = await AiLeadRelevance.findOne({ _id: id, companyId, isDeleted: { $ne: true } });
     if (!doc) throw new ApiError(404, 'Relevance record not found');
@@ -215,6 +224,7 @@ export async function excludeRelevance(companyId, userId, id, payload = {}) {
 }
 
 export async function restoreRelevance(companyId, userId, id, payload = {}) {
+    await ensureLeadRelevanceStore();
     rejectTenantOverrides(payload);
     const doc = await AiLeadRelevance.findOne({ _id: id, companyId, isDeleted: { $ne: true } });
     if (!doc) throw new ApiError(404, 'Relevance record not found');
@@ -234,6 +244,7 @@ export async function restoreRelevance(companyId, userId, id, payload = {}) {
 }
 
 export async function getRelevanceHistory(companyId, id) {
+    await ensureLeadRelevanceStore();
     const doc = await getRelevance(companyId, id);
     return { _id: doc._id, companyId: doc.companyId, history: doc.history || [] };
 }

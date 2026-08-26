@@ -14,8 +14,11 @@ import {
     SESSION_ALLOWED_TTL_MINUTES_MAX,
 } from './constants.js';
 import { actorUserId, assertAssistedCaptureManage, assertAssistedCaptureStart, assertAssistedCaptureView } from './permissions.util.js';
-import { validateGoogleSearchUrl } from './googleUrl.util.js';
+import { validateAssistedSearchUrl, assistedSourceFromUrl } from './googleUrl.util.js';
 import { issueSessionToken } from './sessionToken.util.js';
+import { buildSearchUrl } from '../searchQuery/normalize.util.js';
+
+const SOCIAL_SESSION_SOURCES = Object.freeze(['facebook', 'instagram', 'linkedin', 'x']);
 
 function requireObjectId(id, label) {
     if (!id || !mongoose.isValidObjectId(id)) throw new ApiError(404, `${label} not found`);
@@ -71,8 +74,15 @@ export async function createAssistedCaptureSession({ companyId, user, campaignId
         throw new ApiError(400, `Cannot create assisted capture for query status: ${query.status}`);
     }
 
-    const searchUrl = validateGoogleSearchUrl(query.searchUrl);
-    const sourceHint = ['google', 'web', 'official_website'].includes(body?.sourceHint) ? body.sourceHint : (query.sourceHint || 'google');
+    const searchUrl = validateAssistedSearchUrl(
+        query.searchUrl || buildSearchUrl(query.sourceHint || body?.sourceHint, query.queryText),
+    );
+    const inferredSource = assistedSourceFromUrl(searchUrl) || 'google';
+    const sourceHint = ['google', 'web', 'official_website', 'baidu', '1688', 'sogou', 'so360', ...SOCIAL_SESSION_SOURCES].includes(body?.sourceHint)
+        ? body.sourceHint
+        : (query.sourceHint || inferredSource);
+    const isSocialSource = SOCIAL_SESSION_SOURCES.includes(sourceHint)
+        || SOCIAL_SESSION_SOURCES.includes(inferredSource);
 
     const requestedTtl = Number(body?.sessionTtlMinutes);
     const sessionTtlMinutes = Number.isFinite(requestedTtl)
@@ -105,60 +115,69 @@ export async function createAssistedCaptureSession({ companyId, user, campaignId
     const actorId = actorUserId(user);
     const searchUrlHash = hashText(searchUrl);
 
-    // Free the Discovery Agent: end other active sessions for this company so a new
-    // Search & Capture is claimable (do not leave the agent stuck on a prior awaiting_user loop).
+    // Free the Discovery Agent for Google/China searches. Facebook/Instagram public ingest
+    // must not cancel an in-progress Simple Lead Search Processing session.
     const ACTIVE_RELEASE = [
         'created', 'queued', 'agent_assigned', 'opening', 'awaiting_user',
         'manual_action_required', 'ready_to_capture', 'capturing',
     ];
-    await AssistedCaptureSession.updateMany(
-        {
-            companyId,
-            status: { $in: ACTIVE_RELEASE },
-        },
-        {
-            $set: {
-                status: 'cancelled',
-                cancelledAt: now,
-                cancelledBy: actorId,
-                pendingCaptureStatus: 'none',
-                pendingCaptureAckedAt: null,
-                pendingNavigationStatus: 'none',
-                failMessage: '',
-                'autoCollection.status': 'stopped',
-                'autoCollection.phase': 'done',
-                'autoCollection.enabled': false,
-                'autoCollection.stoppedAt': now,
-                'autoCollection.summary.stopReason': 'superseded_by_new_search',
+    if (!isSocialSource) {
+        await AssistedCaptureSession.updateMany(
+            {
+                companyId,
+                status: { $in: ACTIVE_RELEASE },
             },
-        },
-    );
+            {
+                $set: {
+                    status: 'cancelled',
+                    cancelledAt: now,
+                    cancelledBy: actorId,
+                    pendingCaptureStatus: 'none',
+                    pendingCaptureAckedAt: null,
+                    pendingNavigationStatus: 'none',
+                    failMessage: '',
+                    'autoCollection.status': 'stopped',
+                    'autoCollection.phase': 'done',
+                    'autoCollection.enabled': false,
+                    'autoCollection.stoppedAt': now,
+                    'autoCollection.summary.stopReason': 'superseded_by_new_search',
+                },
+            },
+        );
+    }
 
-    const discoveryAgentJob = await DiscoveryAgentJob.create({
-        companyId,
-        financialYear,
-        createdBy: actorId,
-        sourceMode: 'assisted_google_capture',
-        status: 'WAITING_CONNECT',
-        keyword: query.queryText || 'assisted_google_capture',
-        // Plain token delivered once on /claim then cleared from metadata (never on session API).
-        metadata: {
-            assistedCaptureSessionId: null,
-            searchUrlHash,
-            pendingSessionToken: tokenPlain,
-        },
-    });
+    let discoveryAgentJob = null;
+    if (!isSocialSource) {
+        discoveryAgentJob = await DiscoveryAgentJob.create({
+            companyId,
+            financialYear,
+            createdBy: actorId,
+            sourceMode: 'assisted_google_capture',
+            status: 'WAITING_CONNECT',
+            keyword: query.queryText || 'assisted_google_capture',
+            metadata: {
+                assistedCaptureSessionId: null,
+                searchUrlHash,
+                pendingSessionToken: tokenPlain,
+            },
+        });
+    }
+
+    const sessionSource = isSocialSource
+        ? (SOCIAL_SESSION_SOURCES.includes(sourceHint) ? sourceHint : inferredSource)
+        : (['baidu', '1688', 'sogou', 'so360'].includes(inferredSource) ? inferredSource : 'google');
 
     const session = await AssistedCaptureSession.create({
         companyId,
         campaignId,
         queryId,
-        discoveryAgentJobId: discoveryAgentJob._id,
-        source: 'google',
+        discoveryAgentJobId: discoveryAgentJob?._id || null,
+        source: sessionSource,
         sourceHint,
         searchUrl,
         searchUrlHash,
-        status: 'queued',
+        status: isSocialSource ? 'completed' : 'queued',
+        completedAt: isSocialSource ? now : null,
         idempotencyKey,
         requestFingerprint,
         tokenHash,
@@ -168,9 +187,11 @@ export async function createAssistedCaptureSession({ companyId, user, campaignId
         updatedBy: actorId,
     });
 
-    await DiscoveryAgentJob.findByIdAndUpdate(discoveryAgentJob._id, {
-        $set: { 'metadata.assistedCaptureSessionId': session._id },
-    });
+    if (discoveryAgentJob) {
+        await DiscoveryAgentJob.findByIdAndUpdate(discoveryAgentJob._id, {
+            $set: { 'metadata.assistedCaptureSessionId': session._id },
+        });
+    }
 
     return { session: sanitizeSession(session), idempotentReplay: false };
 }

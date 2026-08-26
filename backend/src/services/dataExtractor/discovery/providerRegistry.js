@@ -6,6 +6,7 @@ import { isPlacesEnrichmentEnabled } from '../placesEnrichment.service.js';
 import { testWebSearchProvider } from '../providers/searchProvider.factory.js';
 import { testGoogleBusinessConnection } from '../adapters/googleBusinessAdapter.js';
 import { getIndiamartDiscoveryConfig, testIndiamartAvailability } from './indiamartDiscovery.service.js';
+import { isPublicHtmlSearchConfigured, testPublicHtmlSearch } from '../providers/publicHtmlSearchProvider.js';
 
 const FUTURE = [
     ['tradeindia', 'TradeIndia', PROVIDER_TYPES.FUTURE_PROVIDER],
@@ -31,6 +32,26 @@ function freeFirst(settings) {
 }
 
 export const DISCOVERY_PROVIDERS = [
+    {
+        providerId: 'public_web',
+        providerName: 'Public Web Discovery',
+        providerType: PROVIDER_TYPES.SEARCH_PROVIDER,
+        categoryLabel: 'Free public search (no paid API)',
+        priority: 0,
+        supportsPagination: true,
+        supportsResume: true,
+        supportsLocation: true,
+        supportsKeyword: true,
+        supportsBusinessProfile: false,
+        rateLimitType: 'request_delay',
+        isConfigured: () => isPublicHtmlSearchConfigured(),
+        isEnabled: (s) => discoveryCfg(s).publicWebEnabled !== false,
+        executable: true,
+        async healthCheck() {
+            return testPublicHtmlSearch();
+        },
+        usageDetails: usageNA,
+    },
     {
         providerId: 'brave',
         providerName: 'Brave Search',
@@ -288,6 +309,8 @@ const PROVIDER_ALIASES = {
     linkedin: 'linkedin_company',
     youtube: 'youtube_business',
     brave_search: 'brave',
+    public_html: 'public_web',
+    duckduckgo: 'public_web',
 };
 
 export function resolveProviderId(providerId) {
@@ -359,5 +382,5 @@ export function assertProvidersExecutable(selectedIds = [], settings = null) {
 }
 
 export function freeFirstProviderOrder() {
-    return ['brave', 'indiamart', 'website_enrichment', 'facebook_public', 'instagram_public', 'serpapi', 'google_places'];
+    return ['public_web', 'brave', 'indiamart', 'website_enrichment', 'facebook_public', 'instagram_public', 'serpapi', 'google_places'];
 }

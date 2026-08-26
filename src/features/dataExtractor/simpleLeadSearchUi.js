@@ -3,6 +3,41 @@
  * Keep pure (no React) so node:test can cover render-data edge cases.
  */
 
+export function formatBusinessTypesLabel(businessType = '') {
+    if (Array.isArray(businessType)) {
+        return businessType.map((s) => String(s || '').trim()).filter(Boolean).join(' + ');
+    }
+    return String(businessType || '').trim();
+}
+
+export function formatSimpleSearchLabel(product = '', businessType = '', location = '') {
+    return [product, formatBusinessTypesLabel(businessType), location]
+        .map((s) => String(s || '').trim())
+        .filter(Boolean)
+        .join(' · ');
+}
+
+export function nextSimpleBusinessTypes(current = [], toggledId = '') {
+    const ANY = 'Any Business';
+    const id = String(toggledId || '').trim();
+    const list = Array.isArray(current) ? current.filter(Boolean) : [];
+    if (!id) return list.length ? list : ['Manufacturer'];
+    if (id === ANY) return [ANY];
+    const withoutAny = list.filter((x) => x !== ANY);
+    const has = withoutAny.includes(id);
+    if (has) {
+        const next = withoutAny.filter((x) => x !== id);
+        return next.length ? next : withoutAny;
+    }
+    return [...withoutAny, id];
+}
+
+export function formatBusinessTypeField(record = {}, arrayKey = 'requestedBusinessTypes', singularKey = 'requestedBusinessType') {
+    const arr = record?.[arrayKey];
+    if (Array.isArray(arr) && arr.length) return arr.join(', ');
+    return String(record?.[singularKey] || '').trim() || '-';
+}
+
 /**
  * Resolve generated-query list for display without assuming campaign/result exist.
  * @param {object|null|undefined} campaignProgress
@@ -33,6 +68,46 @@ export function safeQueryTotal(campaignProgress, result, autoCollection) {
     return Number(total) || 0;
 }
 
+const SAFE_FAIL_REASON = Object.freeze({
+    UNSUPPORTED_LAYOUT: 'No parser results on this page',
+    NO_ORGANIC_RESULTS: 'No organic results extracted',
+    NO_PARSER_RESULTS: 'No parser results',
+    AGENT_FAILED: 'Discovery Agent reported a failure',
+    AGENT_OFFLINE: 'Agent offline',
+    EVENT_INGEST_FAILED: 'Ingest rejected records',
+    ASSISTED_SESSION_FAILED: 'Discovery session failed',
+    session_failed: 'Discovery session failed',
+    capture_ingest_failed: 'Capture ingest failed',
+    agent_offline: 'Agent offline',
+});
+
+/**
+ * Failed runs must never show a blank Last Processing Error.
+ * Discovery failures live on autoCollection / session, not autoProcessing.
+ */
+export function lastVisibleRunError({ autoProcessing, autoCollection, session, status } = {}) {
+    const candidates = [
+        autoProcessing?.lastErrorMessage,
+        autoCollection?.lastErrorMessage,
+        session?.failMessage,
+        session?.safeFailureMessage,
+        session?.manualActionMessage,
+        autoCollection?.pauseReason,
+    ].map((s) => String(s || '').trim()).filter(Boolean);
+    if (candidates[0]) return candidates[0];
+    const failed = ['failed', 'FAILED'].includes(String(status || ''))
+        || String(autoCollection?.status || '') === 'failed'
+        || String(session?.status || '') === 'failed'
+        || String(autoCollection?.discoveryStatus || '') === 'failed';
+    if (!failed) return '';
+    const code = String(
+        session?.failCode || autoCollection?.lastErrorCode || autoProcessing?.lastErrorCode || '',
+    ).trim();
+    if (code && SAFE_FAIL_REASON[code]) return SAFE_FAIL_REASON[code];
+    if (code) return code.replace(/_/g, ' ');
+    return 'Run failed without a stored reason.';
+}
+
 /**
  * @param {object|null|undefined} campaignProgress
  * @param {object|null|undefined} result
@@ -59,18 +134,19 @@ export const AUTO_RESUME_BACKLOG_MESSAGE =
 
 /**
  * Keep status polling alive when capture session is inactive but CP6→CP8 backlog remains.
+ * Do not keep polling a terminal session merely because full-auto is checked.
  * @param {object|null|undefined} autoProcessing
  * @param {boolean} ownerFullAuto
  */
 export function shouldKeepPollingForAutoProcessing(autoProcessing, ownerFullAuto = true) {
-    if (!autoProcessing) return Boolean(ownerFullAuto);
+    if (!autoProcessing) return false;
     const status = autoProcessing.status || 'idle';
     if (status === 'paused_owner' || status === 'stopped') return false;
     const backlog = Number(autoProcessing.counts?.processingBacklog || 0);
     if (backlog > 0) return true;
     if (status === 'running') return true;
     if (autoProcessing.enabled || autoProcessing.ownerWorkflowEnabled) return true;
-    return Boolean(ownerFullAuto && status === 'completed');
+    return Boolean(ownerFullAuto && status === 'completed' && backlog > 0);
 }
 
 /**

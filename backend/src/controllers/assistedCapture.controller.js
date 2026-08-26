@@ -17,6 +17,7 @@ import {
     listAssistedCaptureSessions,
     loadClaimedSessionForAgent,
     pollQueuedSessionId,
+    pollReclaimableAssistedSession,
     requestCaptureVisibleResults,
     setManualActionRequired,
     submitAgentAssistedEvent,
@@ -225,7 +226,9 @@ export const presence = withSafeErrors(async (req, res) => {
 });
 
 export const pollQueued = withSafeErrors(async (req, res) => {
-    const queued = await pollQueuedSessionId(requireCompany(req));
+    const companyId = requireCompany(req);
+    const queued = (await pollQueuedSessionId(companyId))
+        || (await pollReclaimableAssistedSession(companyId));
     res.send(new ApiResponse(200, { queued }, queued ? 'Queued assisted session available' : 'No queued assisted session'));
 });
 

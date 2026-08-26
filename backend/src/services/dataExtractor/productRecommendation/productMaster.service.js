@@ -1,5 +1,10 @@
 import { AiProductMaster } from '../../../models/aiProductMaster.model.js';
+import { ensureModelIndexes } from '../../../utils/ensureModelIndexes.js';
 import { ApiError } from '../../../utils/ApiError.js';
+
+async function ensureProductMasterStore() {
+    await ensureModelIndexes(AiProductMaster);
+}
 
 function cleanList(list = []) {
     return [...new Set((list || []).map((x) => String(x || '').trim()).filter(Boolean))];
@@ -15,6 +20,7 @@ function pushAudit(doc, action, userId, note = '') {
 }
 
 export async function listProductMasters(companyId, query = {}) {
+    await ensureProductMasterStore();
     const q = { companyId };
     if (query.isActive === 'true') q.isActive = true;
     if (query.isActive === 'false') q.isActive = false;
@@ -24,6 +30,7 @@ export async function listProductMasters(companyId, query = {}) {
 }
 
 export async function saveProductMasters(companyId, rows = [], userId = null) {
+    await ensureProductMasterStore();
     const results = [];
     for (const row of rows || []) {
         const productName = String(row.productName || '').trim();
@@ -69,10 +76,12 @@ export async function saveProductMasters(companyId, rows = [], userId = null) {
 }
 
 export async function getActiveProducts(companyId) {
+    await ensureProductMasterStore();
     return AiProductMaster.find({ companyId, isActive: { $ne: false } }).lean();
 }
 
 export async function requireOwnedProduct(companyId, productId) {
+    await ensureProductMasterStore();
     const doc = await AiProductMaster.findOne({ _id: productId, companyId }).lean();
     if (!doc) throw new ApiError(404, 'Product master not found');
     return doc;

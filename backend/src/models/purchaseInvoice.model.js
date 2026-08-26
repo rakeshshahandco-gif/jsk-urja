@@ -81,6 +81,39 @@ const purchaseInvoiceSchema = new mongoose.Schema({
     isDirectPurchase: { type: Boolean, default: false }, // true = stock hit on invoice  // e-invoicing IRN (optional)
     isConsumable: { type: Boolean, default: false }, // Header level toggle
 
+    // Domestic vs Import (header). Distinct from items[].purchaseType (RAW_MATERIAL / TRADING / CONSUMABLE).
+    inwardPurchaseType: {
+        type: String,
+        enum: ['Domestic', 'Import'],
+        default: 'Domestic',
+    },
+    importLandedCost: {
+        billOfEntryNo: { type: String, default: '' },
+        billOfEntryDate: { type: Date, default: null },
+        portCha: { type: String, default: '' },
+        assessableValue: { type: Number, default: 0 },
+        oceanAirFreight: { type: Number, default: 0 },
+        insurance: { type: Number, default: 0 },
+        customsDuty: { type: Number, default: 0 },
+        socialWelfareSurcharge: { type: Number, default: 0 },
+        clearingChaCharges: { type: Number, default: 0 },
+        localTransport: { type: Number, default: 0 },
+        otherCharges: { type: Number, default: 0 },
+        allocationMethod: {
+            type: String,
+            enum: ['By Taxable Value', 'By Quantity'],
+            default: 'By Taxable Value',
+        },
+        totalAdditionalLandedCharges: { type: Number, default: 0 },
+        totalLandedCost: { type: Number, default: 0 },
+        itemAllocations: [{
+            itemId: { type: mongoose.Schema.Types.ObjectId, ref: 'Item', default: null },
+            itemName: { type: String, default: '' },
+            allocatedLandedCharges: { type: Number, default: 0 },
+            landedUnitCost: { type: Number, default: 0 },
+        }],
+    },
+
     // Items
     items: [piItemSchema],
 

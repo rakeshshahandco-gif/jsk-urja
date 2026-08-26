@@ -14,6 +14,8 @@ export const JOB_STATUSES = [
     'QUEUED',
     'RUNNING',
     'PAUSED',
+    'RECOVERING',
+    'BLOCKED',
     'COMPLETED',
     'COMPLETED_WITH_WARNINGS',
     'STOPPED',

@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { AiLeadScore } from '../../../models/aiLeadScore.model.js';
+import { ensureModelIndexes } from '../../../utils/ensureModelIndexes.js';
 import { ExtractedLead } from '../../../models/extractedLead.model.js';
 import { AiIndustryClassification } from '../../../models/aiIndustryClassification.model.js';
 import { AiLeadRelevance } from '../../../models/aiLeadRelevance.model.js';
@@ -9,6 +10,10 @@ import { AiCompanyIntelligenceProfile } from '../../../models/aiCompanyIntellige
 import { ApiError } from '../../../utils/ApiError.js';
 import { runLeadScoring } from './score.service.js';
 import { getLeadScoringSettings, settingsFingerprint } from './settings.service.js';
+
+async function ensureLeadScoreStore() {
+    await ensureModelIndexes(AiLeadScore);
+}
 
 function rejectTenantOverrides(payload = {}) {
     if (payload.companyId != null || payload.tenantId != null) {
@@ -88,6 +93,7 @@ function isUpstreamNewer(existing, hashes) {
 }
 
 export async function listScores(companyId, query = {}) {
+    await ensureLeadScoreStore();
     const q = { companyId, isDeleted: { $ne: true } };
     if (query.status) q.status = query.status;
     if (query.priority) q.priority = query.priority;
@@ -113,17 +119,20 @@ export async function listScores(companyId, query = {}) {
 }
 
 export async function getScore(companyId, id) {
+    await ensureLeadScoreStore();
     const doc = await AiLeadScore.findOne({ _id: id, companyId, isDeleted: { $ne: true } }).lean();
     if (!doc) throw new ApiError(404, 'Lead score not found');
     return doc;
 }
 
 export async function getScoreHistory(companyId, id) {
+    await ensureLeadScoreStore();
     const doc = await getScore(companyId, id);
     return { _id: doc._id, companyId: doc.companyId, history: doc.history || [] };
 }
 
 export async function scoreOne(companyId, userId, payload = {}) {
+    await ensureLeadScoreStore();
     rejectTenantOverrides(payload);
     let record = payload.record || null;
     let classification = payload.classification || null;
@@ -291,6 +300,7 @@ export async function scoreOne(companyId, userId, payload = {}) {
 }
 
 export async function overrideScore(companyId, userId, id, payload = {}) {
+    await ensureLeadScoreStore();
     rejectTenantOverrides(payload);
     const doc = await AiLeadScore.findOne({ _id: id, companyId, isDeleted: { $ne: true } });
     if (!doc) throw new ApiError(404, 'Lead score not found');
@@ -344,6 +354,7 @@ export async function overrideScore(companyId, userId, id, payload = {}) {
 }
 
 export async function lockScore(companyId, userId, id, payload = {}) {
+    await ensureLeadScoreStore();
     rejectTenantOverrides(payload);
     const doc = await AiLeadScore.findOne({ _id: id, companyId, isDeleted: { $ne: true } });
     if (!doc) throw new ApiError(404, 'Lead score not found');
@@ -369,6 +380,7 @@ export async function lockScore(companyId, userId, id, payload = {}) {
 }
 
 export async function exportApprovedScores(companyId, query = {}) {
+    await ensureLeadScoreStore();
     const q = {
         companyId,
         isDeleted: { $ne: true },
@@ -394,6 +406,7 @@ export async function exportApprovedScores(companyId, query = {}) {
 }
 
 export async function applyOutdatedFromUpstream(companyId, scoreId, hashes = {}) {
+    await ensureLeadScoreStore();
     const doc = await AiLeadScore.findOne({ _id: scoreId, companyId, isDeleted: { $ne: true } });
     if (!doc) throw new ApiError(404, 'Lead score not found');
     if (doc.locked) return { outdated: false, reason: 'locked', score: doc.toObject() };

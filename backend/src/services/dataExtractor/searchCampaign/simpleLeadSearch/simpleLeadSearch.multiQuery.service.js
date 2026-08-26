@@ -16,15 +16,16 @@ import {
 } from '../assistedCapture/session.service.js';
 import { getAgentStatusForCompany, SESSION_UI_LABELS } from '../assistedCapture/agentPresence.service.js';
 import {
-    buildNextGoogleResultsPageUrl,
+    buildNextAssistedPageUrl,
     readGooglePageIndexFromUrl,
-    validateGoogleSearchUrl,
+    validateAssistedSearchUrl,
 } from '../assistedCapture/googleUrl.util.js';
 import {
     SLS_QUERY_CAPTURE_STATUSES,
     SLS_QUERY_OPENABLE,
     SLS_QUERY_TERMINAL,
 } from './slsQueryProgress.constants.js';
+import { chinaSourceBucket, sourceHintFromPlatform } from './queryBuilder.util.js';
 
 function hashText(value) {
     return crypto.createHash('sha256').update(String(value || '')).digest('hex');
@@ -55,6 +56,17 @@ async function loadOwnedSession(companyId, sessionId) {
     const session = await AssistedCaptureSession.findOne({ _id: sessionId, companyId });
     if (!session) throw new ApiError(404, 'Assisted capture session not found');
     return session;
+}
+function assertNotOwnerStopped(session) {
+    const ac = session?.autoCollection || {};
+    if (
+        ac.ownerStoppedAt
+        || ac.stopRequested === true
+        || String(ac.summary?.stopReason || '') === 'owner_stop'
+        || session?.status === 'cancelled'
+    ) {
+        throw new ApiError(400, 'STOPPED BY USER. This search will not resume. Start a new search.');
+    }
 }
 
 const ACTIVE_SESSION = new Set([
@@ -112,15 +124,43 @@ export async function buildCampaignProgress({ companyId, campaignId, session = n
 
     const campaignUnique = await RawCapture.countDocuments({ companyId, campaignId });
     const campaignCaptures = await RawCapture.find({ companyId, campaignId })
-        .select('seenCount')
+        .select('seenCount source notes')
         .lean();
     const appearanceSum = campaignCaptures.reduce((n, c) => n + Number(c.seenCount || 1), 0);
+    const emptySourceCounts = () => ({
+        google: 0, baidu: 0, '1688': 0, sogou: 0, so360: 0,
+        alibaba: 0, made_in_china: 0, global_sources: 0,
+    });
+    const rawBySource = emptySourceCounts();
+    let verifiedManufacturers = 0;
+    for (const c of campaignCaptures) {
+        const bucket = chinaSourceBucket(c.source);
+        if (rawBySource[bucket] != null) rawBySource[bucket] += 1;
+        else rawBySource.google += 1;
+        if (/"vs"\s*:\s*"VERIFIED_MANUFACTURER"/.test(String(c.notes || ''))) verifiedManufacturers += 1;
+    }
 
     const sessions = await AssistedCaptureSession.find({ companyId, campaignId })
-        .select('insertedCount updatedExistingCount acceptedCount visibleResultCount captureEventCount queryId')
+        .select('insertedCount updatedExistingCount acceptedCount visibleResultCount captureEventCount queryId source sourceHint')
         .lean();
 
     const resultAppearances = sessions.reduce((n, s) => n + Number(s.acceptedCount || 0), 0);
+    const queryPlatformById = {};
+    for (const q of queries) {
+        queryPlatformById[String(q._id)] = q.selectedCriteria?.sourcePlatform || q.sourceHint || '';
+    }
+    const capturedBySource = emptySourceCounts();
+    for (const s of sessions) {
+        const n = Number(s.acceptedCount || 0);
+        const platform = queryPlatformById[String(s.queryId)] || s.source || s.sourceHint;
+        const bucket = chinaSourceBucket(platform);
+        if (capturedBySource[bucket] != null) capturedBySource[bucket] += n;
+        else capturedBySource.google += n;
+    }
+    const capturedSum = Object.values(capturedBySource).reduce((n, v) => n + Number(v || 0), 0);
+    if (capturedSum === 0) {
+        Object.assign(capturedBySource, rawBySource);
+    }
     const newUniqueInserted = sessions.reduce((n, s) => n + Number(s.insertedCount || 0), 0);
     const existingUpdated = sessions.reduce((n, s) => n + Number(s.updatedExistingCount || 0), 0);
     const overlapping = Math.max(0, resultAppearances - newUniqueInserted);
@@ -138,9 +178,11 @@ export async function buildCampaignProgress({ companyId, campaignId, session = n
             priorityScore: q.priorityScore,
             businessType: q.selectedCriteria?.businessType || '',
             locationLabel: q.selectedCriteria?.locationLabel || '',
+            ownerDisplayLabel: q.selectedCriteria?.ownerDisplayLabel || '',
             locationScope: q.selectedCriteria?.locationScope || '',
             relatedKeyword: q.selectedCriteria?.relatedKeyword || '',
             queryLanguage: q.selectedCriteria?.queryLanguage || 'en',
+            sourcePlatform: q.selectedCriteria?.sourcePlatform || q.sourceHint || 'google',
             captureEvents: Number(q.slsCaptureEventCount || 0),
             visibleResults: Number(q.slsVisibleResultCount || 0),
             newUniqueRecords: Number(q.slsNewUniqueCount || 0),
@@ -170,16 +212,91 @@ export async function buildCampaignProgress({ companyId, campaignId, session = n
         appearanceSumSeenCount: appearanceSum,
         currentBusinessType: queryProgress.find((q) => q.isCurrent)?.businessType || '',
         currentLocationLabel: queryProgress.find((q) => q.isCurrent)?.locationLabel || '',
+        currentOwnerDisplayLabel: queryProgress.find((q) => q.isCurrent)?.ownerDisplayLabel || '',
+        searchLabel: queryProgress.find((q) => q.isCurrent)?.ownerDisplayLabel
+            || queryProgress.find((q) => q.ownerDisplayLabel)?.ownerDisplayLabel
+            || '',
         queries: queryProgress,
         currentQueryId: currentQueryId || null,
-        note: 'Accepted/visible counts are result appearances, not unique companies.',
+        sourceStatus: buildChinaSourceStatus(queryProgress, session, capturedBySource),
+        capturedBySource,
+        verifiedManufacturers,
+        note: 'Accepted/visible counts are result appearances, not unique companies. Indexed Alibaba / Made-in-China / Global Sources are Google-hosted site: searches, not native portal capture.',
     };
+}
+
+function mapQueryStatusToSourceStatus(sls, sessionStatus) {
+    const st = String(sls || 'pending');
+    const sess = String(sessionStatus || '');
+    if (sess === 'manual_action_required') return 'Waiting for User';
+    if (['opening', 'agent_assigned', 'queued'].includes(sess)) return 'Searching';
+    if (['awaiting_user', 'ready_to_capture', 'capturing'].includes(sess)) return 'Running';
+    if (st === 'completed') return 'Completed';
+    if (st === 'failed') return 'Failed';
+    if (st === 'skipped') return 'Not Available';
+    if (st === 'partially_captured' || st === 'ready' || st === 'opening') return 'Running';
+    if (st === 'pending') return 'Queued';
+    return st;
+}
+
+function buildChinaSourceStatus(queryProgress, session, capturedBySource = {}) {
+    const buckets = {
+        '1688': [], baidu: [], sogou: [], so360: [],
+        alibaba: [], made_in_china: [], global_sources: [], google: [],
+    };
+    for (const q of queryProgress) {
+        const key = chinaSourceBucket(q.sourcePlatform);
+        if (!buckets[key]) buckets.google.push(q);
+        else buckets[key].push(q);
+    }
+    const currentId = session?.queryId ? String(session.queryId) : '';
+    function rollup(list, label, capturedKey) {
+        if (!list.length) {
+            return {
+                source: label,
+                status: 'Not Available',
+                queryCount: 0,
+                captured: Number(capturedBySource[capturedKey] || 0),
+            };
+        }
+        const current = list.find((q) => q.id === currentId);
+        const allDone = list.every((q) => ['completed', 'skipped', 'failed'].includes(q.slsCaptureStatus));
+        const anyFail = list.some((q) => q.slsCaptureStatus === 'failed');
+        const anyRun = list.some((q) => ['opening', 'ready', 'partially_captured'].includes(q.slsCaptureStatus));
+        let status = 'Queued';
+        if (current) status = mapQueryStatusToSourceStatus(current.slsCaptureStatus, session?.status);
+        else if (allDone && anyFail) status = 'Failed';
+        else if (allDone) status = 'Completed';
+        else if (anyRun) status = 'Running';
+        if (session?.status === 'manual_action_required' && current) {
+            status = label === '1688'
+                ? 'Waiting for User — Complete 1688 verification'
+                : 'Waiting for User';
+        }
+        return {
+            source: label,
+            status,
+            queryCount: list.length,
+            captured: Number(capturedBySource[capturedKey] || 0),
+        };
+    }
+    return [
+        rollup(buckets['1688'], '1688 Direct', '1688'),
+        rollup(buckets.baidu, 'Baidu', 'baidu'),
+        rollup(buckets.sogou, 'Sogou', 'sogou'),
+        rollup(buckets.so360, '360 Search', 'so360'),
+        rollup(buckets.alibaba, 'Alibaba (indexed)', 'alibaba'),
+        rollup(buckets.made_in_china, 'Made-in-China (indexed)', 'made_in_china'),
+        rollup(buckets.global_sources, 'Global Sources (indexed)', 'global_sources'),
+        rollup(buckets.google, 'Google Web', 'google'),
+    ];
 }
 
 export async function openNextGeneratedQuery({ companyId, user, sessionId, headers = {} }) {
     const cid = requireCompanyId(companyId);
     assertAssistedCaptureStart(user);
     const current = await loadOwnedSession(cid, sessionId);
+    assertNotOwnerStopped(current);
     const campaignId = current.campaignId;
 
     const campaign = await SearchCampaign.findOne({ _id: campaignId, companyId: cid }).lean();
@@ -246,7 +363,7 @@ export async function openNextGeneratedQuery({ companyId, user, sessionId, heade
         queryId: next._id,
         body: {
             idempotencyKey: `sls-nextq-${cid}-${next._id}-${Date.now()}`.slice(0, 200),
-            sourceHint: 'google',
+            sourceHint: sourceHintFromPlatform(next.sourceHint || next.selectedCriteria?.sourcePlatform || 'google'),
             sessionTtlMinutes: 120,
         },
         headers,
@@ -283,6 +400,7 @@ export async function openNextGooglePage({ companyId, user, sessionId }) {
     const cid = requireCompanyId(companyId);
     assertAssistedCaptureStart(user);
     const session = await loadOwnedSession(cid, sessionId);
+    assertNotOwnerStopped(session);
 
     if (!READY_FOR_PAGE.has(session.status)) {
         throw new ApiError(400, `Open Next Google Page requires Google Ready (current: ${session.status})`);
@@ -304,7 +422,7 @@ export async function openNextGooglePage({ companyId, user, sessionId }) {
     }
 
     const currentPage = Number(session.googlePageIndex || readGooglePageIndexFromUrl(session.searchUrl) || 1);
-    const { url, nextPageIndex } = buildNextGoogleResultsPageUrl(session.searchUrl, currentPage);
+    const { url, nextPageIndex } = buildNextAssistedPageUrl(session.searchUrl, currentPage);
 
     session.pendingNavigationStatus = 'pending';
     session.pendingNavigationTargetUrl = url;
@@ -416,7 +534,7 @@ export async function ackPendingNavigation({ companyId, sessionId, agentInstance
     if (session.pendingNavigationStatus !== 'pending') {
         return { session: session.toObject(), alreadyAcked: true };
     }
-    const target = validateGoogleSearchUrl(session.pendingNavigationTargetUrl);
+    const target = validateAssistedSearchUrl(session.pendingNavigationTargetUrl);
     const nextPage = readGooglePageIndexFromUrl(target);
     session.pendingNavigationStatus = 'acked';
     session.pendingNavigationAckedAt = new Date();

@@ -4,16 +4,46 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+    formatSimpleSearchLabel,
+    formatBusinessTypeField,
+    nextSimpleBusinessTypes,
     AUTO_RESUME_BACKLOG_MESSAGE,
     CAMPAIGN_LOAD_ERROR_MESSAGE,
     reconcileBucketsFromCounts,
     safeGeneratedQueries,
     safeQueryIndex,
+    lastVisibleRunError,
     safeQueryTotal,
     shouldKeepPollingForAutoProcessing,
 } from './simpleLeadSearchUi.js';
 
 describe('Simple Lead Search UI null-safety', () => {
+    it('formats Product · Business Type · Location', () => {
+        assert.equal(formatSimpleSearchLabel('LED Light', 'Manufacturer', 'Mumbai'), 'LED Light · Manufacturer · Mumbai');
+        assert.equal(
+            formatSimpleSearchLabel('LED Light', ['Manufacturer', 'Exporter'], 'Mumbai'),
+            'LED Light · Manufacturer + Exporter · Mumbai',
+        );
+    });
+
+    it('keeps Any Business exclusive of specific types', () => {
+        assert.deepEqual(nextSimpleBusinessTypes(['Manufacturer'], 'Exporter'), ['Manufacturer', 'Exporter']);
+        assert.deepEqual(nextSimpleBusinessTypes(['Manufacturer', 'Exporter'], 'Supplier'), ['Manufacturer', 'Exporter', 'Supplier']);
+        assert.deepEqual(nextSimpleBusinessTypes(['Manufacturer'], 'Any Business'), ['Any Business']);
+        assert.deepEqual(nextSimpleBusinessTypes(['Any Business'], 'Manufacturer'), ['Manufacturer']);
+        assert.ok(!nextSimpleBusinessTypes(['Any Business'], 'Manufacturer').includes('Any Business'));
+        assert.deepEqual(nextSimpleBusinessTypes(['Manufacturer'], 'Manufacturer'), ['Manufacturer']);
+    });
+
+    it('opens older singular requestedBusinessType rows without arrays', () => {
+        assert.equal(formatBusinessTypeField({ requestedBusinessType: 'Manufacturer' }), 'Manufacturer');
+        assert.equal(
+            formatBusinessTypeField({ requestedBusinessTypes: ['Manufacturer', 'Exporter'], requestedBusinessType: 'Manufacturer' }),
+            'Manufacturer, Exporter',
+        );
+        assert.equal(formatBusinessTypeField({}), '-');
+    });
+
     it('renders empty query list when campaign/result are null', () => {
         assert.deepEqual(safeGeneratedQueries(null, null), []);
         assert.deepEqual(safeGeneratedQueries(undefined, undefined), []);
@@ -73,6 +103,7 @@ describe('Simple Lead Search UI null-safety', () => {
             enabled: false,
             counts: { processingBacklog: 140 },
         }, true), false);
+        assert.equal(shouldKeepPollingForAutoProcessing(null, true), false);
     });
 
     it('reconcile buckets are exclusive additives', () => {
@@ -90,5 +121,26 @@ describe('Simple Lead Search UI null-safety', () => {
         assert.equal(b.total, 149);
         assert.equal(b.stageEnrichmentDocs, 8);
         assert.match(AUTO_RESUME_BACKLOG_MESSAGE, /Pending records detected/);
+    });
+
+    it('shows discovery fail reason when autoProcessing error is blank', () => {
+        assert.equal(lastVisibleRunError({
+            autoProcessing: { lastErrorMessage: '' },
+            autoCollection: { lastErrorMessage: '', status: 'failed', discoveryStatus: 'failed' },
+            session: { status: 'failed', failCode: 'UNSUPPORTED_LAYOUT', failMessage: 'No organic results extracted' },
+            status: 'failed',
+        }), 'No organic results extracted');
+        assert.equal(lastVisibleRunError({
+            autoProcessing: {},
+            autoCollection: { status: 'failed', lastErrorCode: 'UNSUPPORTED_LAYOUT' },
+            session: { status: 'failed', failCode: 'UNSUPPORTED_LAYOUT' },
+            status: 'failed',
+        }), 'No parser results on this page');
+        assert.equal(lastVisibleRunError({
+            autoProcessing: {},
+            autoCollection: { status: 'running' },
+            session: { status: 'awaiting_user' },
+            status: 'awaiting_user',
+        }), '');
     });
 });

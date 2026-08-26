@@ -31,6 +31,9 @@ export const updateStockForItems = async (items, refNo, refId, refType, userId, 
         const oldRate = inventoryItem.valuationRate || 0;
         const newQty = item.receivedQty || item.qty;
         const newRate = item.rate;
+        const lastPurchaseRate = (item.invoiceRate !== undefined && item.invoiceRate !== null && item.invoiceRate !== '')
+            ? Number(item.invoiceRate)
+            : newRate;
 
         const totalOldValue = oldStock * oldRate;
         const totalNewValue = newQty * newRate;
@@ -40,7 +43,7 @@ export const updateStockForItems = async (items, refNo, refId, refType, userId, 
 
         inventoryItem.currentStock = oldStock + newQty;
         inventoryItem.valuationRate = newAvgRate;
-        inventoryItem.lastPurchaseCost = newRate;
+        inventoryItem.lastPurchaseCost = lastPurchaseRate;
         inventoryItem.averageCost = newAvgRate;
         await inventoryItem.save({ session });
 
@@ -66,7 +69,7 @@ export const updateStockForItems = async (items, refNo, refId, refType, userId, 
             amount: Math.round(newQty * newRate * 100) / 100,
             runningStock: inventoryItem.currentStock,
             warehouse: item.warehouse || '',
-            remarks: `${refType}: ${refNo}`,
+            remarks: item.costRemarks || `${refType}: ${refNo}`,
             financialYear: financialYear || getFYFromDate(new Date()),
             createdBy: userId,
         });

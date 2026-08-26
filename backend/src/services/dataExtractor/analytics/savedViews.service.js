@@ -1,8 +1,13 @@
 import { AiAnalyticsSavedView } from '../../../models/aiAnalyticsSavedView.model.js';
+import { ensureModelIndexes } from '../../../utils/ensureModelIndexes.js';
 import { ApiError } from '../../../utils/ApiError.js';
 import { getAnalyticsSettings } from './settings.service.js';
 import { assertCanManageViews, assertCanSavePersonalView } from './permissions.util.js';
 import { assertNoSecrets } from './filters.util.js';
+
+async function ensureAnalyticsSavedViewStore() {
+    await ensureModelIndexes(AiAnalyticsSavedView);
+}
 
 function rejectTenantOverrides(payload = {}) {
     if (payload.companyId != null || payload.tenantId != null) {
@@ -11,6 +16,7 @@ function rejectTenantOverrides(payload = {}) {
 }
 
 export async function listSavedViews(companyId, userId, user) {
+    await ensureAnalyticsSavedViewStore();
     const q = {
         companyId,
         isDeleted: { $ne: true },
@@ -24,6 +30,7 @@ export async function listSavedViews(companyId, userId, user) {
 }
 
 export async function createSavedView(companyId, userId, payload = {}, user = null) {
+    await ensureAnalyticsSavedViewStore();
     rejectTenantOverrides(payload);
     assertNoSecrets(payload);
     assertCanSavePersonalView(user);
@@ -50,6 +57,7 @@ export async function createSavedView(companyId, userId, payload = {}, user = nu
 }
 
 export async function updateSavedView(companyId, userId, id, payload = {}, user = null) {
+    await ensureAnalyticsSavedViewStore();
     rejectTenantOverrides(payload);
     assertNoSecrets(payload);
     const doc = await AiAnalyticsSavedView.findOne({ _id: id, companyId, isDeleted: { $ne: true } });
@@ -69,6 +77,7 @@ export async function updateSavedView(companyId, userId, id, payload = {}, user 
 }
 
 export async function deleteSavedView(companyId, userId, id, user = null) {
+    await ensureAnalyticsSavedViewStore();
     const doc = await AiAnalyticsSavedView.findOne({ _id: id, companyId, isDeleted: { $ne: true } });
     if (!doc) throw new ApiError(404, 'Saved view not found');
     if (doc.scope === 'COMPANY') assertCanManageViews(user);

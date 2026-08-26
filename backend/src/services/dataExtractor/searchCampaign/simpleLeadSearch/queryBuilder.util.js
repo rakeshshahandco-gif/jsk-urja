@@ -1,4 +1,10 @@
 import { ApiError } from '../../../../utils/ApiError.js';
+import {
+    buildCombinedManufacturerExporterPhrase,
+    buildManufacturerSearchPhrases,
+    buildTypeSearchPhrases,
+    formatSimpleSearchLabel,
+} from './simpleBusinessType.util.js';
 
 /**
  * Simple Lead Search query generation.
@@ -48,6 +54,7 @@ export const BUSINESS_TYPE_OPTIONS = Object.freeze([
     { id: 'Consultant', label: 'Consultant', phrase: 'consultants', priorityScore: 64 },
     { id: 'Marketplace Seller', label: 'Marketplace Seller', phrase: 'marketplace sellers', priorityScore: 60 },
     { id: 'Other', label: 'Other', phrase: 'companies', priorityScore: 55 },
+    { id: 'Any Business', label: 'Any Business', phrase: '', priorityScore: 50 },
 ]);
 
 const BUSINESS_TYPE_BY_ID = new Map(BUSINESS_TYPE_OPTIONS.map((o) => [o.id.toLowerCase(), o]));
@@ -62,13 +69,15 @@ export const INDIA_GLOBAL_SOURCE_OPTIONS = Object.freeze([
 ]);
 
 export const CHINA_SOURCE_OPTIONS = Object.freeze([
-    { id: 'alibaba', label: 'Alibaba', implemented: false },
-    { id: '1688', label: '1688', implemented: false },
-    { id: 'made_in_china', label: 'Made-in-China', implemented: false },
-    { id: 'global_sources', label: 'Global Sources', implemented: false },
-    { id: 'baidu', label: 'Baidu', implemented: false },
+    { id: '1688', label: '1688 Direct', implemented: true },
+    { id: 'baidu', label: 'Baidu', implemented: true },
+    { id: 'sogou', label: 'Sogou', implemented: true },
+    { id: 'so360', label: '360 Search', implemented: true },
+    { id: 'alibaba', label: 'Alibaba (indexed)', implemented: true },
+    { id: 'made_in_china', label: 'Made-in-China (indexed)', implemented: true },
+    { id: 'global_sources', label: 'Global Sources (indexed)', implemented: true },
     { id: 'chinese_company_websites', label: 'Chinese Company Websites', implemented: false },
-    { id: 'google_global', label: 'Google Global Results', implemented: true },
+    { id: 'google_global', label: 'Google Web (secondary)', implemented: true },
 ]);
 
 /** Suggest major cities for state expansion (owner must select; not auto-all). */
@@ -88,8 +97,20 @@ export const MAJOR_CITIES_BY_STATE = Object.freeze({
 const LEGACY_EXCLUSIONS = Object.freeze(['-jobs', '-course', '-training']);
 /** Expanded exclusions for multi-business-type / scoped search. */
 const SAFE_EXCLUSIONS = Object.freeze(['-jobs', '-course', '-training', '-career', '-vacancy', '-tutorial']);
+/** Job-style negatives that push Google into the Jobs vertical — skip for exact model SKUs. */
+const JOB_STYLE_EXCLUSIONS = Object.freeze([
+    '-jobs', '-job', '-course', '-training', '-career', '-vacancy',
+    '-tutorial', '-tutor', '-hiring', '-recruitment', '-internship',
+]);
 
 export const MAX_GENERATED_QUERIES = 24;
+/** Higher cap for per-model China families (cities + Chinese + Baidu + 1688). */
+export const MAX_MODEL_CHINA_QUERIES = 110;
+
+/** Auto-expanded when Country=China and city/state are blank. */
+export const CHINA_PRIORITY_CITIES = Object.freeze([
+    'Shenzhen', 'Dongguan', 'Guangzhou', 'Hangzhou', 'Ningbo',
+]);
 export const MAX_RELATED_KEYWORDS = 8;
 
 const CN_PRODUCT_GLOSSARY = Object.freeze({
@@ -120,6 +141,8 @@ function resolveBusinessType(raw) {
         supplier: 'Supplier',
         system_integrator: 'System Integrator',
         service_provider: 'Service Provider',
+        any_business: 'Any Business',
+        'any business': 'Any Business',
     };
     if (aliases[key] && BUSINESS_TYPE_BY_ID.has(aliases[key].toLowerCase())) {
         return BUSINESS_TYPE_BY_ID.get(aliases[key].toLowerCase());
@@ -265,8 +288,8 @@ function buildPhraseTemplates(productLower) {
     ];
 }
 
-function buildExclusionSuffix(excludeKeywords, { legacy = false } = {}) {
-    const base = legacy ? LEGACY_EXCLUSIONS : SAFE_EXCLUSIONS;
+function buildExclusionSuffix(excludeKeywords, { legacy = false, skipJobStyle = false } = {}) {
+    const base = skipJobStyle ? [] : (legacy ? LEGACY_EXCLUSIONS : SAFE_EXCLUSIONS);
     const extraExcludes = Array.isArray(excludeKeywords)
         ? excludeKeywords.map((k) => normalizeDisplay(k)).filter(Boolean).map((k) => (k.startsWith('-') ? k : `-${k}`))
         : [];
@@ -276,18 +299,108 @@ function buildExclusionSuffix(excludeKeywords, { legacy = false } = {}) {
     for (const e of exclusions) {
         const key = e.toLowerCase();
         if (seenEx.has(key)) continue;
+        if (skipJobStyle && JOB_STYLE_EXCLUSIONS.includes(key)) continue;
         seenEx.add(key);
         exParts.push(e);
     }
     return exParts.length ? ` ${exParts.join(' ')}` : '';
 }
 
-function pushQuery(out, seenText, item) {
+export function isChinaCountry(country) {
+    const c = normalizeDisplay(country).toLowerCase();
+    return c === 'china' || c === 'prc' || c === 'cn'
+        || c === "people's republic of china" || c === 'p.r.c.';
+}
+
+/** Map planner sourcePlatform to SearchQuery sourceHint (native portal vs Google-indexed). */
+export function sourceHintFromPlatform(sourcePlatform) {
+    const p = String(sourcePlatform || '').toLowerCase();
+    if (p === 'baidu') return 'baidu';
+    if (p === '1688') return '1688';
+    if (p === 'sogou') return 'sogou';
+    if (p === 'so360' || p === '360') return 'so360';
+    return 'google';
+}
+
+/** Bucket for counters. site:1688.com on Google stays google — never "direct 1688". */
+export function chinaSourceBucket(sourcePlatform) {
+    const p = String(sourcePlatform || '').toLowerCase();
+    if (p === '1688') return '1688';
+    if (p === 'baidu') return 'baidu';
+    if (p === 'sogou') return 'sogou';
+    if (p === 'so360' || p === '360') return 'so360';
+    if (p === 'alibaba') return 'alibaba';
+    if (p === 'made_in_china') return 'made_in_china';
+    if (p === 'global_sources') return 'global_sources';
+    return 'google';
+}
+
+/**
+ * Exact product/model SKU (ZT2S, BT2S, ZTC, BTC) — not an industry phrase.
+ */
+export function looksLikeModelCode(raw) {
+    const s = normalizeDisplay(raw);
+    if (!s || /\s/.test(s)) return false;
+    if (s.length < 2 || s.length > 16) return false;
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,15}$/.test(s)) return false;
+    const hasLetter = /[A-Za-z]/.test(s);
+    const hasDigit = /\d/.test(s);
+    if (hasLetter && hasDigit) return true;
+    return hasLetter && !hasDigit && s.length >= 2 && s.length <= 5;
+}
+
+const MODEL_NOISE_SUFFIX = /(?:\s|-)*(?:modules?|moduls?|模组|模块)$/i;
+
+function normalizeModelToken(part) {
+    let s = normalizeDisplay(part);
+    if (!s) return '';
+    s = s.replace(MODEL_NOISE_SUFFIX, '').trim();
+    return s.replace(/\s+/g, '');
+}
+
+/**
+ * Split "ZT2S, BT2S, ZTC, BTC" into separate models. Empty when product is a phrase.
+ * "ZT2S MODULE" / "ZT2S 模组" still count as model ZT2S (not a 7-query industry phrase).
+ */
+export function parseProductModels(product) {
+    const raw = normalizeDisplay(product);
+    if (!raw) return [];
+    const parts = raw.split(/[,;，、|/]+/).map((s) => s.trim()).filter(Boolean);
+    if (!parts.length) return [];
+    const out = [];
+    const seen = new Set();
+    for (const p of parts) {
+        const token = normalizeModelToken(p);
+        if (!looksLikeModelCode(token)) continue;
+        const k = token.toUpperCase();
+        if (seen.has(k)) continue;
+        seen.add(k);
+        out.push(token);
+    }
+    return out;
+}
+
+function quoteModel(model) {
+    return `"${String(model || '').replace(/"/g, '')}"`;
+}
+
+function modelSpecialty(model) {
+    const u = String(model || '').toUpperCase();
+    if (u === 'BTC' || (u.startsWith('BT') && u !== 'ZT2S')) {
+        return { zigbee: false, bluetooth: true, zhModule: '蓝牙模组' };
+    }
+    if (u === 'ZTC' || u.startsWith('ZT')) {
+        return { zigbee: true, bluetooth: false, zhModule: '模组' };
+    }
+    return { zigbee: /Z/.test(u), bluetooth: /B/.test(u), zhModule: '模组' };
+}
+
+function pushQuery(out, seenText, item, maxQueries = MAX_GENERATED_QUERIES) {
     const queryText = String(item.queryText || '').replace(/\s+/g, ' ').trim();
     if (!queryText) return;
-    const key = queryText.toLowerCase();
+    const key = `${queryText.toLowerCase()}::${String(item.sourcePlatform || 'google').toLowerCase()}`;
     if (seenText.has(key)) return;
-    if (out.length >= MAX_GENERATED_QUERIES) return;
+    if (out.length >= maxQueries) return;
     seenText.add(key);
     out.push({
         queryText,
@@ -303,6 +416,7 @@ function pushQuery(out, seenText, item) {
         enabled: item.enabled !== false,
         isAlternate: Boolean(item.isAlternate),
         isExpansion: Boolean(item.isExpansion),
+        ownerDisplayLabel: item.ownerDisplayLabel || '',
     });
 }
 
@@ -397,8 +511,24 @@ function buildLegacyQueries({ product, city, state, country, excludeKeywords }) 
     return out;
 }
 
+function rowToQuery(row, extras) {
+    return {
+        queryText: `${row.core}${extras.exSuffix}`,
+        priorityScore: row.priorityScore,
+        businessType: extras.businessType,
+        locationLabel: extras.location,
+        locationScope: extras.locationScope,
+        queryLanguage: 'en',
+        sourcePlatform: extras.sourcePlatform,
+        recommended: false,
+        ownerDisplayLabel: extras.ownerDisplayLabel,
+        isAlternate: Boolean(row.isAlternate),
+    };
+}
+
 function buildPrimaryBusinessTypeQueries({
     productLower,
+    productDisplay,
     businessTypes,
     location,
     locationScope,
@@ -408,10 +538,43 @@ function buildPrimaryBusinessTypeQueries({
     const planned = [];
     const types = businessTypes.map(resolveBusinessType).filter(Boolean);
     types.sort((a, b) => Number(b.priorityScore) - Number(a.priorityScore));
+    const typeIds = types.map((t) => t.id);
+    const ownerDisplayLabel = formatSimpleSearchLabel(productDisplay || productLower, typeIds, location);
+    const extras = { exSuffix, location, locationScope, sourcePlatform, ownerDisplayLabel };
+
+    if (types.length === 1 && /manufacturer/i.test(types[0].id)) {
+        return buildManufacturerSearchPhrases({ product: productLower, location }).map((row, i) => ({
+            queryText: `${row.core}${exSuffix}`,
+            priorityScore: row.priorityScore,
+            businessType: 'Manufacturer',
+            locationLabel: location,
+            locationScope,
+            queryLanguage: 'en',
+            sourcePlatform,
+            recommended: i === 0,
+            ownerDisplayLabel,
+            isAlternate: i > 0,
+        }));
+    }
+
+    const hasMfr = types.some((t) => /manufacturer/i.test(t.id));
+    const hasExporter = types.some((t) => /exporter/i.test(t.id));
+    if (hasMfr) {
+        buildManufacturerSearchPhrases({ product: productLower, location }).forEach((row, i) => {
+            planned.push(rowToQuery({ ...row, isAlternate: i > 0 }, { ...extras, businessType: 'Manufacturer' }));
+        });
+    }
     for (const t of types) {
-        const phrase = location
-            ? `${productLower} ${t.phrase} ${location}`
-            : `${productLower} ${t.phrase}`;
+        if (/manufacturer/i.test(t.id)) continue;
+        const extra = buildTypeSearchPhrases({ product: productLower, location, businessType: t.id });
+        if (extra.length) {
+            extra.forEach((row) => {
+                planned.push(rowToQuery(row, { ...extras, businessType: t.id }));
+            });
+            continue;
+        }
+        const core = t.phrase ? `${productLower} ${t.phrase}` : productLower;
+        const phrase = location ? `${core} ${location}` : core;
         planned.push({
             queryText: `${phrase}${exSuffix}`,
             priorityScore: t.priorityScore,
@@ -421,6 +584,12 @@ function buildPrimaryBusinessTypeQueries({
             queryLanguage: 'en',
             sourcePlatform,
             recommended: false,
+            ownerDisplayLabel,
+        });
+    }
+    if (hasMfr && hasExporter) {
+        buildCombinedManufacturerExporterPhrase({ product: productLower, location }).forEach((row) => {
+            planned.push(rowToQuery(row, { ...extras, businessType: 'Manufacturer' }));
         });
     }
     if (planned[0]) planned[0].recommended = true;
@@ -547,6 +716,41 @@ function buildWorldwideExtras({ productLower, businessTypes, exSuffix, sourcePla
     return planned;
 }
 
+function parseChinaProductPhrases(product) {
+    const parts = String(product || '').split(/[,;，、|/]+/).map((s) => normalizeDisplay(s)).filter(Boolean);
+    return parts.length ? parts : [];
+}
+
+function chinaPreferredBusinessTypes(types) {
+    const list = Array.isArray(types) ? types.filter(Boolean) : [];
+    const core = list.filter((t) => {
+        const id = String(t.id || '').toLowerCase();
+        if (/system integrator|consultant|contractor|service provider/.test(id)) return false;
+        if (id === 'provider') return false;
+        return /manufacturer|oem|odm|supplier|factory|distributor/.test(id);
+    });
+    return core.length ? core : list.slice(0, 2);
+}
+
+function chinaSwitchShorthand(phrase) {
+    const p = String(phrase || '');
+    if (/开关/.test(p)) return '智能开关';
+    return p;
+}
+
+function china1688RelatedTerm(keyword, phrases) {
+    const kw = normalizeDisplay(keyword);
+    if (!kw) return '';
+    const base = chinaSwitchShorthand(phrases[0] || '');
+    if (!base) return kw;
+    if (/[\u4e00-\u9fff]/.test(kw)) return `${kw}${base}`;
+    return `${kw}${base}`;
+}
+
+function chinaHasCjk(text) {
+    return /[\u4e00-\u9fff]/.test(String(text || ''));
+}
+
 function buildChinaQueries({
     product,
     relatedKeywords,
@@ -556,90 +760,215 @@ function buildChinaQueries({
     expandStates = [],
 }) {
     const productRaw = normalizeDisplay(product);
-    const productLower = productRaw.toLowerCase();
+    const phrases = parseChinaProductPhrases(productRaw);
     const countryN = normalizeDisplay(country) || 'China';
-    const types = (businessTypes.length ? businessTypes : ['Manufacturer', 'OEM / ODM'])
-        .map(resolveBusinessType)
-        .filter(Boolean);
+    const types = chinaPreferredBusinessTypes(
+        (businessTypes.length ? businessTypes : ['Manufacturer', 'OEM / ODM', 'Supplier'])
+            .map(resolveBusinessType)
+            .filter(Boolean),
+    );
+    const kws = (relatedKeywords || []).map((k) => normalizeDisplay(k)).filter(Boolean).slice(0, 6);
     const planned = [];
-    const sourcePlatform = 'google_global';
+    const cities = ['深圳', '东莞', '广州', '杭州'];
+
+    let pri = 100;
+    for (const p of phrases) {
+        const preserved = chinaHasCjk(p) ? p : (translateProductToChinese(p) || p);
+        pushChinaItem(planned, {
+            queryText: preserved,
+            translatedQuery: `${p} 1688`,
+            priorityScore: pri--,
+            businessType: 'Supplier',
+            relatedKeyword: p,
+            locationLabel: countryN,
+            sourcePlatform: '1688',
+        });
+    }
+    for (const kw of kws.slice(0, 4)) {
+        const text = china1688RelatedTerm(kw, phrases);
+        if (!text) continue;
+        pushChinaItem(planned, {
+            queryText: text,
+            translatedQuery: `${kw} 1688`,
+            priorityScore: pri--,
+            businessType: 'Supplier',
+            relatedKeyword: kw,
+            locationLabel: countryN,
+            sourcePlatform: '1688',
+            isAlternate: true,
+        });
+    }
+
+    pri = 89;
+    const baiduRoles = ['厂家', '生产厂家', '供应商'];
+    phrases.forEach((p, idx) => {
+        const preserved = chinaHasCjk(p) ? p : (translateProductToChinese(p) || p);
+        for (const role of baiduRoles) {
+            pushChinaItem(planned, {
+                queryText: `${preserved} ${role}`,
+                translatedQuery: `${p} ${role}`,
+                priorityScore: pri--,
+                businessType: chinaBusinessRole(role),
+                relatedKeyword: p,
+                locationLabel: countryN,
+                sourcePlatform: 'baidu',
+                isAlternate: true,
+            });
+        }
+        const city = cities[idx % cities.length];
+        pushChinaItem(planned, {
+            queryText: `${preserved} ${city} 厂家`,
+            translatedQuery: `${p} ${city} factory`,
+            priorityScore: pri--,
+            businessType: 'Manufacturer',
+            relatedKeyword: p,
+            locationLabel: city,
+            locationScope: 'city',
+            sourcePlatform: 'baidu',
+            isAlternate: true,
+        });
+        if (types.some((t) => /oem/i.test(t.id))) {
+            pushChinaItem(planned, {
+                queryText: `${preserved} OEM`,
+                translatedQuery: `${p} OEM`,
+                priorityScore: pri--,
+                businessType: 'OEM / ODM',
+                relatedKeyword: p,
+                locationLabel: countryN,
+                sourcePlatform: 'baidu',
+                isAlternate: true,
+            });
+        }
+    });
+    for (const kw of kws.slice(0, 4)) {
+        const p = chinaHasCjk(phrases[0] || '') ? phrases[0] : (translateProductToChinese(phrases[0] || '') || phrases[0] || '');
+        if (!p) continue;
+        const joined = chinaHasCjk(kw) ? `${kw}${p} 厂家` : `${kw}${p} 厂家`;
+        pushChinaItem(planned, {
+            queryText: joined,
+            translatedQuery: `${kw} ${p} factory`,
+            priorityScore: pri--,
+            businessType: 'Manufacturer',
+            relatedKeyword: kw,
+            locationLabel: countryN,
+            sourcePlatform: 'baidu',
+            isAlternate: true,
+        });
+    }
+
+    pri = 69;
+    for (const p of phrases) {
+        const preserved = chinaHasCjk(p) ? p : (translateProductToChinese(p) || p);
+        for (const role of baiduRoles.slice(0, 2)) {
+            pushChinaItem(planned, {
+                queryText: `${preserved} ${role}`,
+                translatedQuery: `${p} Sogou`,
+                priorityScore: pri--,
+                businessType: chinaBusinessRole(role),
+                relatedKeyword: p,
+                locationLabel: countryN,
+                sourcePlatform: 'sogou',
+                isAlternate: true,
+            });
+        }
+    }
+
+    pri = 61;
+    for (const p of phrases) {
+        const preserved = chinaHasCjk(p) ? p : (translateProductToChinese(p) || p);
+        for (const role of ['厂家', '供应商']) {
+            pushChinaItem(planned, {
+                queryText: `${preserved} ${role}`,
+                translatedQuery: `${p} 360 Search`,
+                priorityScore: pri--,
+                businessType: chinaBusinessRole(role),
+                relatedKeyword: p,
+                locationLabel: countryN,
+                sourcePlatform: 'so360',
+                isAlternate: true,
+            });
+        }
+    }
+
+    pri = 50;
+    for (const p of phrases) {
+        const q = chinaHasCjk(p) ? p : `"${p.replace(/"/g, '')}"`;
+        pushChinaItem(planned, {
+            queryText: `site:alibaba.com ${q}`,
+            translatedQuery: `${p} Alibaba indexed`,
+            priorityScore: pri--,
+            businessType: 'Supplier',
+            relatedKeyword: p,
+            locationLabel: countryN,
+            queryLanguage: chinaHasCjk(p) ? 'zh' : 'en',
+            sourcePlatform: 'alibaba',
+            isAlternate: true,
+        });
+        pushChinaItem(planned, {
+            queryText: `site:made-in-china.com ${q}`,
+            translatedQuery: `${p} Made-in-China indexed`,
+            priorityScore: pri--,
+            businessType: 'Manufacturer',
+            relatedKeyword: p,
+            locationLabel: countryN,
+            queryLanguage: chinaHasCjk(p) ? 'zh' : 'en',
+            sourcePlatform: 'made_in_china',
+            isAlternate: true,
+        });
+        pushChinaItem(planned, {
+            queryText: `site:globalsources.com ${q}`,
+            translatedQuery: `${p} Global Sources indexed`,
+            priorityScore: pri--,
+            businessType: 'Supplier',
+            relatedKeyword: p,
+            locationLabel: countryN,
+            queryLanguage: chinaHasCjk(p) ? 'zh' : 'en',
+            sourcePlatform: 'global_sources',
+            isAlternate: true,
+        });
+    }
+
+    pri = 40;
+    for (const p of phrases) {
+        const preserved = chinaHasCjk(p) ? p : p;
+        pushChinaItem(planned, {
+            queryText: `${preserved} manufacturer ${countryN}${exSuffix}`,
+            priorityScore: pri--,
+            businessType: 'Manufacturer',
+            relatedKeyword: p,
+            locationLabel: countryN,
+            queryLanguage: chinaHasCjk(preserved) ? 'zh' : 'en',
+            sourcePlatform: 'google_global',
+            isAlternate: true,
+        });
+        pushChinaItem(planned, {
+            queryText: `${preserved} supplier ${countryN}${exSuffix}`,
+            priorityScore: pri--,
+            businessType: 'Supplier',
+            relatedKeyword: p,
+            locationLabel: countryN,
+            queryLanguage: chinaHasCjk(preserved) ? 'zh' : 'en',
+            sourcePlatform: 'google_global',
+            isAlternate: true,
+        });
+    }
+
     const states = parseLocationExpandList(expandStates);
-
-    for (const t of types) {
-        planned.push({
-            queryText: `${productRaw} ${t.phrase} ${countryN}${exSuffix}`,
-            priorityScore: t.priorityScore,
-            businessType: t.id,
-            locationLabel: countryN,
-            locationScope: 'country',
-            queryLanguage: 'en',
-            sourcePlatform,
-        });
-    }
-
-    for (const kw of relatedKeywords) {
-        const kwDisp = normalizeDisplay(kw);
-        const primary = types[0];
-        planned.push({
-            queryText: `${kwDisp} ${primary.phrase} ${countryN}${exSuffix}`,
-            priorityScore: 55,
-            businessType: primary.id,
-            relatedKeyword: kw,
-            locationLabel: countryN,
-            locationScope: 'country',
-            queryLanguage: 'en',
-            sourcePlatform,
-            isAlternate: true,
-        });
-    }
-
-    // Chinese variants (bounded) — preserve Unicode product text
-    const zhProduct = translateProductToChinese(product) || productRaw;
-    for (const t of types.slice(0, 2)) {
-        const zhRole = chinaPhraseForBusinessType(t.id);
-        const zhQuery = `${zhProduct}${zhRole}`;
-        planned.push({
-            queryText: zhQuery,
-            translatedQuery: `${productRaw} ${t.phrase} ${countryN}`,
-            priorityScore: Math.max(40, t.priorityScore - 20),
-            businessType: t.id,
-            locationLabel: countryN,
-            locationScope: 'country',
-            queryLanguage: 'zh',
-            sourcePlatform,
-            isAlternate: true,
-        });
-    }
-    for (const kw of relatedKeywords.slice(0, 4)) {
-        const zhKw = translateProductToChinese(kw) || normalizeDisplay(kw);
-        const zhQuery = `${zhKw}${chinaPhraseForBusinessType(types[0]?.id)}`;
-        planned.push({
-            queryText: zhQuery,
-            translatedQuery: `${normalizeDisplay(kw)} ${types[0]?.phrase || 'manufacturers'} ${countryN}`,
-            priorityScore: 42,
-            businessType: types[0]?.id || 'Manufacturer',
-            relatedKeyword: kw,
-            locationLabel: countryN,
-            locationScope: 'country',
-            queryLanguage: 'zh',
-            sourcePlatform,
-            isAlternate: true,
-        });
-    }
-
-    // Province / state expansion (optional) — separate EN queries per selected Chinese province
     if (states.length) {
         const expandTypes = types.slice(0, 2);
+        const expandPhrase = phrases[0] || productRaw;
         for (const st of states) {
             for (const t of expandTypes) {
-                planned.push({
-                    queryText: `${productRaw} ${t.phrase} ${st} ${countryN}${exSuffix}`,
-                    priorityScore: Math.min(t.priorityScore, 48),
+                pushChinaItem(planned, {
+                    queryText: `${expandPhrase} ${t.phrase} ${st} ${countryN}${exSuffix}`,
+                    translatedQuery: `${expandPhrase} ${t.phrase} ${st}`,
+                    priorityScore: Math.min(t.priorityScore || 48, 48),
                     businessType: t.id,
+                    relatedKeyword: expandPhrase,
                     locationLabel: st,
                     locationScope: 'state',
-                    queryLanguage: 'en',
-                    sourcePlatform,
+                    queryLanguage: chinaHasCjk(expandPhrase) ? 'zh' : 'en',
+                    sourcePlatform: 'google_global',
                     isExpansion: true,
                     isAlternate: true,
                 });
@@ -647,6 +976,283 @@ function buildChinaQueries({
         }
     }
 
+    if (planned[0]) planned[0].recommended = true;
+    return planned;
+}
+
+function chinaBusinessRole(text) {
+    if (/厂家|制造商|工厂|生产/.test(text)) return 'Manufacturer';
+    if (/经销商|代理商/.test(text)) return 'Distributor';
+    return 'Supplier';
+}
+
+function native1688TermsForModel(model) {
+    const u = String(model || '').toUpperCase();
+    const spec = modelSpecialty(model);
+    if (u === 'ZT2S') return [`${model} 模组`, `${model} 涂鸦`, `${model} Zigbee 模组`];
+    if (u === 'BT2S') return [`${model} 模组`, `${model} 蓝牙模组`, `${model} 涂鸦`];
+    if (u === 'BTC') return [`${model} 蓝牙模组`];
+    if (u === 'ZTC') return [`${model} Zigbee 模组`];
+    const out = [`${model} 模组`];
+    if (spec.bluetooth) out.push(`${model} 蓝牙模组`);
+    if (spec.zigbee) out.push(`${model} Zigbee 模组`);
+    return out;
+}
+
+function nativeBaiduTermsForModel(model) {
+    const u = String(model || '').toUpperCase();
+    if (u === 'ZT2S') {
+        return [
+            `${model} 模组`, `${model} 涂鸦`, `${model} 供应商`, `${model} 厂家`,
+            `${model} 生产厂家`, `${model} Zigbee 模组`, `${model} 深圳 供应商`, `${model} 东莞 厂家`,
+            `${model} 广州 厂家`, `${model} 杭州 供应商`, `${model} 宁波 厂家`,
+        ];
+    }
+    if (u === 'BT2S') {
+        return [
+            `${model} 蓝牙模组`, `${model} 涂鸦`, `${model} 供应商`, `${model} 厂家`,
+            `${model} 生产厂家`, `${model} 深圳 蓝牙模组`, `${model} 东莞 厂家`, `${model} 广州 蓝牙模组`,
+        ];
+    }
+    if (u === 'BTC') {
+        return [
+            `${model} 蓝牙模组`, `${model} 供应商`, `${model} 厂家`, `${model} 蓝牙模组 供应商`,
+            `${model} 深圳 蓝牙模组`,
+        ];
+    }
+    if (u === 'ZTC') {
+        return [
+            `${model} Zigbee 模组`, `${model} 供应商`, `${model} 厂家`,
+            `${model} 杭州 Zigbee 模组`, `${model} 深圳 厂家`,
+        ];
+    }
+    const spec = modelSpecialty(model);
+    const out = [`${model} 模组`, `${model} 供应商`, `${model} 厂家`];
+    if (spec.bluetooth) out.push(`${model} 蓝牙模组`);
+    if (spec.zigbee) out.push(`${model} Zigbee 模组`);
+    return out;
+}
+
+function pushChinaItem(planned, {
+    queryText, translatedQuery, priorityScore, businessType, relatedKeyword,
+    locationLabel, locationScope, queryLanguage, sourcePlatform, isAlternate, isExpansion,
+}) {
+    planned.push({
+        queryText,
+        translatedQuery: translatedQuery || '',
+        priorityScore,
+        businessType,
+        relatedKeyword: relatedKeyword || '',
+        locationLabel: locationLabel || '',
+        locationScope: locationScope || 'country',
+        queryLanguage: queryLanguage || 'zh',
+        sourcePlatform,
+        isAlternate: Boolean(isAlternate),
+        isExpansion: Boolean(isExpansion),
+    });
+}
+
+/**
+ * China native-first families for NEW campaigns only.
+ * Order: 1688 → Baidu → Sogou → 360 → indexed B2B → Google Web (secondary).
+ * site:1688.com remains Google-indexed discovery, never direct 1688.
+ */
+function buildChinaModelQueries({
+    models,
+    country = 'China',
+    expandCities = [],
+    excludeKeywords,
+    city = '',
+    state = '',
+} = {}) {
+    const countryN = normalizeDisplay(country) || 'China';
+    const planned = [];
+    const exSuffix = buildExclusionSuffix(excludeKeywords, { skipJobStyle: true });
+    void expandCities;
+    void city;
+    void state;
+
+    let pri = 100;
+    for (const model of models) {
+        for (const text of native1688TermsForModel(model)) {
+            pushChinaItem(planned, {
+                queryText: text,
+                translatedQuery: `${model} module 1688`,
+                priorityScore: pri--,
+                businessType: chinaBusinessRole(text),
+                relatedKeyword: model,
+                locationLabel: countryN,
+                sourcePlatform: '1688',
+            });
+        }
+    }
+
+    pri = 89;
+    for (const model of models) {
+        for (const text of nativeBaiduTermsForModel(model)) {
+            pushChinaItem(planned, {
+                queryText: text,
+                translatedQuery: `${quoteModel(model)} supplier China`,
+                priorityScore: pri--,
+                businessType: chinaBusinessRole(text),
+                relatedKeyword: model,
+                locationLabel: /深圳/.test(text) ? 'Shenzhen' : (/东莞/.test(text) ? 'Dongguan' : (/杭州/.test(text) ? 'Hangzhou' : countryN)),
+                locationScope: /深圳|东莞|广州|杭州|宁波/.test(text) ? 'city' : 'country',
+                sourcePlatform: 'baidu',
+                isExpansion: /深圳|东莞|广州|杭州|宁波/.test(text),
+                isAlternate: true,
+            });
+        }
+    }
+
+    pri = 69;
+    for (const model of models) {
+        const terms = nativeBaiduTermsForModel(model).slice(0, 2);
+        for (const text of terms) {
+            pushChinaItem(planned, {
+                queryText: text,
+                translatedQuery: `${quoteModel(model)} Sogou`,
+                priorityScore: pri--,
+                businessType: chinaBusinessRole(text),
+                relatedKeyword: model,
+                locationLabel: countryN,
+                sourcePlatform: 'sogou',
+                isAlternate: true,
+            });
+        }
+    }
+
+    pri = 61;
+    for (const model of models) {
+        const terms = nativeBaiduTermsForModel(model).slice(0, 2);
+        for (const text of terms) {
+            pushChinaItem(planned, {
+                queryText: text,
+                translatedQuery: `${quoteModel(model)} 360 Search`,
+                priorityScore: pri--,
+                businessType: chinaBusinessRole(text),
+                relatedKeyword: model,
+                locationLabel: countryN,
+                sourcePlatform: 'so360',
+                isAlternate: true,
+            });
+        }
+    }
+
+    pri = 50;
+    for (const model of models) {
+        const q = quoteModel(model);
+        pushChinaItem(planned, {
+            queryText: `site:alibaba.com ${q}`,
+            translatedQuery: `${q} Alibaba indexed`,
+            priorityScore: pri--,
+            businessType: 'Supplier',
+            relatedKeyword: model,
+            locationLabel: countryN,
+            queryLanguage: 'en',
+            sourcePlatform: 'alibaba',
+            isAlternate: true,
+        });
+        pushChinaItem(planned, {
+            queryText: `site:made-in-china.com ${q}`,
+            translatedQuery: `${q} Made-in-China indexed`,
+            priorityScore: pri--,
+            businessType: 'Manufacturer',
+            relatedKeyword: model,
+            locationLabel: countryN,
+            queryLanguage: 'en',
+            sourcePlatform: 'made_in_china',
+            isAlternate: true,
+        });
+        pushChinaItem(planned, {
+            queryText: `site:globalsources.com ${q}`,
+            translatedQuery: `${q} Global Sources indexed`,
+            priorityScore: pri--,
+            businessType: 'Supplier',
+            relatedKeyword: model,
+            locationLabel: countryN,
+            queryLanguage: 'en',
+            sourcePlatform: 'global_sources',
+            isAlternate: true,
+        });
+        pushChinaItem(planned, {
+            queryText: `site:1688.com ${q}`,
+            translatedQuery: `${q} 1688 via Google index`,
+            priorityScore: pri--,
+            businessType: 'Supplier',
+            relatedKeyword: model,
+            locationLabel: countryN,
+            queryLanguage: 'zh',
+            sourcePlatform: 'google_global',
+            isAlternate: true,
+        });
+    }
+
+    pri = 40;
+    for (const model of models) {
+        const q = quoteModel(model);
+        pushChinaItem(planned, {
+            queryText: `${q} manufacturer ${countryN}${exSuffix}`,
+            priorityScore: pri--,
+            businessType: 'Manufacturer',
+            relatedKeyword: model,
+            locationLabel: countryN,
+            queryLanguage: 'en',
+            sourcePlatform: 'google_global',
+            isAlternate: true,
+        });
+        pushChinaItem(planned, {
+            queryText: `${q} supplier ${countryN}${exSuffix}`,
+            priorityScore: pri--,
+            businessType: 'Supplier',
+            relatedKeyword: model,
+            locationLabel: countryN,
+            queryLanguage: 'en',
+            sourcePlatform: 'google_global',
+            isAlternate: true,
+        });
+    }
+
+    if (planned[0]) planned[0].recommended = true;
+    return planned;
+}
+
+function buildSplitModelQueries({
+    models,
+    location,
+    locationScope,
+    excludeKeywords,
+    sourcePlatform,
+}) {
+    const planned = [];
+    const exSuffix = buildExclusionSuffix(excludeKeywords, { skipJobStyle: true });
+    let score = 100;
+    for (const model of models) {
+        const q = quoteModel(model);
+        const loc = location ? ` ${location}` : '';
+        planned.push({
+            queryText: `${q} manufacturer${loc}${exSuffix}`,
+            priorityScore: score,
+            businessType: 'Manufacturer',
+            relatedKeyword: model,
+            locationLabel: location,
+            locationScope,
+            queryLanguage: 'en',
+            sourcePlatform,
+        });
+        planned.push({
+            queryText: `${q} supplier${loc}${exSuffix}`,
+            priorityScore: score - 4,
+            businessType: 'Supplier',
+            relatedKeyword: model,
+            locationLabel: location,
+            locationScope,
+            queryLanguage: 'en',
+            sourcePlatform,
+            isAlternate: true,
+        });
+        score = Math.max(60, score - 8);
+    }
     if (planned[0]) planned[0].recommended = true;
     return planned;
 }
@@ -671,6 +1277,52 @@ export function buildSimpleQueries({
 } = {}) {
     const productRaw = normalizeDisplay(product);
     if (!productRaw) return [];
+
+    const models = parseProductModels(productRaw);
+    const countryHint = normalizeDisplay(country);
+    const chinaHint = isChinaCountry(countryHint)
+        || normalizeDisplay(searchMarket || '').toLowerCase() === 'china_suppliers';
+
+    if (models.length && chinaHint) {
+        const planned = buildChinaModelQueries({
+            models,
+            country: isChinaCountry(countryHint) ? countryHint : 'China',
+            expandCities,
+            excludeKeywords,
+            city,
+            state,
+        });
+        const out = [];
+        const seen = new Set();
+        for (const q of planned) pushQuery(out, seen, q, MAX_MODEL_CHINA_QUERIES);
+        if (out[0]) {
+            out.forEach((q) => { q.recommended = false; });
+            out[0].recommended = true;
+        }
+        return out;
+    }
+
+    if (models.length >= 2) {
+        const scopeEarly = inferLocationScope({ locationScope, city, state, country, worldwide });
+        const locEarly = buildLocationPhrase({
+            locationScope: scopeEarly,
+            city: normalizeDisplay(city),
+            state: normalizeDisplay(state),
+            country: normalizeDisplay(country),
+            worldwide: scopeEarly === 'worldwide',
+        });
+        const planned = buildSplitModelQueries({
+            models,
+            location: locEarly,
+            locationScope: scopeEarly,
+            excludeKeywords,
+            sourcePlatform: 'google',
+        });
+        const out = [];
+        const seen = new Set();
+        for (const q of planned) pushQuery(out, seen, q, MAX_MODEL_CHINA_QUERIES);
+        return out;
+    }
 
     const typesProvided = businessTypes != null
         && ((Array.isArray(businessTypes) && businessTypes.length > 0)
@@ -710,7 +1362,7 @@ export function buildSimpleQueries({
             exSuffix,
             expandStates,
         });
-        if (china.length > MAX_GENERATED_QUERIES) {
+        if (china.length > MAX_MODEL_CHINA_QUERIES) {
             throw new ApiError(
                 400,
                 `This selection creates ${china.length} queries. Please reduce business types or states.`,
@@ -718,7 +1370,11 @@ export function buildSimpleQueries({
         }
         const out = [];
         const seen = new Set();
-        for (const q of china) pushQuery(out, seen, q);
+        for (const q of china) pushQuery(out, seen, q, MAX_MODEL_CHINA_QUERIES);
+        if (out[0]) {
+            out.forEach((q) => { q.recommended = false; });
+            out[0].recommended = true;
+        }
         return out;
     }
 
@@ -734,6 +1390,7 @@ export function buildSimpleQueries({
     const chunks = [
         ...buildPrimaryBusinessTypeQueries({
             productLower,
+            productDisplay: productRaw,
             businessTypes: types,
             location,
             locationScope: scope,
@@ -769,6 +1426,7 @@ export function buildSimpleQueries({
         for (const st of expandStates.map(normalizeDisplay).filter(Boolean)) {
             chunks.push(...buildPrimaryBusinessTypeQueries({
                 productLower,
+                productDisplay: productRaw,
                 businessTypes: types.slice(0, 2),
                 location: st,
                 locationScope: 'state',
@@ -793,6 +1451,10 @@ export function buildSimpleQueries({
     // Ensure exactly one recommended
     out.forEach((q) => { q.recommended = false; });
     if (out[0]) out[0].recommended = true;
+    const ownerLabel = formatSimpleSearchLabel(productRaw, types, location);
+    out.forEach((q) => {
+        q.ownerDisplayLabel = ownerLabel;
+    });
     return out;
 }
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useSearchParams, useParams } from 'react-router-dom';
 import {
     createPurchaseInvoice, getSuppliers,
@@ -33,6 +33,62 @@ const inp = { padding: '9px 12px', background: '#ffffff', border: '1px solid #e2
 const lbl = { fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 600 };
 
 const r2 = (n) => Math.round((n || 0) * 100) / 100;
+
+const EMPTY_IMPORT_LANDED = {
+    billOfEntryNo: '',
+    billOfEntryDate: '',
+    portCha: '',
+    oceanAirFreight: 0,
+    insurance: 0,
+    customsDuty: 0,
+    socialWelfareSurcharge: 0,
+    clearingChaCharges: 0,
+    localTransport: 0,
+    otherCharges: 0,
+    allocationMethod: 'By Taxable Value',
+};
+
+function additionalLandedCharges(lc = {}) {
+    return r2(
+        Number(lc.oceanAirFreight || 0)
+        + Number(lc.insurance || 0)
+        + Number(lc.customsDuty || 0)
+        + Number(lc.socialWelfareSurcharge || 0)
+        + Number(lc.clearingChaCharges || 0)
+        + Number(lc.localTransport || 0)
+        + Number(lc.otherCharges || 0)
+    );
+}
+
+function rowTaxableAmount(r) {
+    const qty = Number(r.qty) || 0;
+    const rate = Number(r.rate) || 0;
+    const disc = Number(r.discountPercent) || 0;
+    return r2(qty * rate * (1 - disc / 100));
+}
+
+function allocateImportLanded(rows, lc) {
+    const additional = additionalLandedCharges(lc);
+    const taxables = rows.map(rowTaxableAmount);
+    const qtys = rows.map((r) => Number(r.qty) || 0);
+    const assessableValue = r2(taxables.reduce((s, n) => s + n, 0));
+    const byQty = lc?.allocationMethod === 'By Quantity';
+    const denom = byQty ? (qtys.reduce((s, n) => s + n, 0) || 1) : (assessableValue || 1);
+    return {
+        assessableValue,
+        totalAdditionalLandedCharges: additional,
+        totalLandedCost: r2(assessableValue + additional),
+        allocations: rows.map((_, i) => {
+            const share = byQty ? qtys[i] / denom : taxables[i] / denom;
+            const allocatedLandedCharges = r2(additional * share);
+            const qty = qtys[i];
+            return {
+                allocatedLandedCharges,
+                landedUnitCost: qty ? r2((taxables[i] + allocatedLandedCharges) / qty) : 0,
+            };
+        }),
+    };
+}
 
 const FLOWS = [
     { key: 'PO→GRN→Invoice', label: 'PO → GRN → Invoice', desc: 'Standard flow. Invoice against a confirmed GRN.', icon: '📋' },
@@ -112,11 +168,17 @@ export default function PurchaseInvoiceFormPage() {
         gstType: 'CGST / SGST', placeOfSupply: 'Maharashtra', paymentTerms: '30 Days', remarks: '',
         poNumber: '', poDate: '', transporterName: '', vehicleNo: '', lrNumber: '',
         freightAmount: 0, freightGstRate: 0,
-        isConsumable: false
+        isConsumable: false,
+        inwardPurchaseType: 'Domestic',
+        importLandedCost: { ...EMPTY_IMPORT_LANDED },
     });
 
     const [rows, setRows] = useState([{ ...EMPTY_ROW }]);
     const setH = (k, v) => setHeader(h => ({ ...h, [k]: v }));
+    const setLanded = (k, v) => setHeader(h => ({
+        ...h,
+        importLandedCost: { ...EMPTY_IMPORT_LANDED, ...(h.importLandedCost || {}), [k]: v },
+    }));
 
     const onSupplierChange = (supplierId) => {
         const s = suppliers.find(s => s._id === supplierId);
@@ -369,6 +431,14 @@ export default function PurchaseInvoiceFormPage() {
                         freightAmount: inv.freightAmount || 0,
                         freightGstRate: inv.freightGstRate || 0,
                         isConsumable: inv.isConsumable || false,
+                        inwardPurchaseType: inv.inwardPurchaseType || 'Domestic',
+                        importLandedCost: {
+                            ...EMPTY_IMPORT_LANDED,
+                            ...(inv.importLandedCost || {}),
+                            billOfEntryDate: inv.importLandedCost?.billOfEntryDate
+                                ? String(inv.importLandedCost.billOfEntryDate).slice(0, 10)
+                                : '',
+                        },
                     });
                     setRows(inv.items.map(r => ({
                         itemId: r.itemId?._id || r.itemId,
@@ -517,6 +587,11 @@ export default function PurchaseInvoiceFormPage() {
     const rawTotal = r2(totalTaxableWithFreight + totals.cgst + totals.sgst + totals.igst + freightGstTotal);
     const roundOff = r2(Math.round(rawTotal) - rawTotal);
     const grandWithFreight = r2(rawTotal + roundOff);
+    const isImportPurchase = header.inwardPurchaseType === 'Import';
+    const landedCalc = useMemo(
+        () => allocateImportLanded(rows, header.importLandedCost || EMPTY_IMPORT_LANDED),
+        [rows, header.importLandedCost]
+    );
 
     // Group GST by rate for summary labels (display only — calcRow unchanged)
     const gstRateGroups = rows.reduce((acc, row) => {
@@ -714,6 +789,38 @@ export default function PurchaseInvoiceFormPage() {
         lrNumber: header.lrNumber,
         freightAmount: Number(header.freightAmount) || 0,
         freightGstRate: Number(header.freightGstRate) || 0,
+        inwardPurchaseType: header.inwardPurchaseType || 'Domestic',
+        importLandedCost: (header.inwardPurchaseType === 'Import')
+            ? {
+                billOfEntryNo: header.importLandedCost?.billOfEntryNo || '',
+                billOfEntryDate: header.importLandedCost?.billOfEntryDate || null,
+                portCha: header.importLandedCost?.portCha || '',
+                assessableValue: landedCalc.assessableValue,
+                oceanAirFreight: Number(header.importLandedCost?.oceanAirFreight) || 0,
+                insurance: Number(header.importLandedCost?.insurance) || 0,
+                customsDuty: Number(header.importLandedCost?.customsDuty) || 0,
+                socialWelfareSurcharge: Number(header.importLandedCost?.socialWelfareSurcharge) || 0,
+                clearingChaCharges: Number(header.importLandedCost?.clearingChaCharges) || 0,
+                localTransport: Number(header.importLandedCost?.localTransport) || 0,
+                otherCharges: Number(header.importLandedCost?.otherCharges) || 0,
+                allocationMethod: header.importLandedCost?.allocationMethod || 'By Taxable Value',
+                totalAdditionalLandedCharges: landedCalc.totalAdditionalLandedCharges,
+                totalLandedCost: landedCalc.totalLandedCost,
+                itemAllocations: rows.map((r, i) => ({
+                    itemId: r.itemId || null,
+                    itemName: r.itemName || '',
+                    allocatedLandedCharges: landedCalc.allocations[i]?.allocatedLandedCharges || 0,
+                    landedUnitCost: landedCalc.allocations[i]?.landedUnitCost || 0,
+                })),
+            }
+            : {
+                ...EMPTY_IMPORT_LANDED,
+                billOfEntryDate: null,
+                assessableValue: 0,
+                totalAdditionalLandedCharges: 0,
+                totalLandedCost: 0,
+                itemAllocations: [],
+            },
         items: rows.map(r => ({
             itemId: r.itemId, itemCode: r.itemCode, itemName: r.itemName,
             hsnCode: r.hsnCode, uom: r.uom,
@@ -919,9 +1026,20 @@ export default function PurchaseInvoiceFormPage() {
                                                 {suppliers.map(s => <option key={s._id} value={s._id}>{s.supplierName} ({s.supplierCode})</option>)}
                                             </select>
                                         </div>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
                                             <div><span style={lbl}>Supplier Inv No</span><input value={header.supplierInvoiceNo} onChange={e => setH('supplierInvoiceNo', e.target.value)} style={inp} placeholder="Supplier's Inv #" /></div>
                                             <div><span style={lbl}>Invoice Date *</span><input type="date" value={header.invoiceDate} onChange={e => setH('invoiceDate', e.target.value)} style={inp} required /></div>
+                                            <div>
+                                                <span style={lbl}>Purchase Type</span>
+                                                <select
+                                                    value={header.inwardPurchaseType || 'Domestic'}
+                                                    onChange={e => setH('inwardPurchaseType', e.target.value)}
+                                                    style={{ ...inp, cursor: 'pointer' }}
+                                                >
+                                                    <option value="Domestic">Domestic</option>
+                                                    <option value="Import">Import</option>
+                                                </select>
+                                            </div>
                                         </div>
                                         <div><span style={lbl}>Supplier GSTIN</span><input value={header.supplierGstin} onChange={e => setH('supplierGstin', e.target.value)} style={inp} placeholder="15-digit GSTIN" /></div>
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
@@ -1019,6 +1137,71 @@ export default function PurchaseInvoiceFormPage() {
                                     <div><span style={lbl}>LR / Bilty No</span><input value={header.lrNumber} onChange={e => setH('lrNumber', e.target.value)} style={inp} placeholder="LR Number" /></div>
                                 </div>
                             </div>
+
+
+                            {isImportPurchase && (
+                                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '16px 20px', marginBottom: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+                                    <h3 style={{ margin: '0 0 6px', fontSize: '13px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Import Landed Cost</h3>
+                                    <p style={{ margin: '0 0 12px', fontSize: '11px', color: '#94a3b8' }}>Additional costing layer only. Does not change supplier invoice, GST, freight GST, or payable Grand Total.</p>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+                                        <div><span style={lbl}>Bill of Entry No.</span><input value={header.importLandedCost?.billOfEntryNo || ''} onChange={e => setLanded('billOfEntryNo', e.target.value)} style={inp} /></div>
+                                        <div><span style={lbl}>Bill of Entry Date</span><input type="date" value={header.importLandedCost?.billOfEntryDate || ''} onChange={e => setLanded('billOfEntryDate', e.target.value)} style={inp} /></div>
+                                        <div><span style={lbl}>Port / CHA</span><input value={header.importLandedCost?.portCha || ''} onChange={e => setLanded('portCha', e.target.value)} style={inp} /></div>
+                                        <div><span style={lbl}>Ocean / Air Freight</span><input type="number" min="0" step="0.01" value={header.importLandedCost?.oceanAirFreight || 0} onChange={e => setLanded('oceanAirFreight', Number(e.target.value) || 0)} style={inp} className="no-spin" /></div>
+                                        <div><span style={lbl}>Insurance</span><input type="number" min="0" step="0.01" value={header.importLandedCost?.insurance || 0} onChange={e => setLanded('insurance', Number(e.target.value) || 0)} style={inp} className="no-spin" /></div>
+                                        <div><span style={lbl}>Customs Duty / BCD</span><input type="number" min="0" step="0.01" value={header.importLandedCost?.customsDuty || 0} onChange={e => setLanded('customsDuty', Number(e.target.value) || 0)} style={inp} className="no-spin" /></div>
+                                        <div><span style={lbl}>Social Welfare Surcharge</span><input type="number" min="0" step="0.01" value={header.importLandedCost?.socialWelfareSurcharge || 0} onChange={e => setLanded('socialWelfareSurcharge', Number(e.target.value) || 0)} style={inp} className="no-spin" /></div>
+                                        <div><span style={lbl}>Clearing / CHA Charges</span><input type="number" min="0" step="0.01" value={header.importLandedCost?.clearingChaCharges || 0} onChange={e => setLanded('clearingChaCharges', Number(e.target.value) || 0)} style={inp} className="no-spin" /></div>
+                                        <div><span style={lbl}>Local Transport</span><input type="number" min="0" step="0.01" value={header.importLandedCost?.localTransport || 0} onChange={e => setLanded('localTransport', Number(e.target.value) || 0)} style={inp} className="no-spin" /></div>
+                                        <div><span style={lbl}>Other Import Charges</span><input type="number" min="0" step="0.01" value={header.importLandedCost?.otherCharges || 0} onChange={e => setLanded('otherCharges', Number(e.target.value) || 0)} style={inp} className="no-spin" /></div>
+                                        <div>
+                                            <span style={lbl}>Allocation Method</span>
+                                            <select value={header.importLandedCost?.allocationMethod || 'By Taxable Value'} onChange={e => setLanded('allocationMethod', e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+                                                <option value="By Taxable Value">By Taxable Value</option>
+                                                <option value="By Quantity">By Quantity</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <span style={lbl}>Assessable Value (from items)</span>
+                                            <input readOnly value={landedCalc.assessableValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })} style={{ ...inp, background: '#f8f9fa' }} />
+                                        </div>
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '12px' }}>
+                                        <div style={{ padding: '10px 12px', background: '#f8f9fa', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                                            <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>Total additional landed charges</div>
+                                            <div style={{ fontSize: 15, fontWeight: 700, color: '#1e293b' }}>₹{landedCalc.totalAdditionalLandedCharges.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                                        </div>
+                                        <div style={{ padding: '10px 12px', background: '#f8f9fa', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                                            <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>Total landed cost (not payable)</div>
+                                            <div style={{ fontSize: 15, fontWeight: 700, color: '#1e293b' }}>₹{landedCalc.totalLandedCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                                        </div>
+                                    </div>
+                                    {rows.some(r => r.itemId) && (
+                                        <div style={{ marginTop: 12, overflowX: 'auto' }}>
+                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                                                <thead>
+                                                    <tr style={{ background: '#f8f9fa' }}>
+                                                        {['Item', 'Qty', 'Supplier rate', 'Allocated charges', 'Landed unit cost'].map((h) => (
+                                                            <th key={h} style={{ textAlign: 'left', padding: '6px 8px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #e2e8f0' }}>{h}</th>
+                                                        ))}
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {rows.map((r, i) => (
+                                                        <tr key={r.itemId || i}>
+                                                            <td style={{ padding: '6px 8px', borderBottom: '1px solid #f1f5f9' }}>{r.itemName || r.itemCode || '—'}</td>
+                                                            <td style={{ padding: '6px 8px', borderBottom: '1px solid #f1f5f9' }}>{r.qty || 0}</td>
+                                                            <td style={{ padding: '6px 8px', borderBottom: '1px solid #f1f5f9' }}>₹{Number(r.rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                            <td style={{ padding: '6px 8px', borderBottom: '1px solid #f1f5f9' }}>₹{(landedCalc.allocations[i]?.allocatedLandedCharges || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                            <td style={{ padding: '6px 8px', borderBottom: '1px solid #f1f5f9', fontWeight: 600 }}>₹{(landedCalc.allocations[i]?.landedUnitCost || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
 
 
                             {/* Items */}
@@ -1358,6 +1541,18 @@ export default function PurchaseInvoiceFormPage() {
                                             <span>Grand Total</span>
                                             <span>₹{grandWithFreight.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                                         </div>
+                                        {isImportPurchase && (
+                                            <>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px', fontSize: '12px', color: '#64748b' }}>
+                                                    <span>Import additional charges</span>
+                                                    <span>₹{landedCalc.totalAdditionalLandedCharges.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                </div>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#64748b' }}>
+                                                    <span>Total landed cost (not payable)</span>
+                                                    <span>₹{landedCalc.totalLandedCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                </div>
+                                            </>
+                                        )}
 
                                         <button type="button" className={gridStyles.taxDetailsToggle} onClick={() => setTaxDetailsOpen((v) => !v)}>
                                             {taxDetailsOpen ? 'Hide Tax Details' : 'View Tax Details'}

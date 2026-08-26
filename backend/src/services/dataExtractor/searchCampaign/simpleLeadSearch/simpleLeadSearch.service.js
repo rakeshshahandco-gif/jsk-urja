@@ -19,7 +19,7 @@ import { ensureSimpleLeadSearchCampaign } from '../searchCampaign.service.js';
 import { ensureSimpleLeadSearchQuery } from '../searchQuery/searchQuery.service.js';
 import { SearchQuery } from '../../../../models/searchQuery.model.js';
 import { SearchCampaign } from '../../../../models/searchCampaign.model.js';
-import { buildCampaignName, buildSimpleQueries, normalizeDisplay, normalizeBusinessTypes, parseRelatedKeywords, parseLocationExpandList, inferLocationScope, validateLocationForScope, suggestMajorCitiesForState, BUSINESS_TYPE_OPTIONS, DEFAULT_BUSINESS_TYPES, SEARCH_MARKETS, INDIA_GLOBAL_SOURCE_OPTIONS, CHINA_SOURCE_OPTIONS } from './queryBuilder.util.js';
+import { buildCampaignName, buildSimpleQueries, normalizeDisplay, normalizeBusinessTypes, parseRelatedKeywords, parseLocationExpandList, inferLocationScope, validateLocationForScope, suggestMajorCitiesForState, BUSINESS_TYPE_OPTIONS, DEFAULT_BUSINESS_TYPES, SEARCH_MARKETS, INDIA_GLOBAL_SOURCE_OPTIONS, CHINA_SOURCE_OPTIONS, isChinaCountry, parseProductModels, sourceHintFromPlatform } from './queryBuilder.util.js';
 import { attachStageA, summarizeStageA } from './stageAPreFilter.util.js';
 import { buildUnverifiedRawCaptureWorkbook } from './simpleLeadSearch.export.service.js';
 
@@ -74,17 +74,27 @@ function parseSearchBody(body = {}) {
         ? normalizeBusinessTypes(body.businessTypes)
         : [];
     const searchMarketRaw = normalizeDisplay(body?.searchMarket || body?.sourceMode || '').toLowerCase();
-    const searchMarket = SEARCH_MARKETS.includes(searchMarketRaw)
+    const marketExplicit = SEARCH_MARKETS.includes(searchMarketRaw);
+    let searchMarket = marketExplicit
         ? searchMarketRaw
         : (hasBusinessTypesField || body?.locationScope ? 'india_global_web' : '');
+    const hasChinaModels = parseProductModels(product).length > 0
+        && (isChinaCountry(country) || searchMarket === 'china_suppliers');
+    if ((hasChinaModels || isChinaCountry(country)) && (searchMarket === 'india_global_web' || !searchMarket)) {
+        searchMarket = 'china_suppliers';
+    }
     if (searchMarket === 'china_suppliers' && !country) country = 'China';
-    const locationScope = inferLocationScope({
+    let locationScope = inferLocationScope({
         locationScope: body?.locationScope,
         city,
         state,
         country,
         worldwide: parseBool(body?.worldwide, false) || normalizeDisplay(body?.locationScope).toLowerCase() === 'worldwide',
     });
+    // Owner types Country=China with city/state blank — do not require City scope.
+    if ((isChinaCountry(country) || searchMarket === 'china_suppliers') && !city && locationScope === 'city') {
+        locationScope = 'country';
+    }
     const expandStateSearch = parseBool(body?.expandStateSearch, false);
     const expandCountrySearch = parseBool(body?.expandCountrySearch, false);
     const expandCities = parseLocationExpandList(body?.expandCities ?? body?.selectedCities);
@@ -176,7 +186,9 @@ export function previewSimpleLeadSearchQueries({ body = {} } = {}) {
         suggestedCities: suggestMajorCitiesForState(parsed.state),
         businessTypeOptions: BUSINESS_TYPE_OPTIONS,
         sourceOptions: parsed.searchMarket === 'china_suppliers' ? CHINA_SOURCE_OPTIONS : INDIA_GLOBAL_SOURCE_OPTIONS,
-        platformAdaptersNote: 'Assisted Google visible capture is implemented. Direct Alibaba / 1688 / Made-in-China / IndiaMART adapters are not claimed complete.',
+        platformAdaptersNote: parsed.searchMarket === 'china_suppliers'
+            ? 'China discovery is Chinese-native first: direct 1688, then Baidu, Sogou, and 360 Search. Alibaba / Made-in-China / Global Sources are Google-indexed (not native portal capture). Google Web is secondary. Login/CAPTCHA may require manual confirmation. Direct Alibaba API is not claimed complete.'
+            : 'First release uses Google assisted visible capture. Direct Alibaba / 1688 / IndiaMART adapters are not claimed complete.',
         queries: planned.map((q, i) => ({
             ...q,
             index: i + 1,
@@ -255,7 +267,7 @@ export async function startSimpleLeadSearch({ companyId, user, body, headers = {
         campaignBody.searchMarket = parsed.searchMarket;
         campaignBody.selectedSources = parsed.selectedSources.length
             ? parsed.selectedSources
-            : (parsed.searchMarket === 'china_suppliers' ? ['google_global'] : ['google_web']);
+            : (parsed.searchMarket === 'china_suppliers' ? ['1688', 'baidu', 'sogou', 'so360', 'google_global'] : ['google_web']);
         campaignBody.worldwide = parsed.worldwide;
         campaignBody.expandCities = parsed.expandCities;
         campaignBody.expandStates = parsed.expandStates;
@@ -305,6 +317,7 @@ export async function startSimpleLeadSearch({ companyId, user, body, headers = {
             queryText: q.queryText,
             priorityScore: q.priorityScore,
             queryLanguage: q.queryLanguage,
+            sourceHint: sourceHintFromPlatform(q.sourcePlatform),
             selectedCriteria: {
                 businessType: q.businessType || '',
                 relatedKeyword: q.relatedKeyword || '',
@@ -315,6 +328,7 @@ export async function startSimpleLeadSearch({ companyId, user, body, headers = {
                 sourcePlatform: q.sourcePlatform || 'google',
                 searchMarket: parsed.searchMarket || 'india_global_web',
                 product,
+                ownerDisplayLabel: q.ownerDisplayLabel || '',
             },
         });
         if (!saved.slsCaptureStatus) {
@@ -334,6 +348,7 @@ export async function startSimpleLeadSearch({ companyId, user, body, headers = {
             relatedKeyword: q.relatedKeyword || '',
             queryLanguage: q.queryLanguage || 'en',
             locationLabel: q.locationLabel || '',
+            sourcePlatform: q.sourcePlatform || 'google',
             recommended: false,
             enabled: true,
         });
@@ -364,7 +379,7 @@ export async function startSimpleLeadSearch({ companyId, user, body, headers = {
         queryId: selected.id,
         body: {
             idempotencyKey: String(body?.idempotencyKey || `sls-${cid}-${selected.id}-${Date.now()}`).slice(0, 200),
-            sourceHint: 'google',
+            sourceHint: sourceHintFromPlatform(selected.sourcePlatform),
             sessionTtlMinutes: body?.sessionTtlMinutes,
             financialYear: body?.financialYear,
         },
@@ -471,7 +486,39 @@ async function enforceOpeningReadyTimeout(sessionDoc) {
 
     const startedAt = sessionDoc.tokenDeliveredAt || sessionDoc.updatedAt || sessionDoc.createdAt;
     const startedMs = startedAt ? new Date(startedAt).getTime() : 0;
-    if (!startedMs || (Date.now() - startedMs) < OPENING_READY_TIMEOUT_MS) return sessionDoc;
+    const source = String(sessionDoc.source || sessionDoc.sourceHint || 'google').toLowerCase();
+    const isAssistedPortal = source === 'baidu' || source === '1688' || source === 'sogou' || source === 'so360';
+    const readyMs = isAssistedPortal ? 90 * 1000 : OPENING_READY_TIMEOUT_MS;
+    if (!startedMs || (Date.now() - startedMs) < readyMs) return sessionDoc;
+
+    if (isAssistedPortal) {
+        const waitMessage = source === '1688'
+            ? 'Waiting for User — Complete 1688 verification. The 1688 window is still opening or needs login/CAPTCHA.'
+            : `Waiting for User. ${source === 'so360' ? '360 Search' : (source === 'sogou' ? 'Sogou' : 'Baidu')} is still opening or needs verification.`;
+        const updated = await AssistedCaptureSession.findOneAndUpdate(
+            {
+                _id: sessionDoc._id,
+                companyId: sessionDoc.companyId,
+                status: { $in: ['agent_assigned', 'opening'] },
+                browserOpenedAcked: { $ne: true },
+            },
+            {
+                $set: {
+                    status: 'manual_action_required',
+                    manualActionMessage: waitMessage,
+                    failCode: '',
+                    failMessage: '',
+                    'autoCollection.lastErrorCode': 'waiting_for_user',
+                    'autoCollection.lastErrorMessage': waitMessage,
+                    'autoCollection.status': 'paused_manual',
+                    'autoCollection.discoveryStatus': 'paused',
+                    'autoCollection.pauseReason': 'provider_block',
+                },
+            },
+            { new: true },
+        ).lean();
+        return updated || { ...sessionDoc, status: 'manual_action_required', manualActionMessage: waitMessage };
+    }
 
     const failMessage = 'Google window did not become ready within 30 seconds. Check that Discovery Agent is running with Chrome/Edge, then click Retry.';
     const updated = await AssistedCaptureSession.findOneAndUpdate(
@@ -490,6 +537,8 @@ async function enforceOpeningReadyTimeout(sessionDoc) {
                 pendingCaptureStatus: 'none',
                 pendingCaptureAckedAt: null,
                 pendingNavigationStatus: 'none',
+                'autoCollection.lastErrorCode': 'OPENING_TIMEOUT',
+                'autoCollection.lastErrorMessage': failMessage,
             },
         },
         { new: true },
@@ -528,7 +577,23 @@ export async function getSimpleLeadSearchStatus({ companyId, user, sessionId }) 
 
     const stageA = summarizeStageA(allForStats);
     const enrichedRecent = recentRawCaptures.map(attachStageA);
-    const ended = ['completed', 'cancelled', 'expired', 'failed'].includes(session.status);
+    const ownerStopped = Boolean(session.autoCollection?.ownerStoppedAt || session.autoCollection?.stopRequested);
+    const handedOff = String(session.autoCollection?.summary?.stopReason || '') === 'handed_off_to_next_query_session';
+    let ended = ['completed', 'cancelled', 'expired', 'failed'].includes(session.status);
+    // Child source session ended because the campaign moved to the next query — not a campaign end.
+    if (ended && handedOff && !ownerStopped) {
+        const live = await AssistedCaptureSession.findOne({
+            companyId: cid,
+            campaignId: session.campaignId,
+            status: { $nin: ['completed', 'cancelled', 'expired', 'failed'] },
+        }).sort({ updatedAt: -1 }).lean();
+        if (live) {
+            session = live;
+            ended = false;
+        } else {
+            ended = false;
+        }
+    }
 
     // Campaign-wide unique (do not treat session accepted appearances as unique companies)
     const campaignUniqueResultCount = await RawCapture.countDocuments({
@@ -569,10 +634,14 @@ export async function getSimpleLeadSearchStatus({ companyId, user, sessionId }) 
     let autoCollectionSessionId = null;
     let autoCollectionSelectedQuery = null;
     let autoProcessing = null;
+    const tickSessionId = String(session._id);
+    if (tickSessionId !== String(sessionId)) {
+        autoCollectionSessionId = tickSessionId;
+    }
     try {
         const autoMod = await import('./simpleLeadSearch.autoCollection.service.js');
         if (session?.autoCollection?.status === 'running') {
-            const ticked = await autoMod.tickAutoCollection({ companyId: cid, user, sessionId });
+            const ticked = await autoMod.tickAutoCollection({ companyId: cid, user, sessionId: tickSessionId });
             if (ticked?.session) {
                 session = ticked.session;
                 if (ticked.campaignProgress) campaignProgress = ticked.campaignProgress;
@@ -635,7 +704,8 @@ export async function getSimpleLeadSearchStatus({ companyId, user, sessionId }) 
         recentRawCaptures: enrichedRecent,
         sessionUiLabel: SESSION_UI_LABELS[session.status] || session.status,
         sessionEnded: ended,
-        sessionEndedMessage: ended ? 'Session ended. Start a new search.' : null,
+        sessionEndedMessage: ended && !handedOff ? 'Session ended. Start a new search.' : null,
+        campaignActive: !ended,
         ownerErrorMessage: session.status === 'failed'
             ? (session.failMessage || 'Google opening failed. Click Retry to start a new search.')
             : null,
@@ -719,19 +789,17 @@ async function loadOwnedSession(companyId, sessionId) {
 
 export async function stopSimpleLeadSearch({ companyId, user, sessionId }) {
     const cid = requireCompanyId(companyId);
-    const session = await loadOwnedSession(cid, sessionId);
-    const updated = await cancelAssistedCaptureSession({
-        companyId: cid,
-        user,
-        campaignId: session.campaignId,
-        queryId: session.queryId,
-        sessionId,
-    });
+    await loadOwnedSession(cid, sessionId);
+    const { ownerStopPersistentRun } = await import('./simpleLeadSearch.autoCollection.service.js');
+    const stopped = await ownerStopPersistentRun({ companyId: cid, user, sessionId, reason: 'owner_stop' });
     return {
-        session: updated,
+        session: stopped.session,
+        autoCollection: stopped.autoCollection,
+        campaignProgress: stopped.campaignProgress,
         sessionEnded: true,
-        sessionEndedMessage: 'Session ended. Start a new search.',
-        preserved: {
+        sessionEndedMessage: stopped.sessionEndedMessage || 'STOPPED BY USER. Start a new search.',
+        message: stopped.message,
+        preserved: stopped.preserved || {
             rawCaptures: true,
             campaign: true,
             searchQuery: true,
@@ -743,6 +811,9 @@ export async function stopSimpleLeadSearch({ companyId, user, sessionId }) {
 export async function continueSimpleLeadSearchAfterManual({ companyId, user, sessionId }) {
     const cid = requireCompanyId(companyId);
     const session = await loadOwnedSession(cid, sessionId);
+    if (session.status === 'cancelled' || session.autoCollection?.ownerStoppedAt || session.autoCollection?.stopRequested) {
+        throw new ApiError(400, 'STOPPED BY USER. This search will not resume. Start a new search.');
+    }
     const updated = await continueAfterManualAction({
         companyId: cid,
         user,

@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { dataExtractorApi } from '@/services/dataExtractorApi';
 import DataExtractorUserGuide from './DataExtractorUserGuide';
+import DataExtractorClearHistoryModal, { useCanClearExtractorHistory } from './DataExtractorClearHistoryModal';
 
 function isSettingsEditor(user, hasRole, hasPermission) {
     const role = String(user?.roleName || user?.role?.name || '').trim().toLowerCase();
@@ -15,6 +16,8 @@ export default function DataExtractorSettingsPage() {
     const { user, hasRole, hasPermission } = useAuth();
     const canEditSettings = isSettingsEditor(user, hasRole, hasPermission);
     const isSuperadmin = String(user?.roleName || '').toLowerCase() === 'superadmin' || hasRole?.('superadmin');
+    const canClear = useCanClearExtractorHistory();
+    const [clearOpen, setClearOpen] = useState(false);
     const [settings, setSettings] = useState(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -151,6 +154,17 @@ export default function DataExtractorSettingsPage() {
                 </p>
             )}
 
+            {canClear ? (
+                <div style={{ margin: '0 0 20px', padding: 12, border: '1px solid #fecaca', borderRadius: 8, background: '#fff1f2' }}>
+                    <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>Clear History</div>
+                    <p style={{ fontSize: 12, color: '#64748b', marginTop: 0 }}>
+                        Admin only. Clears extractor test history after a count preview. CRM Leads and Verified records stay by default.
+                    </p>
+                    <button type="button" onClick={() => setClearOpen(true)} style={{ padding: '8px 12px', background: '#b91c1c', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                        Clear History
+                    </button>
+                </div>
+            ) : null}
             <DataExtractorUserGuide variant="full" providerStatus={ps} />
 
             {!ps.configured && (
@@ -465,6 +479,11 @@ TRADEINDIA_API_KEY=`}</pre>
                     {saving ? 'Saving…' : 'Save Settings'}
                 </button>
             )}
+            <DataExtractorClearHistoryModal
+                open={clearOpen}
+                onClose={() => setClearOpen(false)}
+                defaultScope="all_extractor"
+            />
         </div>
     );
 }

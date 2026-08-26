@@ -5,11 +5,26 @@
  */
 import logger from '../utils/logger.js';
 import { AssistedCaptureSession } from '../models/assistedCaptureSession.model.js';
+import { User } from '../models/user.model.js';
 import { companyScopeAls } from '../utils/companyScopeContext.js';
 
 const TICK_MS = 2000;
 let timer = null;
 let running = false;
+const tickerUserCache = new Map();
+
+async function tickerUser(session) {
+    const id = String(session.createdBy || '');
+    if (tickerUserCache.has(id)) return tickerUserCache.get(id);
+    const doc = id
+        ? await User.findById(id).select('roleName additionalPermissions permissions').lean()
+        : null;
+    const user = doc
+        ? { ...doc, _id: doc._id, id: doc._id }
+        : { _id: session.createdBy, id: session.createdBy };
+    tickerUserCache.set(id, user);
+    return user;
+}
 
 async function tickOnce() {
     if (running) return;
@@ -17,9 +32,18 @@ async function tickOnce() {
     try {
         const sessions = await AssistedCaptureSession.find({
             $or: [
-                { 'autoCollection.status': 'running' },
+                {
+                    'autoCollection.status': 'running',
+                    'autoCollection.stopRequested': { $ne: true },
+                    $or: [
+                        { 'autoCollection.ownerStoppedAt': null },
+                        { 'autoCollection.ownerStoppedAt': { $exists: false } },
+                    ],
+                    status: { $nin: ['cancelled', 'completed', 'expired'] },
+                },
                 {
                     'autoProcessing.status': { $nin: ['paused_owner', 'stopped'] },
+                    'autoCollection.stopRequested': { $ne: true },
                     $or: [
                         { 'autoProcessing.enabled': true },
                         { 'autoProcessing.ownerWorkflowEnabled': true },
@@ -28,7 +52,7 @@ async function tickOnce() {
                 },
             ],
         })
-            .select('_id companyId createdBy autoCollection.status autoProcessing.status autoProcessing.enabled autoProcessing.ownerWorkflowEnabled')
+            .select('_id companyId createdBy autoCollection.status autoCollection.stopRequested autoCollection.ownerStoppedAt autoProcessing.status autoProcessing.enabled autoProcessing.ownerWorkflowEnabled')
             .limit(40)
             .lean();
 
@@ -44,17 +68,22 @@ async function tickOnce() {
         for (const s of sessions) {
             const companyId = s.companyId;
             const sessionId = String(s._id);
-            const user = { _id: s.createdBy, id: s.createdBy };
+            const user = await tickerUser(s);
             await companyScopeAls.run({ companyId }, async () => {
                 try {
-                    if (s.autoCollection?.status === 'running') {
+                    const ownerStopped = Boolean(s.autoCollection?.ownerStoppedAt)
+                        || s.autoCollection?.stopRequested === true;
+                    if (s.autoCollection?.status === 'running' && !ownerStopped) {
                         await autoCol.tickAutoCollection({ companyId, user, sessionId });
                     }
                 } catch (e) {
                     logger.warn(`[SLS-Runtime] AC tick ${sessionId}: ${e?.message || e}`);
                 }
                 try {
-                    const mayAp = s.autoProcessing
+                    const ownerStopped = Boolean(s.autoCollection?.ownerStoppedAt)
+                        || s.autoCollection?.stopRequested === true;
+                    const mayAp = !ownerStopped
+                        && s.autoProcessing
                         && s.autoProcessing.status !== 'paused_owner'
                         && s.autoProcessing.status !== 'stopped'
                         && (

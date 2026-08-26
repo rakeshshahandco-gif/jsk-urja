@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { AiCrmEnrichmentDraft } from '../../../models/aiCrmEnrichmentDraft.model.js';
+import { ensureModelIndexes } from '../../../utils/ensureModelIndexes.js';
 import { AiCrmEnrichmentTransaction } from '../../../models/aiCrmEnrichmentTransaction.model.js';
 import { ExtractedLead } from '../../../models/extractedLead.model.js';
 import { AiProductRecommendation } from '../../../models/aiProductRecommendation.model.js';
@@ -33,6 +34,11 @@ import {
     CRM_EDIT_CUSTOMER_PERM,
     CRM_EDIT_SUPPLIER_PERM,
 } from './constants.js';
+
+async function ensureCrmEnrichmentStores() {
+    await ensureModelIndexes(AiCrmEnrichmentDraft);
+    await ensureModelIndexes(AiCrmEnrichmentTransaction);
+}
 
 function rejectTenantOverrides(payload = {}) {
     if (payload.companyId != null || payload.tenantId != null) {
@@ -108,6 +114,7 @@ function recordKeyOf({ extractedLeadId, similarCompanyResultId, adhocKey }) {
 }
 
 export async function listDrafts(companyId, query = {}) {
+    await ensureCrmEnrichmentStores();
     const q = { companyId, isDeleted: { $ne: true } };
     if (query.status) q.status = query.status;
     if (query.eligibilityStatus) q.eligibilityStatus = query.eligibilityStatus;
@@ -125,17 +132,20 @@ export async function listDrafts(companyId, query = {}) {
 }
 
 export async function getDraft(companyId, id) {
+    await ensureCrmEnrichmentStores();
     const doc = await AiCrmEnrichmentDraft.findOne({ _id: id, companyId, isDeleted: { $ne: true } }).lean();
     if (!doc) throw new ApiError(404, 'CRM enrichment draft not found');
     return doc;
 }
 
 export async function getDraftHistory(companyId, id) {
+    await ensureCrmEnrichmentStores();
     const doc = await getDraft(companyId, id);
     return { _id: doc._id, companyId: doc.companyId, history: doc.history || [] };
 }
 
 export async function prepareDraft(companyId, userId, payload = {}) {
+    await ensureCrmEnrichmentStores();
     rejectTenantOverrides(payload);
     const intel = await loadIntelligence(companyId, payload.extractedLeadId, payload.similarCompanyResultId);
     const eligibility = evaluateEligibility(intel);
@@ -249,6 +259,7 @@ export async function prepareDraft(companyId, userId, payload = {}) {
 }
 
 export async function setFieldDecisions(companyId, userId, id, payload = {}) {
+    await ensureCrmEnrichmentStores();
     rejectTenantOverrides(payload);
     const doc = await AiCrmEnrichmentDraft.findOne({ _id: id, companyId, isDeleted: { $ne: true } });
     if (!doc) throw new ApiError(404, 'Draft not found');
@@ -267,6 +278,7 @@ export async function setFieldDecisions(companyId, userId, id, payload = {}) {
 }
 
 export async function previewDraft(companyId, userId, id, payload = {}) {
+    await ensureCrmEnrichmentStores();
     rejectTenantOverrides(payload);
     const doc = await AiCrmEnrichmentDraft.findOne({ _id: id, companyId, isDeleted: { $ne: true } });
     if (!doc) throw new ApiError(404, 'Draft not found');
@@ -296,6 +308,7 @@ export async function previewDraft(companyId, userId, id, payload = {}) {
 }
 
 export async function finalApproveDraft(companyId, userId, id, payload = {}) {
+    await ensureCrmEnrichmentStores();
     rejectTenantOverrides(payload);
     const doc = await AiCrmEnrichmentDraft.findOne({ _id: id, companyId, isDeleted: { $ne: true } });
     if (!doc) throw new ApiError(404, 'Draft not found');
@@ -315,6 +328,7 @@ export async function finalApproveDraft(companyId, userId, id, payload = {}) {
 }
 
 export async function createLeadFromDraft(companyId, userId, id, payload = {}, user = null) {
+    await ensureCrmEnrichmentStores();
     rejectTenantOverrides(payload);
     requirePerm(user, 'data_extractor.crm_enrichment.create_lead');
     requirePerm(user, CRM_CREATE_LEAD_PERM);
@@ -385,6 +399,7 @@ export async function createLeadFromDraft(companyId, userId, id, payload = {}, u
 }
 
 export async function applyEnrichmentFromDraft(companyId, userId, id, payload = {}, user = null) {
+    await ensureCrmEnrichmentStores();
     rejectTenantOverrides(payload);
     requirePerm(user, 'data_extractor.crm_enrichment.apply');
     const doc = await AiCrmEnrichmentDraft.findOne({ _id: id, companyId, isDeleted: { $ne: true } });
@@ -450,6 +465,7 @@ export async function applyEnrichmentFromDraft(companyId, userId, id, payload = 
 }
 
 export async function rejectDraft(companyId, userId, id, payload = {}) {
+    await ensureCrmEnrichmentStores();
     rejectTenantOverrides(payload);
     const doc = await AiCrmEnrichmentDraft.findOne({ _id: id, companyId, isDeleted: { $ne: true } });
     if (!doc) throw new ApiError(404, 'Draft not found');
@@ -463,6 +479,7 @@ export async function rejectDraft(companyId, userId, id, payload = {}) {
 }
 
 export async function lockDraft(companyId, userId, id, payload = {}) {
+    await ensureCrmEnrichmentStores();
     rejectTenantOverrides(payload);
     const doc = await AiCrmEnrichmentDraft.findOne({ _id: id, companyId, isDeleted: { $ne: true } });
     if (!doc) throw new ApiError(404, 'Draft not found');
@@ -482,6 +499,7 @@ export async function lockDraft(companyId, userId, id, payload = {}) {
 }
 
 export async function exportDrafts(companyId, query = {}) {
+    await ensureCrmEnrichmentStores();
     const q = { companyId, isDeleted: { $ne: true } };
     if (query.status) q.status = query.status;
     const rows = await AiCrmEnrichmentDraft.find(q).sort({ updatedAt: -1 }).limit(500).lean();

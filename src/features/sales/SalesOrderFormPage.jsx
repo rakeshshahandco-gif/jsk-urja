@@ -11,6 +11,8 @@ import toast from 'react-hot-toast';
 import { ArrowUp, ArrowDown } from 'lucide-react';
 import { BrandedLoader } from '@/components/ui';
 import gridStyles from '@/features/sales/styles/salesOrderFormItemGrid.module.scss';
+import { lookupCustomerPrice } from '@/features/sales/customerPriceList/lookupCustomerPrice';
+import CustomerPriceSuggestionPanel from '@/features/sales/customerPriceList/CustomerPriceSuggestionPanel';
 
 
 const inp = { padding: '7px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, width: '100%', boxSizing: 'border-box', outline: 'none', background: '#fff', color: '#374151' };
@@ -140,6 +142,7 @@ export default function SalesOrderFormPage() {
 
     const [allItems, setAllItems] = useState([]);
     const [stickerOptions, setStickerOptions] = useState([]);
+    const [priceHints, setPriceHints] = useState({});
     const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
     useEffect(() => {
@@ -281,12 +284,37 @@ export default function SalesOrderFormPage() {
         setShowCustDropdown(false);
     };
 
+    const applyCustomerPriceHint = async (index, itemId, qty, { applyRate } = {}) => {
+        if (!form.customerId || !itemId) return;
+        const hint = await lookupCustomerPrice({
+            customerId: form.customerId,
+            itemId,
+            qty,
+            date: form.soDate,
+        });
+        if (!hint) return;
+        setPriceHints((p) => ({ ...p, [index]: hint }));
+        if (!applyRate) return;
+        if (hint.priority !== 1 && hint.priority !== 2) return;
+        if (hint.suggestedRate == null) return;
+        setForm((p) => ({
+            ...p,
+            items: p.items.map((item, idx) => {
+                if (idx !== index) return item;
+                const rate = hint.suggestedRate;
+                return { ...item, rate, amount: (Number(item.qty) || 0) * rate };
+            }),
+        }));
+    };
+
     const handleItemSelect = (val, index) => {
         const selected = allItems.find(it => it._id === val);
         if (!selected) return;
+        let qtyKept = '';
         setForm(p => {
             const items = p.items.map((item, idx) => {
                 if (idx !== index) return item;
+                qtyKept = item.qty || '';
                 const rate = selected.standardRate || selected.rate || selected.salesPrice || '';
                 const updated = {
                     itemId: selected._id,
@@ -305,6 +333,7 @@ export default function SalesOrderFormPage() {
             });
             return { ...p, items };
         });
+        applyCustomerPriceHint(index, val, qtyKept, { applyRate: true });
     };
 
     const fetchPreviewSONo = async (seriesId) => {
@@ -771,7 +800,13 @@ export default function SalesOrderFormPage() {
                                                 <input value={item.uom} onChange={e => setItem(i, 'uom', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 5)} data-row={i} data-col={5} className={gridStyles.inp} autoComplete="off" />
                                             </td>
                                             <td className={`${gridStyles.td} ${gridStyles.colQty}`}>
-                                                <input type="number" min="0" step="any" value={item.qty} onChange={e => setItem(i, 'qty', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 6)} data-row={i} data-col={6} className={`no-spin ${gridStyles.tableInpNum}`} style={{ textAlign: 'center', borderColor: !item.qty ? '#fca5a5' : '#e5e7eb' }} autoComplete="off" />
+                                                <input type="number" min="0" step="any" value={item.qty} onChange={e => {
+                                                    const v = e.target.value;
+                                                    const prev = priceHints[i];
+                                                    const matchesPrev = prev && Number(prev.suggestedRate) === Number(item.rate);
+                                                    setItem(i, 'qty', v);
+                                                    applyCustomerPriceHint(i, item.itemId, v, { applyRate: matchesPrev });
+                                                }} onKeyDown={(e) => handleRowKeyDown(e, i, 6)} data-row={i} data-col={6} className={`no-spin ${gridStyles.tableInpNum}`} style={{ textAlign: 'center', borderColor: !item.qty ? '#fca5a5' : '#e5e7eb' }} autoComplete="off" />
                                             </td>
                                             <td className={`${gridStyles.td} ${gridStyles.colRate}`}>
                                                 <input type="number" min="0" step="any" value={item.rate} onChange={e => setItem(i, 'rate', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 7)} data-row={i} data-col={7} className={`no-spin ${gridStyles.tableInpNum}`} style={{ borderColor: !item.rate ? '#fca5a5' : '#e5e7eb' }} autoComplete="off" />
@@ -788,6 +823,7 @@ export default function SalesOrderFormPage() {
                         </table>
                     </div>
                     <button type="button" onClick={addItem} className={gridStyles.addBtn}>+ Add Item</button>
+                    <CustomerPriceSuggestionPanel hints={priceHints} items={form.items} />
                 </Section>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>

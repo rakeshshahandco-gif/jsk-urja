@@ -26,6 +26,11 @@ import {
 } from './constants.js';
 import { evaluateGenuineness } from './ruleEngine.js';
 import { tryOllamaVerifyGenuineness } from './ollama.util.js';
+import {
+    isGenuinenessJobTerminalStatus,
+    isJobProcessedComplete,
+    resolveGenuinenessJobTerminalStatus,
+} from './jobTerminal.util.js';
 
 function requireCompanyId(companyId) {
     if (!companyId || !mongoose.isValidObjectId(companyId)) throw new ApiError(400, 'Company context required');
@@ -213,6 +218,18 @@ export async function verifyOneQualification({
 
 const runningJobs = new Set();
 
+async function persistGenuinenessJobTerminal(jobId) {
+    const fresh = await RawCaptureGenuinenessJob.findById(jobId);
+    if (!fresh) return null;
+    if (isGenuinenessJobTerminalStatus(fresh.status)) return fresh;
+    if (!fresh.stopRequested && !isJobProcessedComplete(fresh)) return fresh;
+    fresh.status = resolveGenuinenessJobTerminalStatus(fresh);
+    fresh.finishedAt = new Date();
+    fresh.currentDomain = '';
+    await fresh.save();
+    return fresh;
+}
+
 async function processJob(jobId) {
     if (runningJobs.has(String(jobId))) return;
     runningJobs.add(String(jobId));
@@ -290,11 +307,13 @@ async function processJob(jobId) {
                     if (stats.method === 'ollama_local') inc.ollamaCount = 1;
                     else inc.ruleBasedCount = 1;
                     await RawCaptureGenuinenessJob.updateOne({ _id: jobId }, { $inc: inc });
+                    await persistGenuinenessJobTerminal(jobId);
                 } catch (err) {
                     await RawCaptureGenuinenessJob.updateOne({ _id: jobId }, {
                         $set: { lastError: String(err?.message || err).slice(0, 500) },
                         $inc: { failedCount: 1, processed: 1 },
                     });
+                    await persistGenuinenessJobTerminal(jobId);
                     try {
                         await RawCaptureGenuineness.findOneAndUpdate(
                             {
@@ -336,21 +355,29 @@ async function processJob(jobId) {
             () => worker(),
         );
         await Promise.all(workers);
-
-        job = await RawCaptureGenuinenessJob.findById(jobId);
-        if (job.stopRequested) {
-            job.status = 'stopped';
-        } else if (job.failedCount && job.processed > job.failedCount) {
-            job.status = 'partial';
-        } else if (job.failedCount && job.processed === job.failedCount && job.processed > 0) {
-            job.status = 'failed';
-        } else {
-            job.status = 'completed';
+        await persistGenuinenessJobTerminal(jobId);
+    } catch (err) {
+        try {
+            const fresh = await RawCaptureGenuinenessJob.findById(jobId);
+            if (fresh && !isGenuinenessJobTerminalStatus(fresh.status)) {
+                if (isJobProcessedComplete(fresh) || fresh.stopRequested) {
+                    await persistGenuinenessJobTerminal(jobId);
+                } else {
+                    fresh.status = 'failed';
+                    fresh.lastError = String(err?.message || err).slice(0, 500);
+                    fresh.finishedAt = new Date();
+                    await fresh.save();
+                }
+            }
+        } catch {
+            /* ignore secondary persist errors */
         }
-        job.finishedAt = new Date();
-        job.currentDomain = '';
-        await job.save();
     } finally {
+        try {
+            await persistGenuinenessJobTerminal(jobId);
+        } catch {
+            /* ignore */
+        }
         runningJobs.delete(String(jobId));
     }
 }
@@ -372,7 +399,20 @@ export async function startVerificationJob({
         status: { $in: ['queued', 'processing'] },
     }).lean();
     if (active) {
-        return { job: active, alreadyRunning: true };
+        if (isJobProcessedComplete(active)) {
+            await RawCaptureGenuinenessJob.updateOne(
+                { _id: active._id },
+                {
+                    $set: {
+                        status: resolveGenuinenessJobTerminalStatus(active),
+                        finishedAt: new Date(),
+                        currentDomain: '',
+                    },
+                },
+            );
+        } else {
+            return { job: active, alreadyRunning: true };
+        }
     }
 
     const job = await RawCaptureGenuinenessJob.create({
@@ -459,7 +499,7 @@ export async function listGenuinenessForSession({
         : !(verifiedOnlyParam === 'false' || verifiedOnlyParam === false || verifiedOnlyParam === '0');
 
     const sharedOptions = {
-        includeDirectoryListings: true,
+        includeDirectoryListings: false,
         search: query.search || '',
         sort: query.sort || 'sourceAppearances',
         sortDir: query.sortDir || 'desc',

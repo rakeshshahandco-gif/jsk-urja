@@ -15,6 +15,9 @@ function requireCompanyId(companyId) {
 function runStatus(session) {
     const ac = session.autoCollection?.status || 'idle';
     const ap = session.autoProcessing?.status || 'idle';
+    if (session.autoCollection?.ownerStoppedAt || session.autoCollection?.stopRequested || session.status === 'cancelled') {
+        return 'CANCELLED';
+    }
     if (ac === 'running' || ap === 'running') return 'RUNNING';
     if (String(ac).startsWith('paused') || ap === 'paused_owner') return 'PAUSED';
     if (ac === 'failed' || ap === 'failed' || session.status === 'failed') return 'FAILED';
@@ -66,16 +69,28 @@ export async function listSimpleLeadSearchRuns({ companyId, limit = 30 }) {
 
     const activeFilter = {
         companyId: cid,
-        $or: [
-            { 'autoCollection.status': { $in: ['running', 'paused_owner', 'paused_manual', 'paused_batch'] } },
-            { 'autoProcessing.status': 'running' },
+        status: { $nin: ['cancelled', 'completed', 'expired', 'failed'] },
+        'autoCollection.stopRequested': { $ne: true },
+        $and: [
             {
-                status: {
-                    $in: [
-                        'queued', 'agent_assigned', 'opening', 'awaiting_user',
-                        'ready_to_capture', 'capturing', 'manual_action_required',
-                    ],
-                },
+                $or: [
+                    { 'autoCollection.ownerStoppedAt': null },
+                    { 'autoCollection.ownerStoppedAt': { $exists: false } },
+                ],
+            },
+            {
+                $or: [
+                    { 'autoCollection.status': { $in: ['running', 'paused_owner', 'paused_manual', 'paused_batch'] } },
+                    { 'autoProcessing.status': 'running' },
+                    {
+                        status: {
+                            $in: [
+                                'queued', 'agent_assigned', 'opening', 'awaiting_user',
+                                'ready_to_capture', 'capturing', 'manual_action_required',
+                            ],
+                        },
+                    },
+                ],
             },
         ],
     };
@@ -117,9 +132,12 @@ export async function listSimpleLeadSearchRuns({ companyId, limit = 30 }) {
         queryById[String(s.queryId)],
     ));
 
-    const activeRuns = mapped.filter((r) => ['RUNNING', 'PAUSED', 'QUEUED'].includes(r.status)
+    const activeRuns = mapped.filter((r) => r.status !== 'CANCELLED'
+        && r.status !== 'COMPLETED'
+        && r.status !== 'FAILED'
+        && (['RUNNING', 'PAUSED', 'QUEUED'].includes(r.status)
         || ['running', 'paused_owner', 'paused_manual', 'paused_batch'].includes(r.autoCollectionStatus)
-        || r.autoProcessingStatus === 'running');
+        || r.autoProcessingStatus === 'running'));
     const recentRuns = mapped.filter((r) => !activeRuns.some((a) => a.runId === r.runId)).slice(0, lim);
 
     return { active: activeRuns, recent: recentRuns };

@@ -142,6 +142,8 @@ export function mergeDiscoveryRecords(existing, incoming) {
             facebook: preferNonEmpty(existing.socialLinks?.facebook, incoming.socialLinks?.facebook),
             instagram: preferNonEmpty(existing.socialLinks?.instagram, incoming.socialLinks?.instagram),
             linkedin: preferNonEmpty(existing.socialLinks?.linkedin, incoming.socialLinks?.linkedin),
+            youtube: preferNonEmpty(existing.socialLinks?.youtube, incoming.socialLinks?.youtube),
+            twitter: preferNonEmpty(existing.socialLinks?.twitter, incoming.socialLinks?.twitter),
         },
         confidenceScore: Math.max(existing.confidenceScore || 0, incoming.confidenceScore || 0),
         _qualityConflicts: conflicts,

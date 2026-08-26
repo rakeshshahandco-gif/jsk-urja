@@ -2,11 +2,11 @@
  * RawCapture Checkpoint 3 constants.
  */
 export const RAW_CAPTURE_SOURCES = Object.freeze([
-    'google', 'facebook', 'indiamart', 'web', 'manual', 'discovery_agent',
+    'google', 'facebook', 'instagram', 'linkedin', 'x', 'indiamart', 'web', 'manual', 'discovery_agent', 'baidu', '1688', 'sogou', 'so360',
 ]);
 
 export const RAW_CAPTURE_QUERY_SOURCE_HINTS = Object.freeze([
-    'google', 'facebook', 'indiamart', 'official_website', 'web', 'manual',
+    'google', 'facebook', 'instagram', 'linkedin', 'x', 'indiamart', 'official_website', 'web', 'manual', 'baidu', '1688', 'sogou', 'so360',
 ]);
 
 export const RAW_CAPTURE_METHODS = Object.freeze([
@@ -21,7 +21,9 @@ export const RAW_CAPTURE_ALLOWED_METHODS_CP3 = Object.freeze(['assisted_visible'
 export const RAW_CAPTURE_ALLOWED_INGEST_METHODS = Object.freeze([...RAW_CAPTURE_METHODS]);
 
 export const RAW_CAPTURE_RESULT_TYPE_HINTS = Object.freeze([
-    'company', 'product_listing', 'marketplace_supplier', 'facebook_page', 'facebook_group',
+    'company', 'product_listing', 'marketplace_supplier', 'facebook_page', 'facebook_group', 'facebook_profile',
+    'instagram_profile', 'instagram_hashtag',
+    'linkedin_company', 'linkedin_profile', 'x_profile', 'x_post',
     'article', 'job', 'course', 'directory', 'unknown',
 ]);
 

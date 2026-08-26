@@ -9,6 +9,11 @@ import { assertResolvedPublicUrl, assertPublicHttpUrl } from './ssrfGuard.js';
 import { mergePreviewList, normalizeDomain } from './mergeNormalize.service.js';
 import { searchWithSerpApi } from '../providers/serpapiProvider.js';
 import { searchWithBrave } from '../providers/braveSearchProvider.js';
+import { searchWithPublicHtml } from '../providers/publicHtmlSearchProvider.js';
+import { generatePhase1Queries, parseLocationInput } from './queryGenerator.util.js';
+import { enrichDomainFromWebsite } from '../searchCampaign/rawCaptureEnrichment/fetch.util.js';
+import { isDirectoryHost } from '../searchCampaign/rawCaptureEnrichment/parse.util.js';
+import ExcelJS from 'exceljs';
 import {
     buildIndiamartBraveQuery,
     enrichIndiamartPublicUrl,
@@ -25,6 +30,8 @@ import { scoreExtractorConfidence, normalizeExtractorUrl } from '../extractor.ut
 import { getOrCreateExtractorSettings, assertExtractorModuleEnabled } from '../extractor.service.js';
 import { applyControlledResultCap, getControlledTestConfig } from '../controlledTestMode.js';
 import { convertExtractedToLead } from '../extractorConversion.service.js';
+import { applyPostExtractionPhase2, checkCrmDuplicatesForConvert } from './phase2/qualification.service.js';
+import { buildPhase2Analytics } from './phase2/analytics.util.js';
 
 function discoveryCfg(settings) {
     return settings?.sourceConnectors?.discovery || {};
@@ -38,16 +45,20 @@ function audit(job, action, detail = {}) {
 
 function clampTarget(n, settings) {
     const cfg = discoveryCfg(settings);
-    const maxTarget = Math.min(1000, Math.max(1, Number(cfg.maxTarget) || 500));
-    const v = Math.max(1, Number(n) || Number(cfg.defaultTarget) || 10);
+    const maxTarget = Math.min(1000, Math.max(1, Number(cfg.maxTarget) || 1000));
+    const v = Math.max(1, Number(n) || Number(cfg.defaultTarget) || 100);
     return Math.min(maxTarget, v);
 }
 
 function clampBatch(n, settings) {
     const cfg = discoveryCfg(settings);
-    const maxBatch = Math.min(50, Math.max(1, Number(cfg.maxBatchSize) || 50));
+    const maxBatch = Math.min(250, Math.max(1, Number(cfg.maxBatchSize) || 250));
     const v = Math.max(1, Number(n) || Number(cfg.defaultBatchSize) || 10);
     return Math.min(maxBatch, v);
+}
+
+function batchWindow(job) {
+    return Math.max(1, Number(job.batchSize) || 10);
 }
 
 function buildQuery(job) {
@@ -67,6 +78,74 @@ function attachDupLabels(records) {
     });
 }
 
+function crawlMaxPages(depth) {
+    const d = Number(depth);
+    if (d <= 0) return 1;
+    if (d >= 2) return 8;
+    return 5;
+}
+
+function delayMs(ms) {
+    return new Promise((r) => setTimeout(r, Math.max(0, Number(ms) || 0)));
+}
+
+const runningDiscoveryLoops = new Set();
+
+function directoryPlatformOf(link) {
+    const lower = String(link || '').toLowerCase();
+    if (lower.includes('indiamart.com')) return 'indiamart';
+    if (lower.includes('tradeindia.com')) return 'tradeindia';
+    if (lower.includes('justdial.com')) return 'justdial';
+    if (lower.includes('exportersindia.com')) return 'exportersindia';
+    return '';
+}
+
+function isSocialProfileUrl(link) {
+    const lower = String(link || '').toLowerCase();
+    return lower.includes('facebook.com')
+        || lower.includes('instagram.com')
+        || lower.includes('linkedin.com')
+        || lower.includes('twitter.com')
+        || /(?:^|\/\/)(?:www\.)?x\.com\//i.test(lower)
+        || lower.includes('youtube.com')
+        || lower.includes('youtu.be');
+}
+
+function computeRunStats(job, generatedQueries = []) {
+    const records = job.metadata?.previewRecords || [];
+    const queries = generatedQueries.length ? generatedQueries : (job.metadata?.generatedQueries || []);
+    const queryDone = queries.filter((q) => ['done', 'blocked', 'skipped'].includes(String(q.status || ''))).length;
+    const emailsFound = records.filter((r) => r.email).length;
+    const phonesFound = records.filter((r) => r.phone || r.mobile || r.whatsappNumber).length;
+    const contactsFound = records.filter((r) => r.email || r.phone || r.mobile || r.whatsappNumber).length;
+    const websitesProcessed = records.filter((r) => r.rawExtractedData?.enriched
+        || r.crawlStatus === 'data_extracted'
+        || r.crawlStatus === 'failed').length;
+    const failedBlocked = records.filter((r) => ['failed', 'blocked', 'failed_blocked'].includes(String(r.crawlStatus || r.extractionStatus || ''))).length
+        + Number(job.metadata?.blockedQueryCount || 0);
+    const phase2 = buildPhase2Analytics(job, records);
+    return {
+        searchQueriesDone: queryDone,
+        searchQueriesTotal: queries.length,
+        candidatesFound: job.totalRawResults || records.length,
+        websitesProcessed,
+        contactsFound,
+        uniqueCompanies: phase2.uniqueCompanies || job.totalUniqueResults || records.length,
+        emailsFound,
+        phonesFound,
+        failedBlocked,
+        aiProcessed: phase2.aiProcessed,
+        highlyRelevant: phase2.highlyRelevant,
+        relevant: phase2.relevant,
+        possible: phase2.possible,
+        notRelevant: phase2.notRelevant,
+        insufficientInformation: phase2.insufficientInformation,
+        potentialDuplicates: phase2.potentialDuplicates,
+        convertedToCrmLeads: phase2.convertedToCrmLeads,
+        sourceEffectiveness: phase2.sourceEffectiveness,
+    };
+}
+
 export async function listProvidersForCompany(companyId) {
     const settings = await getOrCreateExtractorSettings(companyId);
     return { providers: listDiscoveryProviders(settings), disclaimer: DISCLAIMER, controlledTestMode: getControlledTestConfig(settings) };
@@ -80,9 +159,12 @@ export async function createDiscoveryJob({
     city = '',
     state = '',
     country = '',
+    location = '',
     targetCompanies,
     batchSize,
     selectedSources = [],
+    crawlDepth = 1,
+    includeDirectories = true,
 }) {
     if (!financialYear) throw new ApiError(400, 'financialYear is required');
     const kw = String(keyword || '').trim();
@@ -90,22 +172,49 @@ export async function createDiscoveryJob({
     const settings = await getOrCreateExtractorSettings(companyId);
     if (!settings.moduleEnabled) throw new ApiError(403, 'Data Extractor module is not enabled for this company');
 
+    const parsedLoc = parseLocationInput(location, { city, state, country });
+    const cityN = parsedLoc.city;
+    const stateN = parsedLoc.state;
+    const countryN = parsedLoc.country;
+
     const target = clampTarget(targetCompanies, settings);
     const batch = clampBatch(batchSize, settings);
-    const { selected, executable, skipped } = assertProvidersExecutable(selectedSources, settings);
-    if (!selected.length) throw new ApiError(400, 'Select at least one source');
+    let requestedSources = Array.isArray(selectedSources) ? selectedSources.filter(Boolean) : [];
+    if (!requestedSources.length) {
+        requestedSources = ['public_web', 'website_enrichment'];
+    }
+    if (!requestedSources.includes('public_web') && !requestedSources.includes('brave') && !requestedSources.includes('serpapi')) {
+        requestedSources = ['public_web', ...requestedSources];
+    }
+    if (!requestedSources.includes('website_enrichment')) {
+        requestedSources.push('website_enrichment');
+    }
+
+    const { selected, executable, skipped } = assertProvidersExecutable(requestedSources, settings);
+    if (!executable.length) {
+        throw new ApiError(400, 'No executable discovery sources are available. Public web discovery should always be enabled.');
+    }
+
+    const depth = [0, 1, 2].includes(Number(crawlDepth)) ? Number(crawlDepth) : 1;
+    const generatedQueries = generatePhase1Queries({
+        keyword: kw,
+        city: cityN,
+        state: stateN,
+        country: countryN,
+        includeDirectories: includeDirectories !== false,
+    });
 
     const job = await DiscoveryJob.create({
         companyId,
         financialYear,
         createdBy: userId,
         keyword: kw,
-        city: String(city || '').trim(),
-        state: String(state || '').trim(),
-        country: String(country || '').trim(),
+        city: cityN,
+        state: stateN,
+        country: countryN,
         targetCompanies: target,
         batchSize: batch,
-        selectedSources: selected,
+        selectedSources: selected.length ? selected : executable,
         status: 'DRAFT',
         metadata: {
             previewOnly: true,
@@ -114,12 +223,20 @@ export async function createDiscoveryJob({
             skippedSources: skipped,
             executableSources: executable,
             auditLog: [],
+            generatedQueries,
+            crawlDepth: depth,
+            includeDirectories: includeDirectories !== false,
+            pipelineStatus: 'queued',
+            unlimitedCollection: true,
+            stopReason: '',
+            runStats: computeRunStats({ totalRawResults: 0, totalUniqueResults: 0, metadata: { previewRecords: [], generatedQueries } }, generatedQueries),
         },
     });
-    audit(job, 'job_created', { target, batch, selected });
+    audit(job, 'job_created', { target, batch, selected: job.selectedSources, queryCount: generatedQueries.length, crawlDepth: depth });
     await job.save();
 
-    for (const id of selected) {
+    const taskIds = selected.length ? selected : executable;
+    for (const id of taskIds) {
         const p = getProvider(id);
         let status = 'PENDING';
         if (!p || p.comingSoon || !p.executable) status = 'NOT_CONFIGURED';
@@ -164,6 +281,9 @@ export async function getDiscoveryJobDetail(companyId, jobId) {
         tasks,
         disclaimer: DISCLAIMER,
         previewRecords: attachDupLabels(obj.metadata?.previewRecords || []),
+        generatedQueries: obj.metadata?.generatedQueries || [],
+        runStats: obj.metadata?.runStats || computeRunStats(obj),
+        crawlDepth: obj.metadata?.crawlDepth ?? 1,
     };
 }
 
@@ -183,17 +303,19 @@ function mapSearchItemsToRecords(job, items, sourceProvider, query) {
     const records = [];
     const seen = new Set((job.metadata?.previewRecords || []).map((r) => r.normalizedDomain).filter(Boolean));
     const seenUrls = new Set((job.metadata?.previewRecords || []).map((r) => String(r.sourceUrl || '').toLowerCase()).filter(Boolean));
+    const locLabel = [job.city, job.state, job.country].filter(Boolean).join(', ');
     for (const item of items) {
         const link = String(item.link || '').trim();
         if (!link) continue;
         const lower = link.toLowerCase();
         if (seenUrls.has(lower)) continue;
         seenUrls.add(lower);
-        if (isIndiamartUrl(link)) {
+        const dirPlat = directoryPlatformOf(link) || (isIndiamartUrl(link) ? 'indiamart' : '');
+        if (dirPlat) {
             records.push({
-                companyName: String(item.title || '').split('|')[0].split('-')[0].trim() || 'IndiaMART listing',
+                companyName: String(item.title || '').split('|')[0].split('-')[0].trim() || `${dirPlat} listing`,
                 website: '',
-                sourcePlatform: 'indiamart',
+                sourcePlatform: dirPlat === 'indiamart' ? 'indiamart' : (dirPlat === 'tradeindia' ? 'tradeindia' : (dirPlat === 'justdial' ? 'justdial' : (dirPlat === 'exportersindia' ? 'exportersindia' : 'web_search'))),
                 sourceUrl: link,
                 businessDescription: String(item.snippet || '').trim(),
                 city: job.city,
@@ -202,19 +324,24 @@ function mapSearchItemsToRecords(job, items, sourceProvider, query) {
                 keywords: [job.keyword],
                 extractedAt: new Date(),
                 confidenceScore: 40,
+                crawlStatus: 'candidate_found',
+                extractionStatus: 'candidate_found',
                 socialLinks: {},
                 rawExtractedData: {
                     discoveryJobId: String(job._id),
-                    sourceProvider: 'indiamart',
-                    sourceProviders: [sourceProvider, 'indiamart'].filter(Boolean),
-                    indiamartProfileUrl: link,
+                    sourceProvider: dirPlat,
+                    sourceProviders: [sourceProvider, dirPlat].filter(Boolean),
+                    directoryProfileUrl: link,
                     searchKeyword: job.keyword,
+                    searchLocation: locLabel,
+                    searchQuery: query,
                     via: sourceProvider,
+                    isDirectory: true,
                 },
             });
             continue;
         }
-        if (lower.includes('facebook.com') || lower.includes('instagram.com') || lower.includes('linkedin.com')) {
+        if (isSocialProfileUrl(link)) {
             records.push({
                 companyName: String(item.title || '').split('|')[0].split('-')[0].trim(),
                 website: '',
@@ -227,15 +354,22 @@ function mapSearchItemsToRecords(job, items, sourceProvider, query) {
                 keywords: [job.keyword],
                 extractedAt: new Date(),
                 confidenceScore: 35,
+                crawlStatus: 'candidate_found',
+                extractionStatus: 'candidate_found',
                 socialLinks: {
                     facebook: lower.includes('facebook.com') ? link : '',
                     instagram: lower.includes('instagram.com') ? link : '',
+                    linkedin: lower.includes('linkedin.com') ? link : '',
+                    twitter: (lower.includes('twitter.com') || /(?:^|\/\/)(?:www\.)?x\.com\//i.test(lower)) ? link : '',
+                    youtube: (lower.includes('youtube.com') || lower.includes('youtu.be')) ? link : '',
                 },
                 rawExtractedData: {
                     discoveryJobId: String(job._id),
                     sourceProvider,
                     sourceProviders: [sourceProvider],
                     searchKeyword: job.keyword,
+                    searchLocation: locLabel,
+                    searchQuery: query,
                     socialOnly: true,
                 },
             });
@@ -258,13 +392,17 @@ function mapSearchItemsToRecords(job, items, sourceProvider, query) {
             keywords: [job.keyword],
             extractedAt: new Date(),
             confidenceScore: scoreExtractorConfidence({ companyName, website: link, city: job.city }),
+            crawlStatus: 'candidate_found',
+            extractionStatus: 'candidate_found',
+            socialLinks: {},
             rawExtractedData: {
                 discoveryJobId: String(job._id),
                 sourceProvider,
                 sourceProviders: [sourceProvider],
                 searchKeyword: job.keyword,
-                searchLocation: [job.city, job.state, job.country].filter(Boolean).join(', '),
+                searchLocation: locLabel,
                 searchQuery: query,
+                sourceUrls: [link],
             },
         });
     }
@@ -284,8 +422,7 @@ async function processBraveBatch(job, task, settings, queryOverride = null) {
         task.status = 'EXHAUSTED';
         return { records: [], apiRequests: 0, exhausted: true };
     }
-    const need = Math.max(0, job.targetCompanies - (job.totalUniqueResults || 0));
-    if (need <= 0) return { records: [], apiRequests: 0, exhausted: true };
+    const need = batchWindow(job);
     const maxResults = Math.min(job.batchSize, need, applyControlledResultCap(job.batchSize, settings));
     const offsetStart = Number(task.cursor?.offset || 0);
     const { items, error, pagesFetched, statusCode, nextOffset } = await searchWithBrave({
@@ -312,6 +449,96 @@ async function processBraveBatch(job, task, settings, queryOverride = null) {
     return { records, apiRequests: 1, exhausted: items.length < 10 };
 }
 
+async function processPublicWebBatch(job, task, settings, queryOverride = null) {
+    const queries = Array.isArray(job.metadata?.generatedQueries) && job.metadata.generatedQueries.length
+        ? job.metadata.generatedQueries
+        : generatePhase1Queries({
+            keyword: job.keyword,
+            city: job.city,
+            state: job.state,
+            country: job.country,
+            includeDirectories: job.metadata?.includeDirectories !== false,
+        });
+    let qIndex = Number(task.cursor?.queryIndex || 0);
+    const need = batchWindow(job);
+    if (queryOverride) {
+        const maxResults = Math.min(job.batchSize, need, applyControlledResultCap(job.batchSize, settings));
+        const { items, error, pagesFetched, statusCode, providerName } = await searchWithPublicHtml({
+            query: queryOverride,
+            maxResults,
+        });
+        task.apiRequests += 1;
+        task.pagesProcessed += pagesFetched || 1;
+        if (error && ['RATE_LIMITED', 'BLOCKED'].includes(statusCode)) {
+            task.lastError = error;
+            task.status = 'FAILED';
+            return { records: [], apiRequests: 1, exhausted: false, error, failed: true, statusCode, generatedQueries: queries };
+        }
+        const records = mapSearchItemsToRecords(job, items || [], providerName || 'public_web', queryOverride);
+        task.rawResults += records.length;
+        return { records, apiRequests: 1, exhausted: !(items || []).length, generatedQueries: queries, error: error || '' };
+    }
+    while (qIndex < queries.length) {
+        const planned = queries[qIndex];
+        if (['done', 'blocked'].includes(String(planned.status || ''))) {
+            qIndex += 1;
+            continue;
+        }
+        const query = planned.queryText;
+        const maxResults = Math.min(job.batchSize, need, applyControlledResultCap(job.batchSize, settings), 10);
+        await delayMs(Number(discoveryCfg(settings).defaultRequestDelayMs) || 800);
+        const { items, error, pagesFetched, statusCode, providerName } = await searchWithPublicHtml({
+            query,
+            maxResults,
+        });
+        task.apiRequests += 1;
+        task.pagesProcessed += pagesFetched || 1;
+        planned.status = (statusCode === 'RATE_LIMITED' || statusCode === 'BLOCKED') ? 'blocked' : 'done';
+        planned.lastError = error || '';
+        planned.providerName = providerName || 'public_web';
+        queries[qIndex] = planned;
+        task.cursor = { queryIndex: qIndex + 1, query, providerName };
+        if (error && ['RATE_LIMITED', 'BLOCKED'].includes(statusCode)) {
+            job.metadata = {
+                ...(job.metadata || {}),
+                generatedQueries: queries,
+                blockedQueryCount: Number(job.metadata?.blockedQueryCount || 0) + 1,
+            };
+            // Do not endlessly retry; move on to next query on next tick.
+            qIndex += 1;
+            task.lastError = error;
+            const records = mapSearchItemsToRecords(job, items || [], providerName || 'public_web', query);
+            task.rawResults += records.length;
+            return {
+                records,
+                apiRequests: 1,
+                exhausted: qIndex >= queries.length,
+                error,
+                failed: false,
+                statusCode,
+                generatedQueries: queries,
+            };
+        }
+        const records = mapSearchItemsToRecords(job, items || [], providerName || 'public_web', query);
+        task.rawResults += records.length;
+        job.metadata = { ...(job.metadata || {}), generatedQueries: queries };
+        if (!records.length && !items?.length) {
+            qIndex += 1;
+            continue;
+        }
+        return {
+            records,
+            apiRequests: 1,
+            exhausted: qIndex + 1 >= queries.length && !(items || []).length,
+            generatedQueries: queries,
+            error: error || '',
+        };
+    }
+    task.status = 'EXHAUSTED';
+    job.metadata = { ...(job.metadata || {}), generatedQueries: queries };
+    return { records: [], apiRequests: 0, exhausted: true, generatedQueries: queries };
+}
+
 async function processSerpBatch(job, task, settings) {
     const query = buildQuery(job);
     const ctl = getControlledTestConfig(settings);
@@ -324,8 +551,7 @@ async function processSerpBatch(job, task, settings) {
         task.status = 'EXHAUSTED';
         return { records: [], apiRequests: 0, exhausted: true };
     }
-    const need = Math.max(0, job.targetCompanies - (job.totalUniqueResults || 0));
-    if (need <= 0) return { records: [], apiRequests: 0, exhausted: true };
+    const need = batchWindow(job);
     const maxResults = Math.min(job.batchSize, need, applyControlledResultCap(job.batchSize, settings));
     const { items, error, pagesFetched, statusCode } = await searchWithSerpApi({
         query,
@@ -356,13 +582,15 @@ async function processIndiamartTick(job, task, settings, braveAvailable) {
         task.status = 'DISABLED';
         return { records: [], apiRequests: 0 };
     }
-    if (!cfg.publicDiscoveryMode || !braveAvailable) {
+    if (!cfg.publicDiscoveryMode) {
         task.status = 'NOT_CONFIGURED';
-        task.lastError = 'IndiaMART automatic discovery unavailable. Use Manual URL / Excel import, or enable Public Discovery Mode with Brave Search.';
+        task.lastError = 'IndiaMART automatic discovery is disabled. Directory listings are still found via public site: search queries.';
         return { records: [], apiRequests: 0, statusCode: 'PUBLIC_ACCESS_ONLY' };
     }
     const query = buildIndiamartBraveQuery(job.keyword, job.city, job.state, job.country);
-    const result = await processBraveBatch(job, task, settings, query);
+    const result = braveAvailable
+        ? await processBraveBatch(job, task, settings, query)
+        : await processPublicWebBatch(job, task, settings, query);
     const out = [];
     const blocked = [];
     let delay = cfg.requestDelayMs;
@@ -417,43 +645,101 @@ async function enrichWebsites(records, settings, job) {
     const cfg = discoveryCfg(settings);
     if (cfg.websiteEnrichmentEnabled === false) return { records, errors: [] };
     const ctl = getControlledTestConfig(settings);
-    const maxSites = Math.min(records.length, ctl.enabled ? ctl.maxWebsites : 10, job.batchSize);
+    const depth = [0, 1, 2].includes(Number(job.metadata?.crawlDepth)) ? Number(job.metadata.crawlDepth) : 1;
+    const maxPages = crawlMaxPages(depth);
+    const maxSites = Math.min(records.length, ctl.enabled ? ctl.maxWebsites : Math.max(job.batchSize, 8), 20);
     const errors = [];
     const out = [...records];
     const domainCache = new Set(job.metadata?.enrichedDomains || []);
+    const blockedDomains = new Set(job.metadata?.blockedDomains || []);
+    const delay = Math.max(400, Number(cfg.defaultRequestDelayMs) || 1000);
+
     for (let i = 0; i < maxSites; i++) {
-        const site = out[i]?.website;
+        const rec = out[i];
+        const site = rec?.website;
         if (!site) continue;
-        const domain = out[i].normalizedDomain || normalizeDomain(site);
-        if (domain && domainCache.has(domain)) continue;
+        if (rec.rawExtractedData?.socialOnly || rec.rawExtractedData?.isDirectory) continue;
+        const domain = rec.normalizedDomain || normalizeDomain(site);
+        if (domain && (domainCache.has(domain) || blockedDomains.has(domain))) continue;
+        if (isDirectoryHost(site) || isDirectoryHost(domain)) continue;
+        rec.crawlStatus = 'crawling';
+        rec.extractionStatus = 'crawling';
         try {
             await assertResolvedPublicUrl(site);
-            const { records: enriched, errors: fetchErrors } = await runManualUrlAdapter([site]);
-            errors.push(...fetchErrors);
-            const e = enriched[0];
-            if (!e) continue;
+            if (i > 0) await delayMs(delay);
+            const crawled = await enrichDomainFromWebsite(site, { maxPages });
             if (domain) domainCache.add(domain);
+            if (!crawled.ok || !crawled.data) {
+                const msg = crawled.error || `Website ${domain || site} did not respond within timeout. Candidate retained for later review.`;
+                errors.push(msg);
+                rec.crawlStatus = /403|429|blocked/i.test(msg) ? 'failed_blocked' : 'failed';
+                rec.extractionStatus = rec.crawlStatus;
+                rec.rawExtractedData = { ...(rec.rawExtractedData || {}), enrichError: msg, pagesCrawled: crawled.pagesVisited || [] };
+                if (/403|429|blocked/i.test(msg) && domain) blockedDomains.add(domain);
+                continue;
+            }
+            const data = crawled.data;
+            const emails = data.emails || [];
+            const phones = data.phones || [];
+            const wa = data.whatsappNumbers || [];
+            const primaryEmail = emails[0]?.value || emails[0]?.email || '';
+            const primaryPhone = phones[0]?.original || phones[0]?.normalized || '';
+            const emailSource = emails[0]?.sourceUrl || (data.sourceEvidence || []).find((e) => e.field === 'email')?.sourceUrl || '';
+            const phoneSource = phones[0]?.sourceUrl || (data.sourceEvidence || []).find((e) => e.field === 'phone')?.sourceUrl || '';
+            const addr = (data.addresses || [])[0] || {};
             out[i] = normalizeExtractedRecord({
-                ...out[i],
-                companyName: out[i].companyName || e.companyName,
-                email: out[i].email || e.email,
-                phone: out[i].phone || e.phone,
-                mobile: out[i].mobile || e.mobile,
-                address: out[i].address || e.address,
-                businessDescription: out[i].businessDescription || e.businessDescription,
-                socialLinks: { ...(out[i].socialLinks || {}), ...(e.socialLinks || {}) },
-                confidenceScore: Math.max(out[i].confidenceScore || 0, e.confidenceScore || 0),
+                ...rec,
+                companyName: rec.companyName || data.companyName || data.legalOrDisplayedName || '',
+                email: rec.email || primaryEmail,
+                phone: rec.phone || primaryPhone,
+                mobile: rec.mobile || (phones.find((p) => p.kind === 'mobile')?.original || ''),
+                whatsappNumber: rec.whatsappNumber || wa[0]?.original || wa[0]?.normalized || '',
+                address: rec.address || addr.raw || '',
+                city: rec.city || data.city || addr.city || '',
+                stateProvince: rec.stateProvince || data.state || addr.state || '',
+                country: rec.country || data.country || addr.country || '',
+                pincode: rec.pincode || addr.pinCode || '',
+                businessDescription: rec.businessDescription || data.productsServices?.slice(0, 8).join(', ') || '',
+                productCategories: [...new Set([...(rec.productCategories || []), ...(data.productsServices || [])])].slice(0, 20),
+                socialLinks: {
+                    ...(rec.socialLinks || {}),
+                    facebook: rec.socialLinks?.facebook || data.facebook?.url || '',
+                    instagram: rec.socialLinks?.instagram || data.instagram?.url || '',
+                    linkedin: rec.socialLinks?.linkedin || data.linkedin?.url || '',
+                    youtube: rec.socialLinks?.youtube || data.youtube?.url || '',
+                    twitter: rec.socialLinks?.twitter || data.twitter?.url || '',
+                },
+                confidenceScore: Math.max(rec.confidenceScore || 0, primaryEmail || primaryPhone ? 70 : 45),
+                crawlStatus: 'data_extracted',
+                extractionStatus: 'data_extracted',
                 rawExtractedData: {
-                    ...(out[i].rawExtractedData || {}),
+                    ...(rec.rawExtractedData || {}),
                     enriched: true,
-                    sourceProviders: [...new Set([...(out[i].rawExtractedData?.sourceProviders || []), 'website_enrichment'])],
+                    crawlDepth: depth,
+                    pagesCrawled: crawled.pagesVisited || [],
+                    emails: emails.slice(0, 8),
+                    phones: phones.slice(0, 8),
+                    emailSourceUrl: emailSource,
+                    phoneSourceUrl: phoneSource,
+                    sourceEvidence: (data.sourceEvidence || []).slice(0, 40),
+                    rawPhone: phones[0]?.original || '',
+                    normalizedPhone: phones[0]?.normalized || '',
+                    sourceProviders: [...new Set([...(rec.rawExtractedData?.sourceProviders || []), 'website_enrichment'])],
                 },
             });
         } catch (err) {
-            errors.push(site + ': ' + (err.message || 'enrich failed'));
+            const msg = `${domain || site} did not respond within timeout. Candidate retained for later review. (${err.message || 'enrich failed'})`;
+            errors.push(msg);
+            rec.crawlStatus = 'failed';
+            rec.extractionStatus = 'failed';
+            rec.rawExtractedData = { ...(rec.rawExtractedData || {}), enrichError: msg };
         }
     }
-    job.metadata = { ...(job.metadata || {}), enrichedDomains: [...domainCache].slice(-500) };
+    job.metadata = {
+        ...(job.metadata || {}),
+        enrichedDomains: [...domainCache].slice(-500),
+        blockedDomains: [...blockedDomains].slice(-200),
+    };
     return { records: out, errors };
 }
 
@@ -463,6 +749,25 @@ async function processOneTick(job, settings) {
     let warnings = [];
     const cfg = discoveryCfg(settings);
     const allowPaid = cfg.allowPaidFallback === true;
+    job.metadata = { ...(job.metadata || {}), pipelineStatus: 'searching' };
+
+    const publicTask = tasks.find((t) => t.providerId === 'public_web' && ['PENDING', 'RUNNING'].includes(t.status));
+    if (publicTask) {
+        publicTask.status = 'RUNNING';
+        const result = await processPublicWebBatch(job, publicTask, settings);
+        job.totalApiRequests += result.apiRequests || 0;
+        if (result.generatedQueries) {
+            job.metadata = { ...(job.metadata || {}), generatedQueries: result.generatedQueries };
+        }
+        if (result.error) {
+            warnings.push(result.error);
+            job.errorSummary = [...(job.errorSummary || []), result.error].slice(-20);
+        }
+        fresh = result.records || [];
+        if (result.failed) publicTask.status = 'FAILED';
+        else if (result.exhausted && publicTask.status !== 'FAILED') publicTask.status = 'EXHAUSTED';
+        await publicTask.save();
+    }
 
     const braveTask = tasks.find((t) => t.providerId === 'brave' && ['PENDING', 'RUNNING'].includes(t.status));
     if (braveTask) {
@@ -554,20 +859,44 @@ async function processOneTick(job, settings) {
 
     let preview = [...(job.metadata?.previewRecords || []), ...fresh.map(normalizeExtractedRecord)];
     preview = mergePreviewList(preview);
+    try {
+        const p2 = await applyPostExtractionPhase2({
+            _id: job._id,
+            companyId: job.companyId,
+            financialYear: job.financialYear,
+            keyword: job.keyword,
+            city: job.city,
+            state: job.state,
+            country: job.country,
+            totalRawResults: (job.totalRawResults || 0) + fresh.length,
+            metadata: { ...(job.metadata || {}), previewRecords: preview },
+        });
+        preview = p2.preview;
+        job.metadata = { ...(job.metadata || {}), phase2Analytics: p2.analytics };
+    } catch (_) { /* Phase 2 must never fail Phase 1 extraction */ }
     preview = await enrichRecordsWithDuplicates(job.companyId, preview);
     try { await syncMergeReviewsFromJob(job.companyId, job._id, job.createdBy); } catch (_) { /* non-blocking */ }
-    preview = attachDupLabels(preview).slice(0, job.targetCompanies);
+    preview = attachDupLabels(preview);
+    preview = preview.map((r) => {
+        if (r.duplicateDisplayLabel && r.duplicateDisplayLabel !== 'NEW' && r.crawlStatus !== 'data_extracted') {
+            return { ...r, crawlStatus: 'duplicate_detected', extractionStatus: 'duplicate_detected' };
+        }
+        return r;
+    });
 
     const before = job.totalUniqueResults || 0;
     job.totalRawResults += fresh.length;
     job.totalUniqueResults = preview.length;
     job.totalDuplicates = preview.filter((r) => r.duplicateDisplayLabel && r.duplicateDisplayLabel !== 'NEW').length;
+    const runStats = computeRunStats({ ...job.toObject?.() || job, metadata: { ...(job.metadata || {}), previewRecords: preview } });
     job.metadata = {
         ...(job.metadata || {}),
         previewOnly: true,
         previewRecords: preview,
         disclaimer: DISCLAIMER,
-        freeFirstNote: 'Discovery continues until the target is reached, selected sources are exhausted, or configured usage limits are reached.',
+        pipelineStatus: job.status === 'RUNNING' ? 'searching' : (job.metadata?.pipelineStatus || 'searching'),
+        runStats,
+        freeFirstNote: 'Batch size is an operational limit only. Collection continues until queries/pages are exhausted, the user stops, or a provider is blocked — not because a result cap was reached.',
         lastWarnings: warnings.slice(-10),
         enrichedDomains: job.metadata?.enrichedDomains || [],
     };
@@ -577,28 +906,70 @@ async function processOneTick(job, settings) {
         jobId: job._id,
         companyId: job.companyId,
         status: { $in: ['PENDING', 'RUNNING'] },
-        providerId: { $in: ['brave', 'serpapi', 'indiamart'] },
+        providerId: { $in: ['public_web', 'brave', 'serpapi', 'indiamart'] },
     });
-    if (job.totalUniqueResults >= job.targetCompanies) {
+    if (!active.length && !fresh.length) {
         job.status = warnings.length ? 'COMPLETED_WITH_WARNINGS' : 'COMPLETED';
         job.completedAt = new Date();
-        audit(job, 'job_completed', { unique: job.totalUniqueResults });
-    } else if (!active.length && !fresh.length) {
-        job.status = warnings.length ? 'COMPLETED_WITH_WARNINGS' : 'COMPLETED';
-        job.completedAt = new Date();
-        audit(job, 'job_exhausted', { unique: job.totalUniqueResults });
+        job.metadata.pipelineStatus = 'completed';
+        job.metadata.stopReason = 'exhausted';
+        audit(job, 'job_exhausted', { unique: job.totalUniqueResults, batchSize: job.batchSize, totalCaptured: job.totalRawResults });
     }
 
     await refreshSourceProgress(job);
     await job.save();
+    try {
+        const { consolidateCompanyIdentities } = await import('./phase5/identity.service.js');
+        await consolidateCompanyIdentities({
+            companyId: job.companyId,
+            userId: job.createdBy,
+            financialYear: job.financialYear,
+            limit: 400,
+        });
+    } catch (_) { /* Phase 5 identity must never fail Phase 1 extraction */ }
     return { added: Math.max(0, job.totalUniqueResults - before), warnings };
 }
 
+function kickDiscoveryLoop(companyId, jobId) {
+    const key = String(jobId);
+    if (runningDiscoveryLoops.has(key)) return;
+    runningDiscoveryLoops.add(key);
+    setImmediate(async () => {
+        try {
+            const settings = await getOrCreateExtractorSettings(companyId);
+            for (let i = 0; i < 250; i += 1) {
+                const current = await loadJob(companyId, jobId);
+                if (current.status !== 'RUNNING') break;
+                await processOneTick(current, settings);
+                const after = await loadJob(companyId, jobId);
+                if (after.status !== 'RUNNING') break;
+                await delayMs(1200);
+            }
+        } catch (err) {
+            try {
+                const failed = await loadJob(companyId, jobId);
+                if (failed.status === 'RUNNING') {
+                    failed.status = 'FAILED';
+                    failed.errorSummary = [...(failed.errorSummary || []), err?.message || 'Discovery loop failed'].slice(-20);
+                    failed.metadata = { ...(failed.metadata || {}), pipelineStatus: 'failed' };
+                    await failed.save();
+                }
+            } catch {
+                /* ignore */
+            }
+        } finally {
+            runningDiscoveryLoops.delete(key);
+        }
+    });
+}
+
 export async function startDiscoveryJob(companyId, jobId) {
-    const settings = await getOrCreateExtractorSettings(companyId);
     const job = await loadJob(companyId, jobId);
     if (!['DRAFT', 'QUEUED', 'PAUSED', 'STOPPED'].includes(job.status)) {
-        if (job.status === 'RUNNING') return processContinue(companyId, jobId);
+        if (job.status === 'RUNNING') {
+            kickDiscoveryLoop(companyId, jobId);
+            return getDiscoveryJobDetail(companyId, jobId);
+        }
         throw new ApiError(400, `Cannot start job from status ${job.status}`);
     }
     const exec = (job.metadata?.executableSources || []).filter(Boolean);
@@ -606,9 +977,10 @@ export async function startDiscoveryJob(companyId, jobId) {
     job.status = 'RUNNING';
     job.startedAt = job.startedAt || new Date();
     job.resumedAt = new Date();
+    job.metadata = { ...(job.metadata || {}), pipelineStatus: 'searching' };
     audit(job, 'job_started');
     await job.save();
-    await processOneTick(job, settings);
+    kickDiscoveryLoop(companyId, jobId);
     return getDiscoveryJobDetail(companyId, jobId);
 }
 
@@ -617,6 +989,7 @@ export async function pauseDiscoveryJob(companyId, jobId) {
     if (job.status !== 'RUNNING') throw new ApiError(400, 'Only running jobs can be paused');
     job.status = 'PAUSED';
     job.pausedAt = new Date();
+    job.metadata = { ...(job.metadata || {}), pipelineStatus: 'paused', stopReason: 'paused' };
     audit(job, 'job_paused');
     await job.save();
     await DiscoverySourceTask.updateMany(
@@ -631,14 +1004,14 @@ export async function resumeDiscoveryJob(companyId, jobId) {
     if (job.status !== 'PAUSED') throw new ApiError(400, 'Only paused jobs can be resumed');
     job.status = 'RUNNING';
     job.resumedAt = new Date();
+    job.metadata = { ...(job.metadata || {}), pipelineStatus: 'searching', stopReason: '' };
     audit(job, 'job_resumed');
     await job.save();
     await DiscoverySourceTask.updateMany(
         { jobId: job._id, companyId, status: 'PAUSED' },
-        { $set: { status: 'RUNNING' } },
+        { $set: { status: 'PENDING' } },
     );
-    const settings = await getOrCreateExtractorSettings(companyId);
-    await processOneTick(job, settings);
+    kickDiscoveryLoop(companyId, jobId);
     return getDiscoveryJobDetail(companyId, jobId);
 }
 
@@ -649,6 +1022,7 @@ export async function stopDiscoveryJob(companyId, jobId) {
     }
     job.status = 'STOPPED';
     job.completedAt = new Date();
+    job.metadata = { ...(job.metadata || {}), pipelineStatus: 'completed', stopReason: 'manually_stopped' };
     audit(job, 'job_stopped');
     await job.save();
     return getDiscoveryJobDetail(companyId, jobId);
@@ -667,6 +1041,7 @@ export async function processContinue(companyId, jobId) {
         await job.save();
     }
     await processOneTick(job, settings);
+    kickDiscoveryLoop(companyId, jobId);
     return getDiscoveryJobDetail(companyId, jobId);
 }
 
@@ -679,8 +1054,7 @@ export async function retryFailedSources(companyId, jobId) {
     job.status = 'RUNNING';
     audit(job, 'retry_failed_sources');
     await job.save();
-    const settings = await getOrCreateExtractorSettings(companyId);
-    await processOneTick(job, settings);
+    kickDiscoveryLoop(companyId, jobId);
     return getDiscoveryJobDetail(companyId, jobId);
 }
 
@@ -721,6 +1095,64 @@ export async function saveDiscoveryDrafts(companyId, jobId, userId, financialYea
     audit(job, 'drafts_saved', { count: inserted.length });
     await job.save();
     return { saved: inserted.length, records: inserted };
+}
+
+export async function exportDiscoveryJob(companyId, jobId, format = 'csv') {
+    const job = await loadJob(companyId, jobId);
+    const records = attachDupLabels(job.metadata?.previewRecords || []);
+    const headers = [
+        'Company', 'Email', 'Phone', 'Website', 'Address', 'City', 'State', 'Country',
+        'Business Description', 'Source', 'Source URL', 'Facebook', 'Instagram', 'LinkedIn', 'X/Twitter',
+        'Search Keyword', 'Search Location', 'Date Found', 'Email Source', 'Phone Source', 'Original Query', 'Crawl Status',
+    ];
+    const rowData = records.map((r) => {
+        const raw = r.rawExtractedData || {};
+        return [
+            r.companyName || '',
+            r.email || '',
+            r.phone || r.mobile || r.whatsappNumber || '',
+            r.website || '',
+            r.address || '',
+            r.city || '',
+            r.stateProvince || '',
+            r.country || '',
+            r.businessDescription || '',
+            r.sourcePlatform || raw.sourceProvider || '',
+            r.sourceUrl || '',
+            r.socialLinks?.facebook || '',
+            r.socialLinks?.instagram || '',
+            r.socialLinks?.linkedin || '',
+            r.socialLinks?.twitter || '',
+            raw.searchKeyword || job.keyword || '',
+            raw.searchLocation || [job.city, job.state, job.country].filter(Boolean).join(', '),
+            r.extractedAt ? new Date(r.extractedAt).toISOString() : (job.createdAt ? new Date(job.createdAt).toISOString() : ''),
+            raw.emailSourceUrl || '',
+            raw.phoneSourceUrl || '',
+            raw.searchQuery || '',
+            r.crawlStatus || '',
+        ];
+    });
+    if (format === 'xlsx' || format === 'excel') {
+        const workbook = new ExcelJS.Workbook();
+        const sheet = workbook.addWorksheet('Extraction');
+        sheet.addRow(headers);
+        rowData.forEach((row) => sheet.addRow(row));
+        const buffer = await workbook.xlsx.writeBuffer();
+        return {
+            format: 'xlsx',
+            content: buffer,
+            contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            filename: `extraction-${String(job.keyword || 'run').replace(/\s+/g, '-').slice(0, 40)}.xlsx`,
+        };
+    }
+    const rows = rowData.map((cols) => cols.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','));
+    const csv = [headers.join(','), ...rows].join('\n');
+    return {
+        format: 'csv',
+        content: csv,
+        contentType: 'text/csv',
+        filename: `extraction-${String(job.keyword || 'run').replace(/\s+/g, '-').slice(0, 40)}.csv`,
+    };
 }
 
 export async function importDiscoveryUrls({ companyId, userId, financialYear, urls = [], keyword = 'Manual URL Import' }) {
@@ -1026,7 +1458,7 @@ export async function importDiscoveryFile({
     return getDiscoveryJobDetail(companyId, job._id);
 }
 
-export async function convertDiscoveryPreviewToLead(companyId, jobId, userId, financialYear, { index, recordId } = {}) {
+export async function convertDiscoveryPreviewToLead(companyId, jobId, userId, financialYear, { index, recordId, confirmCrmDuplicate } = {}) {
     const job = await loadJob(companyId, jobId);
     if (recordId) {
         const result = await convertExtractedToLead(companyId, recordId, userId);
@@ -1043,6 +1475,19 @@ export async function convertDiscoveryPreviewToLead(companyId, jobId, userId, fi
     const rec = preview[idx];
     if (rec?.duplicateDisplayLabel === 'ALREADY_CONVERTED' || rec?.status === 'converted' || rec?.convertedRecordId) {
         throw new ApiError(400, 'Record already converted');
+    }
+    if (!confirmCrmDuplicate) {
+        const crm = await checkCrmDuplicatesForConvert(companyId, rec);
+        if (crm.matches.length) {
+            return {
+                converted: false,
+                needsCrmDuplicateReview: true,
+                duplicateStatus: crm.duplicateStatus,
+                matches: crm.matches,
+                previewIndex: idx,
+                companyName: rec.companyName || '',
+            };
+        }
     }
     const { _previewIndex, _isDuplicate, _duplicateLabel, duplicateDisplayLabel, _mergedDraft, ...rest } = rec;
     const [inserted] = await ExtractedLead.insertMany([{

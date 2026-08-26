@@ -1,11 +1,17 @@
 import mongoose from 'mongoose';
 import { AiIndustryClassification } from '../../../models/aiIndustryClassification.model.js';
+import { ensureModelIndexes } from '../../../utils/ensureModelIndexes.js';
 import { ExtractedLead } from '../../../models/extractedLead.model.js';
 import { DiscoveryJob } from '../../../models/discoveryJob.model.js';
 import { ApiError } from '../../../utils/ApiError.js';
 import { classifyIndustryRecord } from './classify.service.js';
 import { getOrCreateExtractorSettings } from '../extractor.service.js';
 import { loadLeadIntelligenceMasters } from '../aiLeadIntelligence.service.js';
+
+async function ensureIndustryClassificationStore() {
+    await ensureModelIndexes(AiIndustryClassification);
+}
+
 
 function rejectTenantOverrides(payload = {}) {
     if (payload.companyId != null || payload.tenantId != null) {
@@ -44,6 +50,7 @@ function isProtectedFromAutoOverwrite(doc) {
 }
 
 export async function listClassifications(companyId, query = {}) {
+    await ensureIndustryClassificationStore();
     const q = { companyId, isDeleted: { $ne: true } };
     if (query.status) q.status = query.status;
     if (query.engineUsed) q.engineUsed = query.engineUsed;
@@ -63,12 +70,14 @@ export async function listClassifications(companyId, query = {}) {
 }
 
 export async function getClassification(companyId, id) {
+    await ensureIndustryClassificationStore();
     const doc = await AiIndustryClassification.findOne({ _id: id, companyId, isDeleted: { $ne: true } }).lean();
     if (!doc) throw new ApiError(404, 'Classification not found');
     return doc;
 }
 
 export async function getClassificationEvidence(companyId, id) {
+    await ensureIndustryClassificationStore();
     const doc = await getClassification(companyId, id);
     return {
         _id: doc._id,
@@ -84,6 +93,7 @@ export async function getClassificationEvidence(companyId, id) {
 }
 
 export async function getClassificationHistory(companyId, id) {
+    await ensureIndustryClassificationStore();
     const doc = await getClassification(companyId, id);
     return {
         _id: doc._id,
@@ -93,6 +103,7 @@ export async function getClassificationHistory(companyId, id) {
 }
 
 export async function getClassificationAudit(companyId, id) {
+    await ensureIndustryClassificationStore();
     const doc = await getClassification(companyId, id);
     return {
         _id: doc._id,
@@ -249,6 +260,7 @@ async function applyToDiscoveryPreview(companyId, discoveryJobId, previewIndex, 
 }
 
 export async function classifyOneRecord(companyId, userId, payload = {}) {
+    await ensureIndustryClassificationStore();
     rejectTenantOverrides(payload);
     const settings = await getOrCreateExtractorSettings(companyId);
     const masters = await loadLeadIntelligenceMasters(companyId);
@@ -307,6 +319,7 @@ export async function classifyOneRecord(companyId, userId, payload = {}) {
 }
 
 export async function overrideClassification(companyId, userId, id, payload = {}) {
+    await ensureIndustryClassificationStore();
     rejectTenantOverrides(payload);
     const doc = await AiIndustryClassification.findOne({ _id: id, companyId, isDeleted: { $ne: true } });
     if (!doc) throw new ApiError(404, 'Classification not found');
@@ -346,6 +359,7 @@ export async function overrideClassification(companyId, userId, id, payload = {}
 }
 
 export async function lockClassification(companyId, userId, id, payload = {}) {
+    await ensureIndustryClassificationStore();
     rejectTenantOverrides(payload);
     const doc = await AiIndustryClassification.findOne({ _id: id, companyId, isDeleted: { $ne: true } });
     if (!doc) throw new ApiError(404, 'Classification not found');
@@ -371,6 +385,7 @@ export async function lockClassification(companyId, userId, id, payload = {}) {
 }
 
 export async function markIrrelevantClassification(companyId, userId, id, payload = {}) {
+    await ensureIndustryClassificationStore();
     rejectTenantOverrides(payload);
     const doc = await AiIndustryClassification.findOne({ _id: id, companyId, isDeleted: { $ne: true } });
     if (!doc) throw new ApiError(404, 'Classification not found');
@@ -388,6 +403,7 @@ export async function markIrrelevantClassification(companyId, userId, id, payloa
 }
 
 export async function reanalyzeClassification(companyId, userId, id, payload = {}) {
+    await ensureIndustryClassificationStore();
     rejectTenantOverrides(payload);
     const doc = await AiIndustryClassification.findOne({ _id: id, companyId, isDeleted: { $ne: true } });
     if (!doc) throw new ApiError(404, 'Classification not found');

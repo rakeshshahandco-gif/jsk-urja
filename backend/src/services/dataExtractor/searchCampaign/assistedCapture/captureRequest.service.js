@@ -73,6 +73,16 @@ export async function requestCaptureVisibleResults({
     });
     if (!session) throw new ApiError(404, 'Assisted capture session not found');
 
+    const ac = session.autoCollection || {};
+    if (
+        session.status === 'cancelled'
+        || ac.ownerStoppedAt
+        || ac.stopRequested === true
+        || String(ac.summary?.stopReason || '') === 'owner_stop'
+    ) {
+        throw new ApiError(400, 'STOPPED BY USER. Capture will not continue.');
+    }
+
     if (!BROWSER_OPEN_STATUSES.includes(session.status)) {
         throw new ApiError(
             400,

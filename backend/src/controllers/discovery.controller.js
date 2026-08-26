@@ -17,6 +17,7 @@ import {
     startDiscoveryJob,
     stopDiscoveryJob,
     testDiscoveryProvider,
+    exportDiscoveryJob,
 } from '../services/dataExtractor/discovery/discoveryJob.service.js';
 import fs from 'fs';
 import {
@@ -40,9 +41,9 @@ function rejectScopedBody(body = {}) {
 
 function stripUnknownJobFields(body = {}) {
     const allowed = new Set([
-        'keyword', 'city', 'state', 'country',
+        'keyword', 'city', 'state', 'country', 'location',
         'targetCompanies', 'batchSize', 'selectedSources', 'sources',
-        'financialYear', 'assignedTo',
+        'financialYear', 'assignedTo', 'crawlDepth', 'includeDirectories', 'resultLimit',
     ]);
     const unknown = Object.keys(body || {}).filter((k) => !allowed.has(k) && !FORBIDDEN_SCOPE_KEYS.includes(k));
     if (unknown.length) {
@@ -60,6 +61,7 @@ export const createJob = asyncHandler(async (req, res) => {
     stripUnknownJobFields(req.body);
     const financialYear = req.body.financialYear || req.query.financialYear;
     const selectedSources = req.body.selectedSources || req.body.sources || [];
+    const targetCompanies = req.body.targetCompanies || req.body.resultLimit;
     const job = await createDiscoveryJob({
         companyId: req.companyId,
         userId: req.user.id,
@@ -68,9 +70,12 @@ export const createJob = asyncHandler(async (req, res) => {
         city: req.body.city,
         state: req.body.state,
         country: req.body.country,
-        targetCompanies: req.body.targetCompanies,
+        location: req.body.location,
+        targetCompanies,
         batchSize: req.body.batchSize,
         selectedSources,
+        crawlDepth: req.body.crawlDepth,
+        includeDirectories: req.body.includeDirectories,
     });
     res.status(201).send(new ApiResponse(201, { job }, 'Discovery job created'));
 });
@@ -151,8 +156,21 @@ export const getResults = asyncHandler(async (req, res) => {
             totalConverted: job.totalConverted,
             totalApiRequests: job.totalApiRequests,
             targetCompanies: job.targetCompanies,
+            runStats: job.runStats,
         },
+        generatedQueries: job.generatedQueries || [],
     }, 'Discovery results'));
+});
+
+export const exportJob = asyncHandler(async (req, res) => {
+    const format = String(req.query.format || 'csv').toLowerCase();
+    const { content, contentType, filename } = await exportDiscoveryJob(req.companyId, req.params.id, format);
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    if (Buffer.isBuffer(content) || content instanceof Uint8Array) {
+        return res.send(Buffer.from(content));
+    }
+    return res.send(content);
 });
 
 export const importUrls = asyncHandler(async (req, res) => {
@@ -289,7 +307,14 @@ export const convertPreviewToLead = asyncHandler(async (req, res) => {
         req.params.id,
         req.user.id,
         financialYear,
-        { index: req.body.index, recordId: req.body.recordId },
+        {
+            index: req.body.index,
+            recordId: req.body.recordId,
+            confirmCrmDuplicate: req.body.confirmCrmDuplicate === true || req.body.confirm === true,
+        },
     );
+    if (result?.needsCrmDuplicateReview) {
+        return res.send(new ApiResponse(200, result, 'Possible CRM duplicate — confirm to convert'));
+    }
     res.send(new ApiResponse(200, result, 'Converted to Lead'));
 });

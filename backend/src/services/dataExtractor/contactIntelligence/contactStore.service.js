@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { AiContactIntelligence } from '../../../models/aiContactIntelligence.model.js';
+import { ensureModelIndexes } from '../../../utils/ensureModelIndexes.js';
 import { ExtractedLead } from '../../../models/extractedLead.model.js';
 import { AiIndustryClassification } from '../../../models/aiIndustryClassification.model.js';
 import { AiLeadRelevance } from '../../../models/aiLeadRelevance.model.js';
@@ -7,6 +8,10 @@ import { AiProductRecommendation } from '../../../models/aiProductRecommendation
 import { ApiError } from '../../../utils/ApiError.js';
 import { getActiveRoles } from './roleMaster.service.js';
 import { analyzeCompanyContacts } from './analyze.service.js';
+
+async function ensureContactIntelligenceStore() {
+    await ensureModelIndexes(AiContactIntelligence);
+}
 
 function rejectTenantOverrides(payload = {}) {
     if (payload.companyId != null || payload.tenantId != null) {
@@ -42,6 +47,7 @@ function assertNoSecrets(obj) {
 }
 
 export async function listContactIntelligence(companyId, query = {}) {
+    await ensureContactIntelligenceStore();
     const q = { companyId, isDeleted: { $ne: true } };
     if (query.status) q.status = query.status;
     if (query.parentIndustry) q.parentIndustry = query.parentIndustry;
@@ -63,17 +69,20 @@ export async function listContactIntelligence(companyId, query = {}) {
 }
 
 export async function getContactIntelligence(companyId, id) {
+    await ensureContactIntelligenceStore();
     const doc = await AiContactIntelligence.findOne({ _id: id, companyId, isDeleted: { $ne: true } }).lean();
     if (!doc) throw new ApiError(404, 'Contact intelligence not found');
     return doc;
 }
 
 export async function getContactHistory(companyId, id) {
+    await ensureContactIntelligenceStore();
     const doc = await getContactIntelligence(companyId, id);
     return { _id: doc._id, companyId: doc.companyId, history: doc.history || [], mergeHistory: doc.mergeHistory || [] };
 }
 
 export async function analyzeOne(companyId, userId, payload = {}) {
+    await ensureContactIntelligenceStore();
     rejectTenantOverrides(payload);
     const roles = await getActiveRoles(companyId);
     let record = payload.record || null;
@@ -198,6 +207,7 @@ export async function analyzeOne(companyId, userId, payload = {}) {
 }
 
 export async function overrideContactAnalysis(companyId, userId, id, payload = {}) {
+    await ensureContactIntelligenceStore();
     rejectTenantOverrides(payload);
     const doc = await AiContactIntelligence.findOne({ _id: id, companyId, isDeleted: { $ne: true } });
     if (!doc) throw new ApiError(404, 'Contact intelligence not found');
@@ -330,6 +340,7 @@ export async function overrideContactAnalysis(companyId, userId, id, payload = {
 }
 
 export async function lockContactAnalysis(companyId, userId, id, payload = {}) {
+    await ensureContactIntelligenceStore();
     rejectTenantOverrides(payload);
     const doc = await AiContactIntelligence.findOne({ _id: id, companyId, isDeleted: { $ne: true } });
     if (!doc) throw new ApiError(404, 'Contact intelligence not found');
@@ -353,6 +364,7 @@ export async function lockContactAnalysis(companyId, userId, id, payload = {}) {
 }
 
 export async function exportApprovedContacts(companyId, query = {}) {
+    await ensureContactIntelligenceStore();
     const q = {
         companyId,
         isDeleted: { $ne: true },

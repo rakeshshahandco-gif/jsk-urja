@@ -63,11 +63,11 @@ export default function DataExtractorActiveRunsPanel() {
     };
 
     const cancel = async (runId) => {
-        if (!window.confirm('Stop Auto Collection for this run? Captured data remains saved.')) return;
+        if (!window.confirm('Stop this run? Already collected data remains saved. The search will not resume.')) return;
         setBusyId(`cancel-${runId}`);
         try {
-            await dataExtractorApi.simpleLeadSearchAutoCollectionStop(runId);
-            toast.success('Run stop requested');
+            await dataExtractorApi.simpleLeadSearchStop(runId);
+            toast.success('STOPPED BY USER');
             await load();
         } catch (e) {
             toast.error(e.response?.data?.message || 'Could not stop run');

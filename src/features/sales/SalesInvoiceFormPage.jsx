@@ -16,6 +16,8 @@ import gridStyles from '@/features/sales/styles/salesOrderItemGrid.module.scss';
 import api from '@/services/api';
 import GstinStatusWarningModal from '@/features/sales/components/GstinStatusWarningModal';
 import { useAuth } from '@/hooks/useAuth';
+import { lookupCustomerPrice } from '@/features/sales/customerPriceList/lookupCustomerPrice';
+import CustomerPriceSuggestionPanel from '@/features/sales/customerPriceList/CustomerPriceSuggestionPanel';
 
 
 const inp = { padding: '7px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, width: '100%', boxSizing: 'border-box', outline: 'none', background: '#fff', color: '#374151' };
@@ -217,6 +219,7 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
     });
 
     const [allItems, setAllItems] = useState([]);
+    const [priceHints, setPriceHints] = useState({});
     const [allCustomers, setAllCustomers] = useState([]);
 
     useEffect(() => {
@@ -386,6 +389,32 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                 };
                 }).filter((row) => Number(row.qty) > 0) : [BLANK_ITEM()],
             }));
+            Promise.all(
+                (so.items || [])
+                    .map((i) => {
+                        const lineBilling = (so.billingState?.lines || []).find(
+                            (l) => String(l.lineId) === String(i._id)
+                        );
+                        const remaining = lineBilling != null
+                            ? Number(lineBilling.remainingQty)
+                            : Number(i.qty) || 0;
+                        const qty = remaining > 0 ? remaining : (i.qty || '');
+                        return { itemId: i.itemId, qty };
+                    })
+                    .filter((row) => Number(row.qty) > 0)
+                    .map(async (row, idx) => {
+                        if (!row.itemId || !so.customerId) return null;
+                        const hint = await lookupCustomerPrice({
+                            customerId: so.customerId,
+                            itemId: row.itemId,
+                            qty: row.qty,
+                            date: so.soDate,
+                        });
+                        return hint ? [idx, hint] : null;
+                    })
+            ).then((pairs) => {
+                setPriceHints(Object.fromEntries(pairs.filter(Boolean)));
+            });
 
             // Series list may already be loaded — re-apply SO series into the dropdown now.
             getInvoiceSeries({ active: true }).then(async (all) => {
@@ -417,13 +446,40 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
     const addItem = () => setForm(p => ({ ...p, items: [...p.items, BLANK_ITEM()] }));
     const removeItem = (i) => setForm(p => ({ ...p, items: p.items.filter((_, idx) => idx !== i) }));
 
+    const applyCustomerPriceHint = async (index, itemId, qty, { applyRate } = {}) => {
+        if (!form.customerId || !itemId) return;
+        const hint = await lookupCustomerPrice({
+            customerId: form.customerId,
+            itemId,
+            qty,
+            date: form.invoiceDate,
+        });
+        if (!hint) return;
+        setPriceHints((p) => ({ ...p, [index]: hint }));
+        if (!applyRate) return;
+        if (hint.priority !== 1 && hint.priority !== 2) return;
+        if (hint.suggestedRate == null) return;
+        setForm((p) => ({
+            ...p,
+            items: p.items.map((item, idx) => (
+                idx === index ? { ...item, rate: hint.suggestedRate } : item
+            )),
+        }));
+    };
+
     const handleItemSelect = (val, index) => {
         const selected = allItems.find(it => it._id === val);
         if (!selected) return;
+        const existing = form.items[index];
+        const lockRate = Boolean(soId && existing?.salesOrderLineId);
+        let qtyKept = existing?.qty || 1;
         setForm(p => {
             const items = p.items.map((item, idx) => {
                 if (idx !== index) return item;
-                const rate = selected.standardRate || selected.rate || selected.sellingPrice || selected.salesPrice || 0;
+                qtyKept = item.qty || 1;
+                const rate = lockRate
+                    ? item.rate
+                    : (selected.standardRate || selected.rate || selected.sellingPrice || selected.salesPrice || 0);
                 return {
                     ...item,
                     itemId: selected._id,
@@ -442,6 +498,7 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
             });
             return { ...p, items };
         });
+        applyCustomerPriceHint(index, val, qtyKept, { applyRate: !lockRate });
     };
 
     const resolveGstForForm = async ({ forceRefresh = false, customerId, gstin, invoiceDate } = {}) => {
@@ -936,7 +993,14 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                                             <input value={item.uom} onChange={e => setItem(i, 'uom', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 5)} data-row={i} data-col={5} className={gridStyles.inp} placeholder="UOM" autoComplete="off" />
                                         </td>
                                         <td className={`${gridStyles.td} ${gridStyles.colQty}`}>
-                                            <input type="number" min="0" step="any" value={item.qty} onChange={e => setItem(i, 'qty', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 6)} data-row={i} data-col={6} className={`no-spin ${gridStyles.tableInpNum}`} style={{ textAlign: 'center', borderColor: !item.qty ? '#fca5a5' : '#e5e7eb' }} autoComplete="off" />
+                                            <input type="number" min="0" step="any" value={item.qty} onChange={e => {
+                                                const v = e.target.value;
+                                                const lockRate = Boolean(soId && item.salesOrderLineId);
+                                                const prev = priceHints[i];
+                                                const matchesPrev = prev && Number(prev.suggestedRate) === Number(item.rate);
+                                                setItem(i, 'qty', v);
+                                                applyCustomerPriceHint(i, item.itemId, v, { applyRate: !lockRate && matchesPrev });
+                                            }} onKeyDown={(e) => handleRowKeyDown(e, i, 6)} data-row={i} data-col={6} className={`no-spin ${gridStyles.tableInpNum}`} style={{ textAlign: 'center', borderColor: !item.qty ? '#fca5a5' : '#e5e7eb' }} autoComplete="off" />
                                         </td>
                                         <td className={`${gridStyles.td} ${gridStyles.colRate}`}>
                                             <input type="number" min="0" step="any" value={item.rate} onChange={e => setItem(i, 'rate', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 7)} data-row={i} data-col={7} className={`no-spin ${gridStyles.tableInpNum}`} style={{ borderColor: !item.rate ? '#fca5a5' : '#e5e7eb' }} autoComplete="off" />
@@ -953,6 +1017,7 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                         </table>
                     </div>
                     <button type="button" onClick={addItem} className={gridStyles.addBtn}>+ Add Item</button>
+                    <CustomerPriceSuggestionPanel hints={priceHints} items={form.items} soLocked={Boolean(soId)} />
                 </Section>
 
                 {/* Totals */}

@@ -66,7 +66,8 @@ export default function DataExtractorDuplicateReviewPage() {
         <div style={{ maxWidth: 980 }}>
             <h2 style={{ marginTop: 0, fontSize: 18 }}>Duplicate Review</h2>
             <p style={{ color: '#64748b', fontSize: 13 }}>
-                Explainable duplicate decisions. High-risk records are never auto-merged — choose Keep A/B, merge selected fields, mark separate, link existing, or ignore.
+                Possible duplicates from smart company merge. Auto-merge only happens at 95%+ deterministic confidence.
+                Manual Merge / Keep Separate / Ignore always override the suggestion.
             </p>
             <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
                 {['open', 'resolved', 'ignored'].map((s) => (
@@ -83,7 +84,7 @@ export default function DataExtractorDuplicateReviewPage() {
                         <div>
                             <strong>{r.recordA?.companyName || 'Record A'}</strong>
                             <span style={{ marginLeft: 8, fontSize: 12, color: '#64748b' }}>
-                                {r.decision} · score {r.matchScore}
+                                Merge Confidence: <strong>{r.matchScore ?? r.candidateRef?.mergeConfidence ?? 0}%</strong>
                                 {r.discoveryJobId ? <> · <Link to={PATHS.DATA_EXTRACTOR.DISCOVERY_JOB(r.discoveryJobId)}>Job</Link></> : null}
                             </span>
                         </div>
@@ -99,11 +100,8 @@ export default function DataExtractorDuplicateReviewPage() {
                             <SideBySide a={r.recordA} b={r.recordB} />
                             {r.status === 'open' ? (
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
-                                    <button type="button" style={btnPrimary} disabled={!!busy} onClick={() => resolve(r._id, 'keep_a')}>Keep A</button>
-                                    <button type="button" style={btnPrimary} disabled={!!busy} onClick={() => resolve(r._id, 'keep_b')}>Keep B</button>
-                                    <button type="button" style={btn} disabled={!!busy} onClick={() => resolve(r._id, 'merge_selected_fields', { fields: ['email', 'phone', 'website', 'address'] })}>Merge email/phone/website/address</button>
-                                    <button type="button" style={btn} disabled={!!busy} onClick={() => resolve(r._id, 'mark_separate')}>Mark separate</button>
-                                    <button type="button" style={btn} disabled={!!busy} onClick={() => resolve(r._id, 'link_existing')}>Link existing</button>
+                                    <button type="button" style={btnPrimary} disabled={!!busy} onClick={() => resolve(r._id, 'merge')}>Merge</button>
+                                    <button type="button" style={btn} disabled={!!busy} onClick={() => resolve(r._id, 'keep_separate')}>Keep Separate</button>
                                     <button type="button" style={btn} disabled={!!busy} onClick={() => resolve(r._id, 'ignore')}>Ignore</button>
                                 </div>
                             ) : (

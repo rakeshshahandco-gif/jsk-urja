@@ -8,6 +8,8 @@ import * as discoveryController from '../../controllers/discovery.controller.js'
 import * as discoveryAgentController from '../../controllers/discoveryAgent.controller.js';
 import { protectDiscoveryAgent } from '../../middlewares/discoveryAgentAuth.middleware.js';
 import * as discoveryMergeReviewController from '../../controllers/discoveryMergeReview.controller.js';
+import * as discoveryPhase2Controller from '../../controllers/discoveryPhase2.controller.js';
+import * as socialSourceController from '../../controllers/socialSource.controller.js';
 import * as industryClassificationController from '../../controllers/industryClassification.controller.js';
 import * as leadRelevanceController from '../../controllers/leadRelevance.controller.js';
 import * as productRecommendationController from '../../controllers/productRecommendation.controller.js';
@@ -41,6 +43,7 @@ import * as rawCaptureQualificationController from '../../controllers/rawCapture
 import * as rawCaptureGenuinenessController from '../../controllers/rawCaptureGenuineness.controller.js';
 import { multerSingleFile } from '../../controllers/rawCaptureImport.controller.js';
 import { assertImportCampaignAccessMiddleware } from '../../services/dataExtractor/searchCampaign/rawCaptureImport/permissions.util.js';
+import dataExtractorOpsRoutes from './dataExtractorOps.routes.js';
 
 const publicRouter = express.Router();
 publicRouter.all('/webhooks/justdial/:token', extractorController.justdialWebhook);
@@ -48,6 +51,7 @@ publicRouter.all('/webhooks/justdial/:token', extractorController.justdialWebhoo
 const router = express.Router();
 
 router.use(protect);
+router.use(dataExtractorOpsRoutes);
 
 // ---- Phase 1 Search Campaign Master (Checkpoint 1) ----
 router.post('/search-campaigns', checkPermission('data_extractor.search_campaign.manage'), searchCampaignController.createCampaign);
@@ -181,6 +185,39 @@ router.post('/simple-lead-search/sessions/:sessionId/auto-processing/resume', ch
 router.post('/simple-lead-search/sessions/:sessionId/auto-processing/stop', checkPermission('data_extractor.assisted_capture.start'), simpleLeadSearchController.autoProcessingStop);
 router.post('/simple-lead-search/sessions/:sessionId/auto-processing/tick', checkPermission('data_extractor.assisted_capture.view'), simpleLeadSearchController.autoProcessingTick);
 router.get('/simple-lead-search/sessions/:sessionId/auto-processing', checkPermission('data_extractor.assisted_capture.view'), simpleLeadSearchController.autoProcessingStatus);
+
+router.get('/social/facebook/status', checkAnyPermission('data_extractor.assisted_capture.view', 'data_extractor.extractor.view'), socialSourceController.facebookStatus);
+router.post('/social/facebook/connect', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.facebookConnect);
+router.post('/social/facebook/disconnect', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.facebookDisconnect);
+router.post('/social/facebook/extract', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.facebookStart);
+router.post('/social/facebook/extract/stop', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.facebookStop);
+router.get('/social/facebook/extract/progress', checkAnyPermission('data_extractor.assisted_capture.view', 'data_extractor.extractor.view', 'data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.facebookProgress);
+router.post('/social/facebook/find-groups', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.facebookFindGroups);
+router.post('/social/facebook/joined-groups', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.facebookJoinedGroups);
+router.post('/social/facebook/exact-group', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.facebookExactGroup);
+router.get('/social/facebook/members/campaign', checkAnyPermission('data_extractor.assisted_capture.view', 'data_extractor.extractor.view', 'data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.facebookMemberCampaign);
+router.post('/social/facebook/members/pause', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.facebookPause);
+router.get('/social/facebook/captures', checkAnyPermission('data_extractor.assisted_capture.view', 'data_extractor.extractor.view', 'data_extractor.raw_capture.view'), socialSourceController.facebookCaptures);
+router.get('/social/facebook/captures/export', checkAnyPermission('data_extractor.assisted_capture.view', 'data_extractor.extractor.view', 'data_extractor.raw_capture.view'), socialSourceController.facebookCapturesExport);
+router.get('/social/instagram/status', checkAnyPermission('data_extractor.assisted_capture.view', 'data_extractor.extractor.view'), socialSourceController.instagramStatus);
+router.post('/social/instagram/connect', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.instagramConnect);
+router.post('/social/instagram/disconnect', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.instagramDisconnect);
+router.post('/social/instagram/extract', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.instagramStart);
+router.post('/social/instagram/extract/stop', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.instagramStop);
+router.get('/social/instagram/captures', checkAnyPermission('data_extractor.assisted_capture.view', 'data_extractor.extractor.view', 'data_extractor.raw_capture.view'), socialSourceController.instagramCaptures);
+router.get('/social/instagram/captures/export', checkAnyPermission('data_extractor.assisted_capture.view', 'data_extractor.extractor.view', 'data_extractor.raw_capture.view'), socialSourceController.instagramCapturesExport);
+router.post('/social/instagram/captures/enrich-websites', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.instagramCapturesEnrichWebsites);
+router.get('/social/linkedin/status', checkAnyPermission('data_extractor.assisted_capture.view', 'data_extractor.extractor.view'), socialSourceController.linkedinStatus);
+router.post('/social/linkedin/connect', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.linkedinConnect);
+router.post('/social/linkedin/disconnect', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.linkedinDisconnect);
+router.post('/social/linkedin/extract', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.linkedinStart);
+router.post('/social/linkedin/test-public-url', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.linkedinTestPublicUrl);
+router.get('/social/x/status', checkAnyPermission('data_extractor.assisted_capture.view', 'data_extractor.extractor.view'), socialSourceController.xStatus);
+router.post('/social/x/connect', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.xConnect);
+router.post('/social/x/disconnect', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.xDisconnect);
+router.post('/social/x/extract', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.xStart);
+router.post('/social/x/test-public-url', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.xTestPublicUrl);
+router.get('/simple-lead-search/sessions/:sessionId/live-activity', checkPermission('data_extractor.assisted_capture.view'), simpleLeadSearchController.liveProcessingActivity);
 router.get('/simple-lead-search/sessions/:sessionId/captured-data', checkPermission('data_extractor.raw_capture.view'), simpleLeadSearchController.campaignCapturedData);
 router.get('/simple-lead-search/sessions/:sessionId/export-all-current', checkPermission('data_extractor.raw_capture.view'), simpleLeadSearchController.exportAllCurrentData);
 router.post('/simple-lead-search/sessions/:sessionId/export-artifacts', checkPermission('data_extractor.raw_capture.view'), simpleLeadSearchController.persistExportArtifacts);
@@ -944,28 +981,42 @@ router.post('/records/:id/convert/supplier', checkPermission('data_extractor.ext
 
 
 
+function checkAnyPermission(...keys) {
+    return (req, res, next) => {
+        if (keys.some((k) => checkUserPermission(req.user, k))) return next();
+        throw new ApiError(403, `Permission denied: ${keys[0]} required`);
+    };
+}
+
 // Business Discovery Engine
-router.get('/discovery/providers', checkPermission('data_extractor.discovery.view'), discoveryController.listDiscoveryProviders);
+router.get('/discovery/providers', checkAnyPermission('data_extractor.discovery.view', 'data_extractor.extractor.view'), discoveryController.listDiscoveryProviders);
 router.post('/discovery/providers/:providerId/test', checkPermission('data_extractor.discovery.settings'), discoveryController.testProvider);
 router.get('/discovery/settings', checkPermission('data_extractor.discovery.settings'), discoveryController.getDiscoverySettings);
 router.put('/discovery/settings', checkPermission('data_extractor.discovery.settings'), discoveryController.putDiscoverySettings);
 
-router.post('/discovery/jobs', checkPermission('data_extractor.discovery.create'), discoveryController.createJob);
-router.get('/discovery/jobs', checkPermission('data_extractor.discovery.view'), discoveryController.listJobs);
-router.get('/discovery/jobs/:id', checkPermission('data_extractor.discovery.view'), discoveryController.getJob);
-router.post('/discovery/jobs/:id/start', checkPermission('data_extractor.discovery.run'), discoveryController.startJob);
-router.post('/discovery/jobs/:id/pause', checkPermission('data_extractor.discovery.pause'), discoveryController.pauseJob);
-router.post('/discovery/jobs/:id/resume', checkPermission('data_extractor.discovery.resume'), discoveryController.resumeJob);
-router.post('/discovery/jobs/:id/stop', checkPermission('data_extractor.discovery.stop'), discoveryController.stopJob);
-router.post('/discovery/jobs/:id/retry', checkPermission('data_extractor.discovery.run'), discoveryController.retryJob);
-router.post('/discovery/jobs/:id/continue', checkPermission('data_extractor.discovery.run'), discoveryController.continueJob);
-router.post('/discovery/jobs/:id/save-drafts', checkPermission('data_extractor.discovery.create'), discoveryController.saveDrafts);
-router.get('/discovery/jobs/:id/results', checkPermission('data_extractor.discovery.view'), discoveryController.getResults);
+router.post('/discovery/jobs', checkAnyPermission('data_extractor.discovery.create', 'data_extractor.extractor.search'), discoveryController.createJob);
+router.get('/discovery/jobs', checkAnyPermission('data_extractor.discovery.view', 'data_extractor.extractor.view'), discoveryController.listJobs);
+router.get('/discovery/jobs/:id', checkAnyPermission('data_extractor.discovery.view', 'data_extractor.extractor.view'), discoveryController.getJob);
+router.post('/discovery/jobs/:id/start', checkAnyPermission('data_extractor.discovery.run', 'data_extractor.extractor.search'), discoveryController.startJob);
+router.post('/discovery/jobs/:id/pause', checkAnyPermission('data_extractor.discovery.pause', 'data_extractor.extractor.search'), discoveryController.pauseJob);
+router.post('/discovery/jobs/:id/resume', checkAnyPermission('data_extractor.discovery.resume', 'data_extractor.extractor.search'), discoveryController.resumeJob);
+router.post('/discovery/jobs/:id/stop', checkAnyPermission('data_extractor.discovery.stop', 'data_extractor.extractor.search'), discoveryController.stopJob);
+router.post('/discovery/jobs/:id/retry', checkAnyPermission('data_extractor.discovery.run', 'data_extractor.extractor.search'), discoveryController.retryJob);
+router.post('/discovery/jobs/:id/continue', checkAnyPermission('data_extractor.discovery.run', 'data_extractor.extractor.search'), discoveryController.continueJob);
+router.post('/discovery/jobs/:id/save-drafts', checkAnyPermission('data_extractor.discovery.create', 'data_extractor.extractor.search'), discoveryController.saveDrafts);
+router.get('/discovery/jobs/:id/results', checkAnyPermission('data_extractor.discovery.view', 'data_extractor.extractor.view'), discoveryController.getResults);
+router.get('/discovery/jobs/:id/export', checkAnyPermission('data_extractor.discovery.view', 'data_extractor.extractor.view'), discoveryController.exportJob);
 
 router.post('/discovery/import-urls', checkPermission('data_extractor.discovery.create'), discoveryController.importUrls);
 
 router.post('/discovery/import-file', checkPermission('data_extractor.discovery.create'), extractorUpload.single('file'), discoveryController.importFile);
 router.post('/discovery/jobs/:id/convert-lead', checkPermission('data_extractor.discovery.convert_lead'), discoveryController.convertPreviewToLead);
+
+router.post('/discovery/jobs/:id/qualify', checkAnyPermission('data_extractor.discovery.run', 'data_extractor.extractor.search'), discoveryPhase2Controller.qualify);
+router.post('/discovery/jobs/:id/qualification-override', checkAnyPermission('data_extractor.discovery.approve', 'data_extractor.extractor.search'), discoveryPhase2Controller.override);
+router.post('/discovery/jobs/:id/qualification-feedback', checkAnyPermission('data_extractor.discovery.approve', 'data_extractor.extractor.search'), discoveryPhase2Controller.feedback);
+router.get('/discovery/jobs/:id/qualified-companies', checkAnyPermission('data_extractor.discovery.view', 'data_extractor.extractor.view'), discoveryPhase2Controller.qualifiedCompanies);
+router.get('/discovery/jobs/:id/phase2-analytics', checkAnyPermission('data_extractor.discovery.view', 'data_extractor.extractor.view'), discoveryPhase2Controller.analytics);
 
 router.post('/discovery/results/:id/approve', checkPermission('data_extractor.discovery.approve'), discoveryController.approveResult);
 router.post('/discovery/results/:id/reject', checkPermission('data_extractor.discovery.approve'), discoveryController.rejectResult);
@@ -981,11 +1032,11 @@ router.get('/discovery/agent/jobs/:id', checkPermission('data_extractor.discover
 router.post('/discovery/agent/jobs/:id/control', checkPermission('data_extractor.discovery.use_local_agent'), discoveryAgentController.controlJob);
 
 // ---- Discovery duplicate / merge review (Phase 4) ----
-router.get('/discovery/merge-reviews', checkPermission('data_extractor.discovery.view'), discoveryMergeReviewController.list);
-router.get('/discovery/merge-reviews/:id', checkPermission('data_extractor.discovery.view'), discoveryMergeReviewController.getOne);
-router.post('/discovery/merge-reviews/:id/resolve', checkPermission('data_extractor.discovery.approve'), discoveryMergeReviewController.resolve);
-router.post('/discovery/jobs/:jobId/sync-merge-reviews', checkPermission('data_extractor.discovery.approve'), discoveryMergeReviewController.syncFromJob);
-router.post('/discovery/compare', checkPermission('data_extractor.discovery.view'), discoveryMergeReviewController.compare);
+router.get('/discovery/merge-reviews', checkAnyPermission('data_extractor.discovery.view', 'data_extractor.extractor.view'), discoveryMergeReviewController.list);
+router.get('/discovery/merge-reviews/:id', checkAnyPermission('data_extractor.discovery.view', 'data_extractor.extractor.view'), discoveryMergeReviewController.getOne);
+router.post('/discovery/merge-reviews/:id/resolve', checkAnyPermission('data_extractor.discovery.approve', 'data_extractor.extractor.search'), discoveryMergeReviewController.resolve);
+router.post('/discovery/jobs/:jobId/sync-merge-reviews', checkAnyPermission('data_extractor.discovery.approve', 'data_extractor.extractor.search'), discoveryMergeReviewController.syncFromJob);
+router.post('/discovery/compare', checkAnyPermission('data_extractor.discovery.view', 'data_extractor.extractor.view'), discoveryMergeReviewController.compare);
 
 
 

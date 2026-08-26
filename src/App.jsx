@@ -175,6 +175,16 @@ import DataExtractorHistoryPage from '@/features/dataExtractor/DataExtractorHist
 import DataExtractorLeadsPage from '@/features/dataExtractor/DataExtractorLeadsPage';
 import DataExtractorPreviewPage from '@/features/dataExtractor/DataExtractorPreviewPage';
 import DataExtractorSettingsPage from '@/features/dataExtractor/DataExtractorSettingsPage';
+import DataExtractorDiscoveryPage from '@/features/dataExtractor/DataExtractorDiscoveryPage';
+import DataExtractorDiscoveryJobsPage from '@/features/dataExtractor/DataExtractorDiscoveryJobsPage';
+import DataExtractorDiscoveryJobPage from '@/features/dataExtractor/DataExtractorDiscoveryJobPage';
+import DataExtractorQualifiedCompaniesPage from '@/features/dataExtractor/DataExtractorQualifiedCompaniesPage';
+import DataExtractorDuplicateReviewPage from '@/features/dataExtractor/DataExtractorDuplicateReviewPage';
+import DataExtractorOperationsPage from '@/features/dataExtractor/DataExtractorOperationsPage';
+import DataExtractorConsolidatedCompaniesPage from '@/features/dataExtractor/DataExtractorConsolidatedCompaniesPage';
+import DataExtractorContactableProspectsPage from '@/features/dataExtractor/DataExtractorContactableProspectsPage';
+import DataExtractorSavedSearchesPage from '@/features/dataExtractor/DataExtractorSavedSearchesPage';
+import DataExtractorSocialSourcePage from '@/features/dataExtractor/DataExtractorSocialSourcePage';
 import SmartImportHubPage from '@/features/smartImport/SmartImportHubPage';
 import SmartImportBatchPage from '@/features/smartImport/SmartImportBatchPage';
 import ImportCenterPage from '@/features/importCenter/ImportCenterPage';
@@ -186,6 +196,10 @@ import PurchaseComparisonReportPage from '@/features/reports/PurchaseComparisonR
 import SalesOrderListPage from '@/features/sales/SalesOrderListPage';
 import SalesOrderFormPage from '@/features/sales/SalesOrderFormPage';
 import SalesOrderDetailPage from '@/features/sales/SalesOrderDetailPage';
+import CustomerPriceListListPage from '@/features/sales/customerPriceList/CustomerPriceListListPage';
+import CustomerPriceListFormPage from '@/features/sales/customerPriceList/CustomerPriceListFormPage';
+import CustomerPriceListDetailPage from '@/features/sales/customerPriceList/CustomerPriceListDetailPage';
+import CustomerPriceHistoryPage from '@/features/sales/customerPriceList/CustomerPriceHistoryPage';
 import SalesInvoiceListPage from '@/features/sales/SalesInvoiceListPage';
 import SalesInvoiceFormPage from '@/features/sales/SalesInvoiceFormPage';
 import SalesInvoiceDetailPage from '@/features/sales/SalesInvoiceDetailPage';
@@ -805,6 +819,11 @@ const AppLayout = () => {
                         <Route path="/sales/orders/new" element={<ProtectedRoute requirePermission="sales"><SalesOrderFormPage /></ProtectedRoute>} />
                         <Route path="/sales/orders/:id/edit" element={<ProtectedRoute requirePermission="sales"><SalesOrderFormPage /></ProtectedRoute>} />
                         <Route path="/sales/orders/:id" element={<ProtectedRoute requirePermission="sales"><SalesOrderDetailPage /></ProtectedRoute>} />
+                        <Route path={PATHS.SALES.CUSTOMER_PRICE_LISTS} element={<ProtectedRoute requirePermission="sales"><CustomerPriceListListPage /></ProtectedRoute>} />
+                        <Route path={PATHS.SALES.CUSTOMER_PRICE_LIST_NEW} element={<ProtectedRoute requirePermission="sales"><CustomerPriceListFormPage /></ProtectedRoute>} />
+                        <Route path={PATHS.SALES.CUSTOMER_PRICE_LIST_HISTORY} element={<ProtectedRoute requirePermission="sales"><CustomerPriceHistoryPage /></ProtectedRoute>} />
+                        <Route path="/sales/customer-price-lists/:id/edit" element={<ProtectedRoute requirePermission="sales"><CustomerPriceListFormPage /></ProtectedRoute>} />
+                        <Route path="/sales/customer-price-lists/:id" element={<ProtectedRoute requirePermission="sales"><CustomerPriceListDetailPage /></ProtectedRoute>} />
                         <Route path="/sales/invoices" element={<ProtectedRoute requirePermission="sales"><SalesInvoiceListPage /></ProtectedRoute>} />
                         <Route path="/sales/invoices/new" element={<ProtectedRoute requirePermission="sales"><SalesInvoiceFormPage /></ProtectedRoute>} />
                         <Route path="/sales/invoices/:id" element={<ProtectedRoute requirePermission="sales"><SalesInvoiceDetailPage /></ProtectedRoute>} />
@@ -876,7 +895,21 @@ const AppLayout = () => {
                         <Route path={PATHS.DOCUMENTS.SCAN_ENTRY_KEYWORDS} element={<ProtectedRoute requirePermission="scan_entry.scan_entry.review"><FeatureGuard feature="accounting.enableAiSmartImport"><ScanEntryKeywordSettingsPage /></FeatureGuard></ProtectedRoute>} />
                         <Route path={PATHS.DATA_EXTRACTOR.ROOT} element={<ProtectedRoute requirePermission="data_extractor.extractor.view"><DataExtractorGuard><DataExtractorLayout /></DataExtractorGuard></ProtectedRoute>}>
                             <Route index element={<Navigate to={PATHS.DATA_EXTRACTOR.SIMPLE_LEAD_SEARCH} replace />} />
+                            <Route path="quick-search" element={<ProtectedRoute requirePermission="data_extractor.extractor.search"><DataExtractorDiscoveryPage /></ProtectedRoute>} />
+                            <Route path="discovery" element={<Navigate to={PATHS.DATA_EXTRACTOR.QUICK_SEARCH} replace />} />
+                            <Route path="discovery-jobs" element={<ProtectedRoute requirePermission="data_extractor.extractor.view"><DataExtractorDiscoveryJobsPage /></ProtectedRoute>} />
+                            <Route path="discovery-jobs/:id" element={<ProtectedRoute requirePermission="data_extractor.extractor.view"><DataExtractorDiscoveryJobPage /></ProtectedRoute>} />
+                            <Route path="qualified-companies" element={<ProtectedRoute requirePermission="data_extractor.extractor.view"><DataExtractorQualifiedCompaniesPage /></ProtectedRoute>} />
+                            <Route path="consolidated-companies" element={<ProtectedRoute requirePermission="data_extractor.extractor.view"><DataExtractorConsolidatedCompaniesPage /></ProtectedRoute>} />
+                            <Route path="contactable-prospects" element={<ProtectedRoute requirePermission="data_extractor.extractor.view"><DataExtractorContactableProspectsPage /></ProtectedRoute>} />
+                            <Route path="operations" element={<ProtectedRoute requirePermission="data_extractor.extractor.view"><DataExtractorOperationsPage /></ProtectedRoute>} />
+                            <Route path="saved-searches" element={<ProtectedRoute requirePermission="data_extractor.extractor.search"><DataExtractorSavedSearchesPage /></ProtectedRoute>} />
+                            <Route path="duplicate-review" element={<ProtectedRoute requirePermission="data_extractor.extractor.view"><DataExtractorDuplicateReviewPage /></ProtectedRoute>} />
                             <Route path="simple-lead-search" element={<ProtectedRoute requirePermission="data_extractor.assisted_capture.start"><DataExtractorSimpleLeadSearchPage /></ProtectedRoute>} />
+                            <Route path="facebook" element={<ProtectedRoute requirePermission="data_extractor.assisted_capture.start"><DataExtractorSocialSourcePage platform="facebook" /></ProtectedRoute>} />
+                            <Route path="instagram" element={<ProtectedRoute requirePermission="data_extractor.assisted_capture.start"><DataExtractorSocialSourcePage platform="instagram" /></ProtectedRoute>} />
+                            <Route path="linkedin" element={<ProtectedRoute requirePermission="data_extractor.assisted_capture.start"><DataExtractorSocialSourcePage platform="linkedin" /></ProtectedRoute>} />
+                            <Route path="x" element={<ProtectedRoute requirePermission="data_extractor.assisted_capture.start"><DataExtractorSocialSourcePage platform="x" /></ProtectedRoute>} />
                             <Route path="keyword-search" element={<ProtectedRoute requirePermission="data_extractor.extractor.search"><DataExtractorKeywordSearchPage /></ProtectedRoute>} />
                             <Route path="manual-url" element={<ProtectedRoute requirePermission="data_extractor.extractor.search"><DataExtractorManualUrlPage /></ProtectedRoute>} />
                             <Route path="import" element={<ProtectedRoute requirePermission="data_extractor.extractor.import"><DataExtractorImportPage /></ProtectedRoute>} />

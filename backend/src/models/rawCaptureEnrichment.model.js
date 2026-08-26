@@ -97,6 +97,12 @@ const rawCaptureEnrichmentSchema = new mongoose.Schema(
         isDirectorySource: { type: Boolean, default: false },
         directoryPlatform: { type: String, trim: true, default: '', maxlength: 80 },
         directoryProfileUrl: { type: String, trim: true, default: '', maxlength: 2048 },
+        entityType: { type: String, trim: true, default: '', maxlength: 40 },
+        canonicalCompanyName: { type: String, trim: true, default: '', maxlength: 300 },
+        companyEntityConfidence: { type: String, trim: true, default: '', maxlength: 20 },
+        companyNameEvidence: { type: String, trim: true, default: '', maxlength: 500 },
+        qualificationMode: { type: String, trim: true, default: '', maxlength: 40 },
+        discoveredListings: { type: [mongoose.Schema.Types.Mixed], default: [] },
         rawCaptureIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'RawCapture' }],
         companyName: { type: String, trim: true, default: '', maxlength: 300 },
         legalOrDisplayedName: { type: String, trim: true, default: '', maxlength: 300 },
@@ -128,10 +134,11 @@ const rawCaptureEnrichmentSchema = new mongoose.Schema(
         conflictingValues: { type: [String], default: [] },
         errorReason: { type: String, trim: true, default: '', maxlength: 500 },
         lastEnrichedAt: { type: Date, default: null },
+        chinaCrawl: { type: mongoose.Schema.Types.Mixed, default: {} },
         createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
         updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     },
-    { timestamps: true, collection: 'raw_capture_enrichments' },
+    { timestamps: true, collection: 'raw_capture_enrichments', autoCreate: false, autoIndex: false },
 );
 
 rawCaptureEnrichmentSchema.index(
@@ -167,7 +174,7 @@ const enrichmentJobSchema = new mongoose.Schema(
         finishedAt: { type: Date, default: null },
         createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     },
-    { timestamps: true, collection: 'raw_capture_enrichment_jobs' },
+    { timestamps: true, collection: 'raw_capture_enrichment_jobs', autoCreate: false, autoIndex: false },
 );
 
 enrichmentJobSchema.index({ companyId: 1, sessionId: 1, createdAt: -1 });

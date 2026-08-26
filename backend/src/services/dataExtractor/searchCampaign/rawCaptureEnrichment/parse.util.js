@@ -12,6 +12,12 @@ import {
 } from '../../extractor.utils.js';
 import { CONTACT_PATH_HINTS, DIRECTORY_HOSTS, SOCIAL_HOSTS } from './constants.js';
 import { extractLabeledAddressesFromHtml, mergeAddressLists } from './addressExtract.util.js';
+import {
+    extractCopyrightName,
+    extractOgSiteName,
+    isGenericSeoCompanyTitle,
+    resolveCanonicalCompanyName,
+} from '../simpleLeadSearch/entityClassification.util.js';
 
 export function normalizeDomain(hostOrUrl) {
     const raw = String(hostOrUrl || '').trim().toLowerCase();
@@ -196,7 +202,7 @@ function hostMatches(url, hosts) {
 }
 
 export function extractSocialLinks(html, pageUrl) {
-    const out = { facebook: null, instagram: null, linkedin: null, youtube: null, whatsappLinks: [] };
+    const out = { facebook: null, instagram: null, linkedin: null, youtube: null, twitter: null, whatsappLinks: [] };
     const hrefRe = /href\s*=\s*["']([^"']+)["']/gi;
     let m;
     const htmlStr = String(html || '');
@@ -242,6 +248,18 @@ export function extractSocialLinks(html, pageUrl) {
                     handle: parsed.handle,
                     pageId: '',
                     pageName: parsed.pageName,
+                    sourceUrl: pageUrl,
+                    matchConfidence: 'verified',
+                    evidence: ['official website link'],
+                };
+            }
+        } else if (hostMatches(href, SOCIAL_HOSTS.twitter || []) && !/\/intent\/|\/share/i.test(href)) {
+            if (!out.twitter) {
+                out.twitter = {
+                    url: href,
+                    handle: '',
+                    pageId: '',
+                    pageName: '',
                     sourceUrl: pageUrl,
                     matchConfidence: 'verified',
                     evidence: ['official website link'],
@@ -380,7 +398,10 @@ export function extractContactPersons(html, pageUrl) {
     return people;
 }
 
-export function classifyBusinessType(textBlob) {
+export function classifyBusinessType(textBlob, pageUrl = '') {
+    if (pageUrl && isDirectoryHost(pageUrl)) {
+        return { businessType: 'marketplace_directory', manufacturerEvidence: 'directory / marketplace host' };
+    }
     const t = String(textBlob || '').toLowerCase();
     const evidence = [];
     if (/\b(manufactur(?:er|ers|ing)?|factory|plant|oem|odm|production\s+unit)s?\b/.test(t)) {
@@ -401,16 +422,20 @@ export function classifyBusinessType(textBlob) {
 
 export function discoverCandidatePaths(html, baseUrl) {
     const found = [];
-    const hrefRe = /href\s*=\s*["']([^"']+)["']/gi;
+    const aRe = /<a\s[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
     let m;
     const s = String(html || '');
-    while ((m = hrefRe.exec(s)) !== null) {
+    const textHints = ['关于我们', '公司简介', '联系我们', '联系方式', '产品中心', '产品展示', '工厂', '资质', '证书'];
+    while ((m = aRe.exec(s)) !== null) {
         let href = m[1].trim();
+        const label = String(m[2] || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
         if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:') || href.startsWith('javascript:')) continue;
         try {
             const abs = new URL(href, baseUrl);
             const path = abs.pathname.toLowerCase();
-            if (CONTACT_PATH_HINTS.some((h) => path.includes(h.replace(/^\//, '')) || path === h)) {
+            const pathHit = CONTACT_PATH_HINTS.some((h) => path.includes(h.replace(/^\//, '')) || path === h);
+            const textHit = textHints.some((t) => label.includes(t.toLowerCase()));
+            if (pathHit || textHit) {
                 found.push(abs.origin + abs.pathname);
             }
         } catch {
@@ -514,7 +539,7 @@ export function parsePageBundle(html, pageUrl) {
     const contactPersons = extractContactPersons(html, pageUrl);
     const gstin = extractGstin(html, pageUrl);
     const textBlob = [title, description, html.slice(0, 50000)].join(' ');
-    const business = classifyBusinessType(textBlob);
+    const business = classifyBusinessType(textBlob, pageUrl);
 
     const addr = jsonLd?.address;
     const jsonLdAddresses = [];
@@ -540,9 +565,24 @@ export function parsePageBundle(html, pageUrl) {
     const addresses = mergeAddressLists(jsonLdAddresses, labeledAddresses);
 
     const companyName = jsonLd?.name || jsonLd?.legalName || '';
+    const ogSiteName = extractOgSiteName(html);
+    const copyrightName = extractCopyrightName(html);
+    const resolved = resolveCanonicalCompanyName({
+        jsonLdName: jsonLd?.name || '',
+        legalName: jsonLd?.legalName || '',
+        ogSiteName,
+        copyrightName,
+        googleTitle: title,
+        isDirectory: Boolean(pageUrl && isDirectoryHost(pageUrl)),
+    });
     const evidence = [];
-    if (companyName) evidence.push({ field: 'companyName', value: companyName, sourceUrl: pageUrl, note: 'json-ld or org' });
-    if (!companyName && title) evidence.push({ field: 'companyName', value: title.split('|')[0].split('-')[0].trim(), sourceUrl: pageUrl, note: 'page title (preliminary)' });
+    if (resolved.name) {
+        evidence.push({ field: 'companyName', value: resolved.name, sourceUrl: pageUrl, note: resolved.evidence });
+    } else if (companyName && !isGenericSeoCompanyTitle(companyName)) {
+        evidence.push({ field: 'companyName', value: companyName, sourceUrl: pageUrl, note: 'json-ld or org' });
+    } else if (title && !isGenericSeoCompanyTitle(title)) {
+        evidence.push({ field: 'companyName', value: title.split('|')[0].split('-')[0].trim(), sourceUrl: pageUrl, note: 'page title (preliminary)' });
+    }
     for (const ph of phones) {
         evidence.push({
             field: 'phone',
@@ -551,7 +591,7 @@ export function parsePageBundle(html, pageUrl) {
             note: `${ph.confidence}; original=${ph.originalText || ph.original}`,
         });
     }
-    for (const net of ['facebook', 'instagram', 'linkedin', 'youtube']) {
+    for (const net of ['facebook', 'instagram', 'linkedin', 'youtube', 'twitter']) {
         if (social[net]?.url) {
             evidence.push({
                 field: net,
@@ -568,8 +608,11 @@ export function parsePageBundle(html, pageUrl) {
     return {
         title,
         description,
-        companyName: companyName || '',
-        legalOrDisplayedName: jsonLd?.legalName || companyName || '',
+        companyName: resolved.name || (companyName && !isGenericSeoCompanyTitle(companyName) ? companyName : ''),
+        legalOrDisplayedName: jsonLd?.legalName || resolved.name || companyName || '',
+        canonicalCompanyName: resolved.name || '',
+        companyEntityConfidence: resolved.confidence || '',
+        companyNameEvidence: resolved.evidence || '',
         emails: dedupeEmails([...mailtoEmails, ...textEmails]),
         phones,
         rejectedPhones: rejectedPhones.slice(0, 20),

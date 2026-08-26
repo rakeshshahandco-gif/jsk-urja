@@ -62,6 +62,7 @@ export default function SimpleLeadSearchCapturedDataPanel({
     sessionId,
     campaignName,
     processRunning = false,
+    isChinaCampaign = false,
     onRetrySelected,
     onRetryAllFailed,
 }) {
@@ -80,6 +81,13 @@ export default function SimpleLeadSearchCapturedDataPanel({
     const [data, setData] = useState(null);
     const [selected, setSelected] = useState([]);
     const [detailId, setDetailId] = useState('');
+    const [resultLang, setResultLang] = useState('both');
+    const [sourceFilter, setSourceFilter] = useState('');
+    const [chineseTextOnly, setChineseTextOnly] = useState(false);
+    const [manufacturerEvidence, setManufacturerEvidence] = useState(false);
+    const [exactModel, setExactModel] = useState(false);
+    const [hasPhone, setHasPhone] = useState(false);
+    const [hasWeChat, setHasWeChat] = useState(false);
     const [recheckJob, setRecheckJob] = useState(null);
     const [recheckBusy, setRecheckBusy] = useState(false);
 
@@ -95,6 +103,12 @@ export default function SimpleLeadSearchCapturedDataPanel({
                 state: stateFilter || undefined,
                 relevance: relevance || undefined,
                 genuineness: genuineness || undefined,
+                sourceName: sourceFilter || undefined,
+                chineseTextOnly: chineseTextOnly ? '1' : undefined,
+                manufacturerEvidence: manufacturerEvidence ? '1' : undefined,
+                exactModel: exactModel ? '1' : undefined,
+                hasPhone: hasPhone ? '1' : undefined,
+                hasWeChat: hasWeChat ? '1' : undefined,
                 failedRetry: failedRetry ? '1' : undefined,
                 page,
                 limit: limit === 'all' ? 'all' : limit,
@@ -110,7 +124,7 @@ export default function SimpleLeadSearchCapturedDataPanel({
         } finally {
             setLoading(false);
         }
-    }, [sessionId, tab, search, businessType, city, stateFilter, relevance, genuineness, failedRetry, page, limit]);
+    }, [sessionId, tab, search, businessType, city, stateFilter, relevance, genuineness, sourceFilter, chineseTextOnly, manufacturerEvidence, exactModel, hasPhone, hasWeChat, failedRetry, page, limit]);
 
     const refreshRecheckStatus = useCallback(async () => {
         if (!sessionId) return null;
@@ -173,7 +187,7 @@ export default function SimpleLeadSearchCapturedDataPanel({
 
     useEffect(() => {
         setPage(1);
-    }, [tab, search, businessType, city, stateFilter, relevance, genuineness, failedRetry, limit]);
+    }, [tab, search, businessType, city, stateFilter, relevance, genuineness, sourceFilter, chineseTextOnly, manufacturerEvidence, exactModel, hasPhone, hasWeChat, failedRetry, limit]);
 
     const items = data?.items || [];
     const tabCounts = data?.tabCounts || {};
@@ -395,6 +409,43 @@ export default function SimpleLeadSearchCapturedDataPanel({
                 <input className={styles.capturedInput} placeholder="State" value={stateFilter} onChange={(e) => setStateFilter(e.target.value)} />
                 <input className={styles.capturedInput} placeholder="Relevance" value={relevance} onChange={(e) => setRelevance(e.target.value)} />
                 <input className={styles.capturedInput} placeholder="Genuineness" value={genuineness} onChange={(e) => setGenuineness(e.target.value)} />
+                {isChinaCampaign ? (
+                    <>
+                        <select className={styles.capturedSelect} value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}>
+                            <option value="">All sources</option>
+                            <option value="1688">1688</option>
+                            <option value="baidu">Baidu</option>
+                            <option value="sogou">Sogou</option>
+                            <option value="so360">360 Search</option>
+                            <option value="alibaba">Alibaba</option>
+                            <option value="made-in-china">Made-in-China</option>
+                            <option value="globalsources">Global Sources</option>
+                            <option value="google">Google</option>
+                            <option value="company_website">Company Website</option>
+                            <option value="enterprise">Enterprise Verification</option>
+                        </select>
+                        <label className={styles.capturedCheck}>
+                            <input type="checkbox" checked={chineseTextOnly} onChange={(e) => setChineseTextOnly(e.target.checked)} />
+                            Chinese Text Only
+                        </label>
+                        <label className={styles.capturedCheck}>
+                            <input type="checkbox" checked={manufacturerEvidence} onChange={(e) => setManufacturerEvidence(e.target.checked)} />
+                            Manufacturer Evidence
+                        </label>
+                        <label className={styles.capturedCheck}>
+                            <input type="checkbox" checked={exactModel} onChange={(e) => setExactModel(e.target.checked)} />
+                            Exact Model Match
+                        </label>
+                        <label className={styles.capturedCheck}>
+                            <input type="checkbox" checked={hasPhone} onChange={(e) => setHasPhone(e.target.checked)} />
+                            Has Phone
+                        </label>
+                        <label className={styles.capturedCheck}>
+                            <input type="checkbox" checked={hasWeChat} onChange={(e) => setHasWeChat(e.target.checked)} />
+                            Has WeChat
+                        </label>
+                    </>
+                ) : null}
                 <label className={styles.capturedCheck}>
                     <input type="checkbox" checked={failedRetry} onChange={(e) => setFailedRetry(e.target.checked)} />
                     Retryable failed only
@@ -429,8 +480,29 @@ export default function SimpleLeadSearchCapturedDataPanel({
                     ) : (
                         <>Showing {items.length} of {pagination.total ?? 0} filtered · Campaign total {campaignTotal}</>
                     )}
+                    {isChinaCampaign && data?.languageStats ? (
+                        <>
+                            {' · '}Chinese-native appearances {data.languageStats.chineseNativeSourceAppearances ?? 0}
+                            {' · '}Chinese-language records {data.languageStats.chineseLanguageRecords ?? 0}
+                            {' · '}Websites crawled {data.languageStats.chineseCompanyWebsitesCrawled ?? 0}
+                            {' · '}Chinese original names {data.languageStats.companiesWithChineseOriginalName ?? 0}
+                            {' · '}Public phone {data.languageStats.companiesWithPublicPhone ?? 0}
+                            {' · '}Public WeChat {data.languageStats.companiesWithPublicWeChat ?? 0}
+                            {' · '}English/export appearances {data.languageStats.englishExportSourceAppearances ?? 0}
+                        </>
+                    ) : null}
                     {processRunning ? ' · auto-refresh on' : ''}
                 </span>
+                {isChinaCampaign ? (
+                    <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        Result Language
+                        <select value={resultLang} onChange={(e) => setResultLang(e.target.value)}>
+                            <option value="both">Original Chinese + English Translation</option>
+                            <option value="zh">Chinese Only</option>
+                            <option value="en">English Only</option>
+                        </select>
+                    </label>
+                ) : null}
                 <div className={styles.capturedRetryGroup}>
                     <button
                         type="button"
@@ -480,12 +552,20 @@ export default function SimpleLeadSearchCapturedDataPanel({
                                     />
                                 </th>
                                 <th>#</th>
-                                <th>Company</th>
+                                {isChinaCampaign ? <th>Chinese company</th> : <th>Company</th>}
+                                {isChinaCampaign ? <th>English company</th> : null}
+                                {isChinaCampaign ? <th>Matched</th> : null}
+                                {isChinaCampaign ? <th>Source</th> : null}
+                                {isChinaCampaign ? <th>Supplier type</th> : null}
                                 <th>Website / Source</th>
-                                <th>Business Type</th>
+                                {isChinaCampaign ? null : <th>Business Type</th>}
                                 <th>City</th>
+                                {isChinaCampaign ? <th>Province</th> : null}
                                 <th>Phone</th>
+                                {isChinaCampaign ? <th>WeChat</th> : null}
                                 <th>Email</th>
+                                {isChinaCampaign ? <th>Status</th> : null}
+                                {isChinaCampaign ? <th>Conf.</th> : null}
                                 <th>Stage</th>
                                 <th>Status</th>
                                 <th>Failure / Skip Reason</th>
@@ -497,7 +577,7 @@ export default function SimpleLeadSearchCapturedDataPanel({
                     <tbody>
                         {!items.length && (
                             <tr>
-                                <td colSpan={isVerifiedTab ? 12 : 13} className={styles.capturedEmpty}>
+                                <td colSpan={isVerifiedTab ? 12 : (isChinaCampaign ? 19 : 13)} className={styles.capturedEmpty}>
                                     {loading ? 'Loading captured records…' : 'No records in this filter.'}
                                 </td>
                             </tr>
@@ -550,14 +630,28 @@ export default function SimpleLeadSearchCapturedDataPanel({
                                     />
                                 </td>
                                 <td>{r.index}</td>
-                                <td title={r.title}>{dash(r.companyName || r.title)}</td>
+                                {isChinaCampaign ? (
+                                    <>
+                                        <td title={r.companyNameOriginal || r.title}>{dash(r.companyNameOriginal || r.title)}</td>
+                                        <td title={r.companyNameEnglish}>{dash(resultLang === 'zh' ? '' : (r.companyNameEnglish || ''))}</td>
+                                    </>
+                                ) : (
+                                    <td title={r.title}>{dash(r.companyName || r.title)}</td>
+                                )}
+                                {isChinaCampaign ? <td>{dash((r.matchedModels || []).join(', ') || r.searchKeyword)}</td> : null}
+                                {isChinaCampaign ? <td>{dash(r.sourceName || r.source)}</td> : null}
+                                {isChinaCampaign ? <td>{dash(r.businessType)}</td> : null}
                                 <td className={styles.capturedUrl} title={r.website || r.sourceUrl}>
                                     {dash(r.website || r.sourceUrl)}
                                 </td>
-                                <td>{dash(r.businessType)}</td>
+                                {isChinaCampaign ? null : <td>{dash(r.businessType)}</td>}
                                 <td>{dash(r.city)}</td>
+                                {isChinaCampaign ? <td>{dash(r.province)}</td> : null}
                                 <td>{dash(r.phone)}</td>
+                                {isChinaCampaign ? <td>{dash(r.wechat || r.wechatPublic)}</td> : null}
                                 <td>{dash(r.email)}</td>
+                                {isChinaCampaign ? <td>{dash(r.chinaVerificationLabel || r.verificationStatusLabel)}</td> : null}
+                                {isChinaCampaign ? <td>{r.chinaConfidence === '' || r.chinaConfidence == null ? '—' : r.chinaConfidence}</td> : null}
                                 <td>{dash(r.currentStage)}</td>
                                 <td>
                                     <span className={styles.capturedStatus}>{dash(r.exclusiveStatus)}</span>
@@ -628,11 +722,32 @@ export default function SimpleLeadSearchCapturedDataPanel({
                         </div>
                     ) : (
                         <div className={styles.capturedDetailGrid}>
-                            <div><strong>Snippet</strong><p>{dash(detail.detail?.snippet || detail.snippet)}</p></div>
+                            {isChinaCampaign ? (
+                                <>
+                                    <div><strong>Chinese name</strong><p>{dash(detail.companyNameOriginal || detail.title)}</p></div>
+                                    <div><strong>English name</strong><p>{dash(detail.companyNameEnglish)}</p></div>
+                                    <div><strong>Matched models</strong><p>{dash((detail.matchedModels || []).join(', '))}</p></div>
+                                    <div><strong>Discovery source</strong><p>{dash(detail.discoveredThrough || detail.sourceName || detail.source)}</p></div>
+                                    <div><strong>Destination website</strong><p>{dash(detail.destinationDomain || detail.displayDomain)}</p></div>
+                                    <div><strong>Destination type</strong><p>{dash(detail.destinationType)}</p></div>
+                                    <div><strong>Crawl status</strong><p>{dash(detail.crawlStatus)} · pages {dash(detail.pagesCrawled)}</p></div>
+                                    <div><strong>Supplier type</strong><p>{dash(detail.chinaVerificationLabel || detail.businessType)}</p></div>
+                                    <div><strong>Verification</strong><p>{dash(detail.chinaVerificationLabel)}</p></div>
+                                    <div><strong>Confidence</strong><p>{detail.chinaConfidence === '' || detail.chinaConfidence == null ? '—' : detail.chinaConfidence}</p></div>
+                                    <div><strong>USCC</strong><p>{dash(detail.uscc)}</p></div>
+                                    <div><strong>Province / City</strong><p>{dash([detail.province, detail.city].filter(Boolean).join(' / '))}</p></div>
+                                    <div><strong>WeChat</strong><p>{dash(detail.wechat || detail.wechatPublic)}</p></div>
+                                    <div><strong>Original evidence</strong><p>{dash(resultLang === 'en' ? (detail.evidenceEnglish || detail.evidenceOriginal || detail.snippet) : (detail.evidenceOriginal || detail.snippet))}</p></div>
+                                    <div><strong>English evidence</strong><p>{dash(detail.evidenceEnglish)}</p></div>
+                                </>
+                            ) : null}
+                            <div><strong>Snippet</strong><p>{dash(isChinaCampaign && resultLang === 'en' ? (detail.evidenceEnglish || detail.detail?.snippet || detail.snippet) : (detail.detail?.snippet || detail.snippet))}</p></div>
                             <div><strong>Source URL</strong><p>{dash(detail.detail?.sourceUrl || detail.sourceUrl)}</p></div>
                             <div><strong>Query / page</strong><p>{dash(detail.queryUsed)} · page {dash(detail.googlePageIndex)}</p></div>
                             <div><strong>Products / services</strong><p>{dash(detail.productsServices)}</p></div>
-                            <div><strong>Location match</strong><p>{dash(detail.locationClassification || detail.locationMatch)}</p></div>
+                            <div><strong>Requested location</strong><p>{dash(detail.requestedLocation)}</p></div>
+                            <div><strong>Detected location</strong><p>{dash(detail.detectedLocation)}</p></div>
+                            <div><strong>Location match</strong><p>{dash(detail.locationMatchLabel || detail.locationClassification || detail.locationMatch)}</p></div>
                             <div><strong>Confirmed cities</strong><p>{dash(detail.confirmedCities)}</p></div>
                             <div><strong>All addresses</strong><p>{dash(detail.allAddresses || detail.primaryAddress)}</p></div>
                             <div><strong>Office in selected city</strong><p>{detail.officeInSelectedCity ? 'Yes' : 'No'}</p></div>

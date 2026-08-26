@@ -247,6 +247,7 @@ async function upsertRawCapture({
         if (record.resultTypeHint && record.resultTypeHint !== 'unknown') {
             existing.resultTypeHint = record.resultTypeHint;
         }
+        if (record.notes) existing.notes = record.notes;
         // Never unarchive on repeat sighting
         if (wasArchived) {
             existing.inboxStatus = 'archived';
@@ -275,6 +276,7 @@ async function upsertRawCapture({
         displayDomain: record.displayDomain || '',
         resultPosition: record.resultPosition,
         resultTypeHint: record.resultTypeHint || 'unknown',
+        notes: record.notes || '',
         captureFingerprint: fingerprint,
         firstSeenAt: new Date(),
         lastSeenAt: new Date(),

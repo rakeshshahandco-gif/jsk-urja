@@ -83,9 +83,28 @@ export function rejectForbiddenQueryBody(body = {}) {
     }
 }
 
+/**
+ * Prefer Google Web/All (udm=14). For China / CJK / 1688-indexed queries, set
+ * public search region params only — does not fake GPS or bypass Google controls.
+ */
+export function inferGoogleWebSearchParams(queryText) {
+    const t = String(queryText || '');
+    const hasCjk = /[\u4e00-\u9fff]/.test(t);
+    const chinaContext = /\bchina\b|中国|site:1688\.com|site:alibaba\.com|site:made-in-china/i.test(t);
+    return {
+        udm: '14',
+        hl: hasCjk ? 'zh-CN' : 'en',
+        gl: (hasCjk || chinaContext) ? 'cn' : '',
+    };
+}
+
 export function buildGoogleSearchUrl(queryText) {
     const q = encodeURIComponent(String(queryText ?? ''));
-    return `https://www.google.com/search?q=${q}`;
+    const extra = inferGoogleWebSearchParams(queryText);
+    const parts = [`q=${q}`, `udm=${extra.udm}`];
+    if (extra.hl) parts.push(`hl=${encodeURIComponent(extra.hl)}`);
+    if (extra.gl) parts.push(`gl=${encodeURIComponent(extra.gl)}`);
+    return `https://www.google.com/search?${parts.join('&')}`;
 }
 
 /**
@@ -103,7 +122,31 @@ export function buildSearchUrl(sourceHint, queryText) {
     if (src === 'google' || src === 'web' || src === 'official_website' || src === 'manual') {
         return buildGoogleSearchUrl(text);
     }
-    // Facebook / IndiaMART: keep text only — no unstable public search URL invented here.
+    if (src === 'baidu') {
+        return `https://www.baidu.com/s?wd=${encodeURIComponent(text)}`;
+    }
+    if (src === '1688') {
+        return `https://s.1688.com/s.html?keywords=${encodeURIComponent(text)}`;
+    }
+    if (src === 'sogou') {
+        return `https://www.sogou.com/web?query=${encodeURIComponent(text)}`;
+    }
+    if (src === 'so360') {
+        return `https://www.so.com/s?q=${encodeURIComponent(text)}`;
+    }
+    if (src === 'facebook') {
+        return `https://www.facebook.com/search/pages/?q=${encodeURIComponent(text)}`;
+    }
+    if (src === 'instagram') {
+        return `https://www.instagram.com/explore/search/keyword/?q=${encodeURIComponent(text)}`;
+    }
+    if (src === 'linkedin') {
+        return `https://www.linkedin.com/search/results/companies/?keywords=${encodeURIComponent(text)}`;
+    }
+    if (src === 'x') {
+        return `https://x.com/search?q=${encodeURIComponent(text)}&src=typed_query`;
+    }
+    // IndiaMART: keep text only — no unstable public search URL invented here.
     return '';
 }
 

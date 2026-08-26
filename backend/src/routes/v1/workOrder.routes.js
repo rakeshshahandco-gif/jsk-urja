@@ -20,6 +20,12 @@ router.route('/:id')
     .put(woController.updateWorkOrder)
     .delete(woController.deleteWorkOrder);
 
+// Section / Subassembly WOs (Phase 1 — process tracking only)
+router.get('/:id/section-work-orders', woController.getSectionWorkOrders);
+router.post('/:id/section-work-orders', woController.createSectionWorkOrder);
+router.patch('/:id/section-config', woController.updateSectionConfig);
+router.patch('/:id/cancel', woController.cancelSectionWorkOrder);
+
 // WO actions
 router.patch('/:id/release', woController.releaseWorkOrder);
 router.patch('/:id/refresh-stock', woController.refreshMaterialStock);

@@ -28,7 +28,7 @@ const INGEST_TOP_ALLOWED = new Set([
     'queryId', 'source', 'captureMethod', 'idempotencyKey', 'records', 'querySourceHint',
 ]);
 const RECORD_ALLOWED = new Set([
-    'title', 'snippet', 'resultUrl', 'resultPosition', 'sourceRecordId', 'resultTypeHint',
+    'title', 'snippet', 'resultUrl', 'resultPosition', 'sourceRecordId', 'resultTypeHint', 'notes',
 ]);
 const LIST_ALLOWED = new Set([
     'queryId', 'source', 'querySourceHint', 'captureMethod', 'inboxStatus', 'resultTypeHint',
@@ -165,6 +165,10 @@ export function normalizeIngestRecord(raw = {}, index = 0) {
         const sourceRecordId = normalizeSourceRecordId(raw.sourceRecordId || '');
         const titleNormalized = normalizeTitleKey(title);
         const snippetNormalized = normalizeTitleKey(snippet);
+        let notes = '';
+        if (raw.notes != null && String(raw.notes).trim() !== '') {
+            notes = normalizeNotes(raw.notes);
+        }
 
         return {
             ok: true,
@@ -180,6 +184,7 @@ export function normalizeIngestRecord(raw = {}, index = 0) {
                 resultPosition,
                 resultTypeHint,
                 sourceRecordId,
+                notes,
             },
         };
     } catch (err) {

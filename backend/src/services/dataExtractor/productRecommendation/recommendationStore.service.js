@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { AiProductRecommendation } from '../../../models/aiProductRecommendation.model.js';
+import { ensureModelIndexes } from '../../../utils/ensureModelIndexes.js';
 import { AiIndustryClassification } from '../../../models/aiIndustryClassification.model.js';
 import { AiLeadRelevance } from '../../../models/aiLeadRelevance.model.js';
 import { ExtractedLead } from '../../../models/extractedLead.model.js';
@@ -8,6 +9,10 @@ import { getOrCreateExtractorSettings } from '../extractor.service.js';
 import { loadLeadIntelligenceMasters } from '../aiLeadIntelligence.service.js';
 import { getActiveProducts } from './productMaster.service.js';
 import { runProductRecommendation } from './recommend.service.js';
+
+async function ensureProductRecommendationStore() {
+    await ensureModelIndexes(AiProductRecommendation);
+}
 
 function rejectTenantOverrides(payload = {}) {
     if (payload.companyId != null || payload.tenantId != null) {
@@ -40,6 +45,7 @@ function recordKeyOf(meta = {}) {
 }
 
 export async function listRecommendations(companyId, query = {}) {
+    await ensureProductRecommendationStore();
     const q = { companyId, isDeleted: { $ne: true } };
     if (query.status) q.status = query.status;
     if (query.parentIndustry) q.parentIndustry = query.parentIndustry;
@@ -59,17 +65,20 @@ export async function listRecommendations(companyId, query = {}) {
 }
 
 export async function getRecommendation(companyId, id) {
+    await ensureProductRecommendationStore();
     const doc = await AiProductRecommendation.findOne({ _id: id, companyId, isDeleted: { $ne: true } }).lean();
     if (!doc) throw new ApiError(404, 'Recommendation not found');
     return doc;
 }
 
 export async function getRecommendationHistory(companyId, id) {
+    await ensureProductRecommendationStore();
     const doc = await getRecommendation(companyId, id);
     return { _id: doc._id, companyId: doc.companyId, history: doc.history || [] };
 }
 
 export async function recommendOne(companyId, userId, payload = {}) {
+    await ensureProductRecommendationStore();
     rejectTenantOverrides(payload);
     const settings = await getOrCreateExtractorSettings(companyId);
     const masters = await loadLeadIntelligenceMasters(companyId);
@@ -202,6 +211,7 @@ export async function recommendOne(companyId, userId, payload = {}) {
 }
 
 export async function overrideRecommendation(companyId, userId, id, payload = {}) {
+    await ensureProductRecommendationStore();
     rejectTenantOverrides(payload);
     const doc = await AiProductRecommendation.findOne({ _id: id, companyId, isDeleted: { $ne: true } });
     if (!doc) throw new ApiError(404, 'Recommendation not found');
@@ -260,6 +270,7 @@ export async function overrideRecommendation(companyId, userId, id, payload = {}
 }
 
 export async function lockRecommendation(companyId, userId, id, payload = {}) {
+    await ensureProductRecommendationStore();
     rejectTenantOverrides(payload);
     const doc = await AiProductRecommendation.findOne({ _id: id, companyId, isDeleted: { $ne: true } });
     if (!doc) throw new ApiError(404, 'Recommendation not found');

@@ -209,6 +209,13 @@ export const dataExtractorApi = {
         });
         return res;
     },
+    simpleLeadSearchLiveActivity: async (sessionId, params = {}) => {
+        const res = await api.get(`/data-extractor/simple-lead-search/sessions/${sessionId}/live-activity`, {
+            params,
+            timeout: 30000,
+        });
+        return unwrap(res);
+    },
     simpleLeadSearchCapturedData: async (sessionId, params = {}) => {
         const res = await api.get(`/data-extractor/simple-lead-search/sessions/${sessionId}/captured-data`, {
             params,
@@ -440,4 +447,161 @@ export const dataExtractorApi = {
         });
         return res;
     },
+
+    listDiscoveryProviders: async () => {
+        const res = await api.get('/data-extractor/discovery/providers');
+        return unwrap(res);
+    },
+    createDiscoveryJob: async (payload) => {
+        const res = await api.post('/data-extractor/discovery/jobs', payload, { timeout: 60000 });
+        return unwrap(res);
+    },
+    listDiscoveryJobs: async (params = {}) => {
+        const res = await api.get('/data-extractor/discovery/jobs', { params });
+        return unwrap(res);
+    },
+    getDiscoveryJob: async (jobId) => {
+        const res = await api.get(`/data-extractor/discovery/jobs/${jobId}`);
+        return unwrap(res);
+    },
+    startDiscoveryJob: async (jobId) => {
+        const res = await api.post(`/data-extractor/discovery/jobs/${jobId}/start`);
+        return unwrap(res);
+    },
+    pauseDiscoveryJob: async (jobId) => {
+        const res = await api.post(`/data-extractor/discovery/jobs/${jobId}/pause`);
+        return unwrap(res);
+    },
+    resumeDiscoveryJob: async (jobId) => {
+        const res = await api.post(`/data-extractor/discovery/jobs/${jobId}/resume`);
+        return unwrap(res);
+    },
+    stopDiscoveryJob: async (jobId) => {
+        const res = await api.post(`/data-extractor/discovery/jobs/${jobId}/stop`);
+        return unwrap(res);
+    },
+    retryDiscoveryJob: async (jobId) => {
+        const res = await api.post(`/data-extractor/discovery/jobs/${jobId}/retry`);
+        return unwrap(res);
+    },
+    continueDiscoveryJob: async (jobId) => {
+        const res = await api.post(`/data-extractor/discovery/jobs/${jobId}/continue`, {}, { timeout: 120000 });
+        return unwrap(res);
+    },
+    getDiscoveryResults: async (jobId, params = {}) => {
+        const res = await api.get(`/data-extractor/discovery/jobs/${jobId}/results`, { params });
+        return unwrap(res);
+    },
+    saveDiscoveryDrafts: async (jobId, payload) => {
+        const res = await api.post(`/data-extractor/discovery/jobs/${jobId}/save-drafts`, payload);
+        return unwrap(res);
+    },
+    convertDiscoveryPreviewToLead: async (jobId, payload) => {
+        const res = await api.post(`/data-extractor/discovery/jobs/${jobId}/convert-lead`, payload);
+        return unwrap(res);
+    },
+    qualifyDiscoveryJob: async (jobId, payload = {}) => {
+        const res = await api.post(`/data-extractor/discovery/jobs/${jobId}/qualify`, payload, { timeout: 180000 });
+        return unwrap(res);
+    },
+    overrideDiscoveryQualification: async (jobId, payload) => {
+        const res = await api.post(`/data-extractor/discovery/jobs/${jobId}/qualification-override`, payload);
+        return unwrap(res);
+    },
+    feedbackDiscoveryQualification: async (jobId, payload) => {
+        const res = await api.post(`/data-extractor/discovery/jobs/${jobId}/qualification-feedback`, payload);
+        return unwrap(res);
+    },
+    getQualifiedCompanies: async (jobId, params = {}) => {
+        const res = await api.get(`/data-extractor/discovery/jobs/${jobId}/qualified-companies`, { params });
+        return unwrap(res);
+    },
+    getPhase2Analytics: async (jobId) => {
+        const res = await api.get(`/data-extractor/discovery/jobs/${jobId}/phase2-analytics`);
+        return unwrap(res);
+    },
+    facebookSourceStatus: async () => unwrap(await api.get('/data-extractor/social/facebook/status')),
+    instagramSourceStatus: async () => unwrap(await api.get('/data-extractor/social/instagram/status')),
+    facebookConnect: async () => unwrap(await api.post('/data-extractor/social/facebook/connect', {}, { timeout: 180000 })),
+    instagramConnect: async () => unwrap(await api.post('/data-extractor/social/instagram/connect', {}, { timeout: 180000 })),
+    facebookDisconnect: async () => unwrap(await api.post('/data-extractor/social/facebook/disconnect')),
+    instagramDisconnect: async () => unwrap(await api.post('/data-extractor/social/instagram/disconnect')),
+    startFacebookExtraction: async (payload) => unwrap(await api.post('/data-extractor/social/facebook/extract', payload, { timeout: 900000 })),
+    stopFacebookExtraction: async () => unwrap(await api.post('/data-extractor/social/facebook/extract/stop')),
+    facebookExtractProgress: async () => unwrap(await api.get('/data-extractor/social/facebook/extract/progress')),
+    findFacebookGroups: async (payload) => unwrap(await api.post('/data-extractor/social/facebook/find-groups', payload, { timeout: 180000 })),
+    listJoinedFacebookGroups: async (payload = {}) => unwrap(await api.post('/data-extractor/social/facebook/joined-groups', payload, { timeout: 420000 })),
+    findExactFacebookGroup: async (payload = {}) => unwrap(await api.post('/data-extractor/social/facebook/exact-group', payload, { timeout: 180000 })),
+    facebookMemberCampaign: async (params = {}) => unwrap(await api.get('/data-extractor/social/facebook/members/campaign', { params })),
+    pauseFacebookExtraction: async () => unwrap(await api.post('/data-extractor/social/facebook/members/pause')),
+    listFacebookCaptures: async (params = {}) => unwrap(await api.get('/data-extractor/social/facebook/captures', { params })),
+    exportFacebookCaptures: async (params = {}) => api.get('/data-extractor/social/facebook/captures/export', {
+        params,
+        responseType: 'blob',
+        timeout: 120000,
+    }),
+    startInstagramExtraction: async (payload) => unwrap(await api.post('/data-extractor/social/instagram/extract', payload, { timeout: 900000 })),
+    stopInstagramExtraction: async () => unwrap(await api.post('/data-extractor/social/instagram/extract/stop')),
+    listInstagramCaptures: async (params = {}) => unwrap(await api.get('/data-extractor/social/instagram/captures', { params })),
+    exportInstagramCaptures: async (params = {}) => api.get('/data-extractor/social/instagram/captures/export', {
+        params,
+        responseType: 'blob',
+        timeout: 120000,
+    }),
+    enrichInstagramWebsites: async (payload = {}) => unwrap(await api.post('/data-extractor/social/instagram/captures/enrich-websites', payload, { timeout: 180000 })),
+    linkedinSourceStatus: async () => unwrap(await api.get('/data-extractor/social/linkedin/status')),
+    xSourceStatus: async () => unwrap(await api.get('/data-extractor/social/x/status')),
+    linkedinConnect: async () => unwrap(await api.post('/data-extractor/social/linkedin/connect', {}, { timeout: 180000 })),
+    xConnect: async () => unwrap(await api.post('/data-extractor/social/x/connect', {}, { timeout: 180000 })),
+    linkedinDisconnect: async () => unwrap(await api.post('/data-extractor/social/linkedin/disconnect')),
+    xDisconnect: async () => unwrap(await api.post('/data-extractor/social/x/disconnect')),
+    startLinkedInExtraction: async (payload) => unwrap(await api.post('/data-extractor/social/linkedin/extract', payload, { timeout: 180000 })),
+    startXExtraction: async (payload) => unwrap(await api.post('/data-extractor/social/x/extract', payload, { timeout: 180000 })),
+    testLinkedInPublicUrl: async (payload) => unwrap(await api.post('/data-extractor/social/linkedin/test-public-url', payload, { timeout: 180000 })),
+    testXPublicUrl: async (payload) => unwrap(await api.post('/data-extractor/social/x/test-public-url', payload, { timeout: 180000 })),
+    listDiscoveryMergeReviews: async (params = {}) => {
+        const res = await api.get('/data-extractor/discovery/merge-reviews', { params });
+        return unwrap(res);
+    },
+    resolveDiscoveryMergeReview: async (id, payload) => {
+        const res = await api.post(`/data-extractor/discovery/merge-reviews/${id}/resolve`, payload);
+        return unwrap(res);
+    },
+    syncDiscoveryMergeReviews: async (jobId) => {
+        const res = await api.post(`/data-extractor/discovery/jobs/${jobId}/sync-merge-reviews`);
+        return unwrap(res);
+    },
+    importDiscoveryUrls: async (payload) => {
+        const res = await api.post('/data-extractor/discovery/import-urls', payload, { timeout: 120000 });
+        return unwrap(res);
+    },
+    exportDiscoveryJob: async (jobId, format = 'csv') => {
+        const res = await api.get(`/data-extractor/discovery/jobs/${jobId}/export`, {
+            params: { format },
+            responseType: 'blob',
+            timeout: 120000,
+        });
+        return res;
+    },
+    getOpsDashboard: async (params = {}) => unwrap(await api.get('/data-extractor/ops/dashboard', { params })),
+    getOpsCampaigns: async () => unwrap(await api.get('/data-extractor/ops/campaigns')),
+    getOpsSourceHealth: async () => unwrap(await api.get('/data-extractor/ops/source-health')),
+    consolidateOpsCompanies: async () => unwrap(await api.post('/data-extractor/ops/consolidate', {})),
+    listOpsCompanies: async (params = {}) => unwrap(await api.get('/data-extractor/ops/companies', { params })),
+    listContactableProspects: async (params = {}) => unwrap(await api.get('/data-extractor/ops/prospects', { params })),
+    recordProspectOutreach: async (id, payload) => unwrap(await api.post(`/data-extractor/ops/prospects/${id}/outreach`, payload)),
+    previewProspectOutreach: async (id) => unwrap(await api.get(`/data-extractor/ops/prospects/${id}/outreach-preview`)),
+    getOpsCompany: async (id) => unwrap(await api.get(`/data-extractor/ops/companies/${id}`)),
+    exportOpsCompanies: async (params = {}) => api.get('/data-extractor/ops/companies/export', { params, responseType: 'blob', timeout: 120000 }),
+    listOpsSavedSearches: async () => unwrap(await api.get('/data-extractor/ops/saved-searches')),
+    createOpsSavedSearch: async (payload) => unwrap(await api.post('/data-extractor/ops/saved-searches', payload)),
+    updateOpsSavedSearch: async (id, payload) => unwrap(await api.put(`/data-extractor/ops/saved-searches/${id}`, payload)),
+    archiveOpsSavedSearch: async (id) => unwrap(await api.post(`/data-extractor/ops/saved-searches/${id}/archive`)),
+    runOpsSavedSearch: async (id) => unwrap(await api.post(`/data-extractor/ops/saved-searches/${id}/run`, {}, { timeout: 180000 })),
+    previewOpsBulkConvert: async (ids) => unwrap(await api.post('/data-extractor/ops/bulk-convert/preview', { ids })),
+    confirmOpsBulkConvert: async (payload) => unwrap(await api.post('/data-extractor/ops/bulk-convert', payload, { timeout: 180000 })),
+    previewOpsTestCleanup: async () => unwrap(await api.get('/data-extractor/ops/test-data/preview')),
+    cleanupOpsTestData: async (payload) => unwrap(await api.post('/data-extractor/ops/test-data/cleanup', payload)),
+    previewExtractorHistoryClear: async (payload) => unwrap(await api.post('/data-extractor/ops/history-clear/preview', payload)),
+    executeExtractorHistoryClear: async (payload) => unwrap(await api.post('/data-extractor/ops/history-clear', payload, { timeout: 120000 })),
 };

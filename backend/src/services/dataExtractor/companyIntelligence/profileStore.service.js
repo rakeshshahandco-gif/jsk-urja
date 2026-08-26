@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { AiCompanyIntelligenceProfile } from '../../../models/aiCompanyIntelligenceProfile.model.js';
+import { ensureModelIndexes } from '../../../utils/ensureModelIndexes.js';
 import { ExtractedLead } from '../../../models/extractedLead.model.js';
 import { AiIndustryClassification } from '../../../models/aiIndustryClassification.model.js';
 import { AiLeadRelevance } from '../../../models/aiLeadRelevance.model.js';
@@ -7,6 +8,10 @@ import { AiProductRecommendation } from '../../../models/aiProductRecommendation
 import { AiContactIntelligence } from '../../../models/aiContactIntelligence.model.js';
 import { ApiError } from '../../../utils/ApiError.js';
 import { generateCompanyProfile } from './generate.service.js';
+
+async function ensureCompanyIntelligenceStore() {
+    await ensureModelIndexes(AiCompanyIntelligenceProfile);
+}
 
 function rejectTenantOverrides(payload = {}) {
     if (payload.companyId != null || payload.tenantId != null) {
@@ -94,6 +99,7 @@ export function markProfileOutdatedIfNeeded(profile, hashes) {
 }
 
 export async function listProfiles(companyId, query = {}) {
+    await ensureCompanyIntelligenceStore();
     const q = { companyId, isDeleted: { $ne: true } };
     if (query.status) q.status = query.status;
     if (query.parentIndustry || query.primaryIndustry) q.primaryIndustry = query.parentIndustry || query.primaryIndustry;
@@ -117,17 +123,20 @@ export async function listProfiles(companyId, query = {}) {
 }
 
 export async function getProfile(companyId, id) {
+    await ensureCompanyIntelligenceStore();
     const doc = await AiCompanyIntelligenceProfile.findOne({ _id: id, companyId, isDeleted: { $ne: true } }).lean();
     if (!doc) throw new ApiError(404, 'Company intelligence profile not found');
     return doc;
 }
 
 export async function getProfileHistory(companyId, id) {
+    await ensureCompanyIntelligenceStore();
     const doc = await getProfile(companyId, id);
     return { _id: doc._id, companyId: doc.companyId, history: doc.history || [] };
 }
 
 export async function generateOne(companyId, userId, payload = {}) {
+    await ensureCompanyIntelligenceStore();
     rejectTenantOverrides(payload);
     let record = payload.record || null;
     let classification = payload.classification || null;
@@ -276,6 +285,7 @@ export async function generateOne(companyId, userId, payload = {}) {
 }
 
 export async function editProfile(companyId, userId, id, payload = {}) {
+    await ensureCompanyIntelligenceStore();
     rejectTenantOverrides(payload);
     const doc = await AiCompanyIntelligenceProfile.findOne({ _id: id, companyId, isDeleted: { $ne: true } });
     if (!doc) throw new ApiError(404, 'Company intelligence profile not found');
@@ -324,6 +334,7 @@ function uniqPush(list = [], value) {
 }
 
 export async function lockProfile(companyId, userId, id, payload = {}) {
+    await ensureCompanyIntelligenceStore();
     rejectTenantOverrides(payload);
     const doc = await AiCompanyIntelligenceProfile.findOne({ _id: id, companyId, isDeleted: { $ne: true } });
     if (!doc) throw new ApiError(404, 'Company intelligence profile not found');
@@ -349,6 +360,7 @@ export async function lockProfile(companyId, userId, id, payload = {}) {
 }
 
 export async function exportApprovedProfiles(companyId, query = {}) {
+    await ensureCompanyIntelligenceStore();
     const q = {
         companyId,
         isDeleted: { $ne: true },
@@ -383,6 +395,7 @@ export async function exportApprovedProfiles(companyId, query = {}) {
 
 /** Helper for tests / callers: mark existing profile outdated when upstream changes. */
 export async function applyOutdatedFromUpstream(companyId, profileId, hashes = {}) {
+    await ensureCompanyIntelligenceStore();
     const doc = await AiCompanyIntelligenceProfile.findOne({ _id: profileId, companyId, isDeleted: { $ne: true } });
     if (!doc) throw new ApiError(404, 'Company intelligence profile not found');
     if (doc.locked) return { outdated: false, reason: 'locked', profile: doc.toObject() };

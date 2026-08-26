@@ -17,6 +17,10 @@ import {
     normalizePhoneKey,
     normalizeSocialKey,
 } from './duplicateContactMerge.util.js';
+import {
+    isGenericSeoCompanyTitle,
+    isNonCompanyDiscoveryEntity,
+} from '../simpleLeadSearch/entityClassification.util.js';
 
 export {
     HOSTED_PLATFORM_SUFFIXES,
@@ -38,9 +42,36 @@ export function isUsableMergeEmail(value) {
     if (JUNK_EMAIL_RE.test(key)) return false;
     const domain = key.split('@')[1] || '';
     if (JUNK_EMAIL_DOMAINS.has(domain)) return false;
+    // Marketplace/directory inboxes are not company identity (TradeIndia, IndiaMART, Justdial, …)
+    if (isDirectoryOrMarketplaceHostname(domain)) return false;
     if (/\.(png|jpg|jpeg|gif|webp|svg|css|js)$/i.test(key)) return false;
     if (/%20|@2x\./i.test(key)) return false;
     return true;
+}
+
+/** Indian GSTIN when present and well-formed — used only as anti-merge evidence. */
+export function normalizedMergeGstin(value) {
+    const g = String(value || '').trim().toUpperCase();
+    if (!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]Z[0-9A-Z]$/.test(g)) return '';
+    return g;
+}
+
+function hostFromSourceUrl(raw) {
+    const s = String(raw || '').trim();
+    if (!s) return '';
+    try {
+        const u = s.includes('://') ? new URL(s) : new URL(`https://${s}`);
+        return u.hostname.replace(/^www\./i, '').toLowerCase();
+    } catch {
+        return '';
+    }
+}
+
+/** Directory/marketplace listing sourceUrl — do not use that contact as a cross-company merge key. */
+export function isDirectorySourcedMergeContact(entry) {
+    if (!entry || typeof entry === 'string') return false;
+    const host = hostFromSourceUrl(entry.sourceUrl || entry.source || '');
+    return Boolean(host) && isDirectoryOrMarketplaceHostname(host);
 }
 
 export function buildCanonicalCompanyKey({
@@ -113,12 +144,13 @@ export function isIndependentlyVerifiedDecision(gen) {
 /**
  * Shared verified-only eligibility for:
  * Verified Data tab, Latest Verified Results, Verified KPI, Final Verified Excel.
- * Includes directory listing groups (accepted live dataset) but excludes human_review / failed / rejected.
- * Owner approval or eligible AI recheck status makes a record eligible without a new company row.
+ * Only individual COMPANY entities. Directory/marketplace/association/category
+ * pages stay discovery sources and do not count as unique verified companies.
  */
-export function isEligibleForFinalVerified(genuineness, enrichment = null) {
+export function isEligibleForFinalVerified(genuineness, enrichment = null, qualification = null) {
     if (!genuineness) return false;
     if (genuineness.verificationStatus === 'failed') return false;
+    if (isNonCompanyDiscoveryEntity(enrichment || {}, genuineness, qualification || {})) return false;
 
     const ownerStatus = String(genuineness.ownerReviewStatus || '');
     const ownerDecision = String(genuineness.ownerDecision || '');
@@ -128,11 +160,6 @@ export function isEligibleForFinalVerified(genuineness, enrichment = null) {
 
     const decision = String(genuineness.systemDecision || genuineness.genuinenessDecision || '');
     if (decision === 'verified_genuine' || decision === 'likely_genuine') return true;
-
-    // Directory listing remains in the verified dataset as directory evidence (not an independent buyer).
-    if (decision === 'directory_or_marketplace_only') return true;
-    if (enrichment?.isDirectorySource && decision) return true;
-
     return false;
 }
 
@@ -191,18 +218,21 @@ function pickBestGenuineness(items = []) {
     })[0] || null;
 }
 
-function shortCompanyName(name, domain) {
+function shortCompanyName(name, domain, fallbackName = '') {
+    const preferred = String(fallbackName || '').trim();
+    if (preferred && !isGenericSeoCompanyTitle(preferred)) return preferred.slice(0, 80);
     const raw = String(name || '').trim();
-    if (!raw) return domain || 'Unknown company';
+    if (!raw || isGenericSeoCompanyTitle(raw)) return preferred || domain || 'Unknown company';
     // Prefer brand after last pipe for long SEO titles ("… | Plush Technologies")
     if (raw.includes('|')) {
         const parts = raw.split('|').map((p) => p.trim()).filter(Boolean);
         const last = parts[parts.length - 1];
-        if (last && last.length >= 3 && last.length <= 80 && !/manufacturer|dealer|supplier|in india/i.test(last)) {
+        if (last && last.length >= 3 && last.length <= 80 && !/manufacturer|dealer|supplier|in india/i.test(last)
+            && !isGenericSeoCompanyTitle(last)) {
             return last;
         }
         const first = parts[0];
-        if (first.length >= 3 && first.length <= 80) return first;
+        if (first.length >= 3 && first.length <= 80 && !isGenericSeoCompanyTitle(first)) return first;
     }
     if (raw.length > 80) return `${raw.slice(0, 77)}...`;
     return raw;
@@ -248,7 +278,7 @@ export function buildVerifiedSourceAppearances({
             genuinenessId: String(gen._id),
             enrichmentId: String(enrich._id),
             qualificationId: qual ? String(qual._id) : '',
-            companyName: enrich.companyName || enrich.legalOrDisplayedName || cap.title || '',
+            companyName: enrich.canonicalCompanyName || enrich.companyName || enrich.legalOrDisplayedName || cap.title || '',
             websiteUrl: enrich.websiteUrl || cap.resultUrlOriginal || cap.resultUrlNormalized || '',
             canonicalDomain: enrich.canonicalDomain || cap.displayDomain || '',
             sourceTitle: cap.title || '',
@@ -295,7 +325,7 @@ export function buildVerifiedSourceAppearances({
             genuinenessId: String(gen._id),
             enrichmentId: enrich ? String(enrich._id) : String(gen.enrichmentId || ''),
             qualificationId: String(gen.qualificationId || ''),
-            companyName: gen.companyName || enrich?.companyName || '',
+            companyName: enrich?.canonicalCompanyName || gen.companyName || enrich?.companyName || '',
             websiteUrl: gen.websiteUrl || enrich?.websiteUrl || '',
             canonicalDomain: gen.canonicalDomain || enrich?.canonicalDomain || '',
             sourceTitle: gen.companyName || '',
@@ -365,10 +395,33 @@ export function groupAppearancesIntoCanonicalCompanies(appearances = []) {
         }
         return x;
     }
+    function gstinsInComponent(root) {
+        const out = new Set();
+        for (const app of list) {
+            if (find(app.appearanceId) !== root) continue;
+            const g = normalizedMergeGstin(app.enrichment?.gstin);
+            if (g) out.add(g);
+        }
+        return out;
+    }
+
     function union(a, b) {
         const ra = find(a);
         const rb = find(b);
-        if (ra !== rb) parent.set(rb, ra);
+        if (ra === rb) return;
+        const ga = gstinsInComponent(ra);
+        const gb = gstinsInComponent(rb);
+        if (ga.size && gb.size) {
+            let shared = false;
+            for (const g of ga) {
+                if (gb.has(g)) {
+                    shared = true;
+                    break;
+                }
+            }
+            if (!shared) return;
+        }
+        parent.set(rb, ra);
     }
 
     const keyOwners = new Map(); // strongKey -> appearanceId
@@ -389,14 +442,17 @@ export function groupAppearancesIntoCanonicalCompanies(appearances = []) {
         // Secondary contact keys merge only for non-directory official/hosted businesses
         if (!app.isDirectory) {
             for (const p of (en.phones || [])) {
+                if (isDirectorySourcedMergeContact(p)) continue;
                 const k = normalizePhoneKey(p.normalized || p.original || p.value);
                 if (k) claim(`phone:${k}`, app.appearanceId);
             }
             for (const p of (en.whatsappNumbers || [])) {
+                if (isDirectorySourcedMergeContact(p)) continue;
                 const k = normalizePhoneKey(p.normalized || p.original || p.value);
                 if (k) claim(`wa:${k}`, app.appearanceId);
             }
             for (const e of (en.emails || [])) {
+                if (isDirectorySourcedMergeContact(e)) continue;
                 const raw = typeof e === 'string' ? e : (e?.value || e?.address);
                 if (!isUsableMergeEmail(raw)) continue;
                 const k = normalizeEmailKey(raw);
@@ -457,6 +513,7 @@ function mapCanonicalCompany(group, index) {
     const companyName = shortCompanyName(
         bestGen?.companyName || primaryEn.companyName || group[0]?.companyName,
         domain,
+        primaryEn.canonicalCompanyName || bestGen?.canonicalCompanyName || '',
     );
 
     return {
@@ -545,7 +602,7 @@ export function buildCanonicalVerifiedCompanies({
 } = {}) {
     const {
         verifiedOnly = true,
-        includeDirectoryListings = true,
+        includeDirectoryListings = false,
         search = '',
         sort = 'sourceAppearances',
         sortDir = 'desc',
@@ -564,11 +621,16 @@ export function buildCanonicalVerifiedCompanies({
     let appearances = allAppearances;
     if (verifiedOnly) {
         appearances = allAppearances.filter((a) => {
-            if (!includeDirectoryListings && (a.isDirectory
-                || a.genuineness?.systemDecision === 'directory_or_marketplace_only')) {
-                return false;
+            const discoveryOnly = isNonCompanyDiscoveryEntity(
+                a.enrichment || {},
+                a.genuineness || {},
+                a.qualification || {},
+            );
+            if (discoveryOnly) {
+                if (!includeDirectoryListings) return false;
+                return Boolean(a.genuineness) && a.genuineness.verificationStatus !== 'failed';
             }
-            return isEligibleForFinalVerified(a.genuineness, a.enrichment);
+            return isEligibleForFinalVerified(a.genuineness, a.enrichment, a.qualification);
         });
     }
 

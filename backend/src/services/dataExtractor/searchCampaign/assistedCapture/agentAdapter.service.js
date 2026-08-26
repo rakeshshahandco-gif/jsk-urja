@@ -4,9 +4,12 @@ import { AssistedCaptureEvent } from '../../../../models/assistedCaptureEvent.mo
 import { SearchQuery } from '../../../../models/searchQuery.model.js';
 import { DiscoveryAgentJob } from '../../../../models/discoveryAgentJob.model.js';
 import { ApiError } from '../../../../utils/ApiError.js';
-import { AGENT_HEARTBEAT_STATUS_ALLOWED } from './constants.js';
+import { AGENT_HEARTBEAT_STATUS_ALLOWED, SESSION_ALLOWED_TTL_MINUTES_MAX } from './constants.js';
 import { submitAssistedCaptureEvent } from './event.service.js';
-import { assertSessionTokenHeader, hashSessionToken } from './sessionToken.util.js';
+import { assertSessionTokenHeader, hashSessionToken, issueSessionToken } from './sessionToken.util.js';
+
+const CHINA_ASSISTED_RECLAIM_SOURCES = Object.freeze(['1688', 'baidu', 'sogou', 'so360']);
+const RECLAIMABLE_STATUSES = Object.freeze(['manual_action_required', 'opening', 'awaiting_user']);
 
 function requireObjectId(id, label) {
     if (!id || !mongoose.isValidObjectId(id)) throw new ApiError(404, `${label} not found`);
@@ -64,14 +67,16 @@ export async function pollQueuedSessionId(companyId) {
         .select('_id status searchUrl')
         .lean();
     if (!session) return null;
+    return pollSessionSummary(session);
+}
 
+function pollSessionSummary(session) {
     let searchUrlHost = '';
     try {
         searchUrlHost = new URL(String(session.searchUrl || '')).host || '';
     } catch {
         searchUrlHost = '';
     }
-
     return {
         _id: session._id,
         status: session.status,
@@ -79,9 +84,47 @@ export async function pollQueuedSessionId(companyId) {
     };
 }
 
+/**
+ * Re-attach a live China assisted session whose visible browser died,
+ * without creating a new campaign or queued child session.
+ */
+export async function pollReclaimableAssistedSession(companyId) {
+    const session = await AssistedCaptureSession.findOne({
+        companyId,
+        status: { $in: RECLAIMABLE_STATUSES },
+        source: { $in: CHINA_ASSISTED_RECLAIM_SOURCES },
+    })
+        .sort({ updatedAt: -1 })
+        .select('_id status searchUrl source')
+        .lean();
+    if (!session) return null;
+    return pollSessionSummary(session);
+}
+
 /** Alias used by listen flow: poll then claim separately. */
 export async function pollQueuedAssistedCapture({ companyId }) {
     return pollQueuedSessionId(companyId);
+}
+
+async function reclaimAssistedCaptureSession({ companyId, sessionId, agentInstanceId }) {
+    const session = await AssistedCaptureSession.findOne({
+        companyId,
+        _id: sessionId,
+        status: { $in: RECLAIMABLE_STATUSES },
+        source: { $in: CHINA_ASSISTED_RECLAIM_SOURCES },
+    });
+    if (!session) return null;
+
+    const now = new Date();
+    const issued = issueSessionToken(now, SESSION_ALLOWED_TTL_MINUTES_MAX);
+    session.agentId = agentInstanceId;
+    session.tokenHash = issued.hash;
+    session.tokenExpiresAt = issued.expiresAt;
+    session.tokenDeliveredAt = now;
+    session.sessionExpiresAt = new Date(now.getTime() + SESSION_ALLOWED_TTL_MINUTES_MAX * 60 * 1000);
+    session.lastHeartbeatAt = now;
+    await session.save();
+    return { session: sanitizeSession(session), sessionToken: issued.plain, reclaimed: true };
 }
 
 export async function claimAssistedCaptureSession({ companyId, sessionId, agentInstanceId }) {
@@ -95,7 +138,17 @@ export async function claimAssistedCaptureSession({ companyId, sessionId, agentI
     }
 
     const session = await AssistedCaptureSession.findOne(filter).sort({ createdAt: 1 });
-    if (!session) throw new ApiError(404, 'No queued assisted capture session found');
+    if (!session) {
+        if (sessionId) {
+            const reclaimed = await reclaimAssistedCaptureSession({
+                companyId,
+                sessionId,
+                agentInstanceId: safeAgentId,
+            });
+            if (reclaimed) return reclaimed;
+        }
+        throw new ApiError(404, 'No queued assisted capture session found');
+    }
 
     session.agentId = safeAgentId;
     session.status = 'agent_assigned';
@@ -211,6 +264,10 @@ export async function setManualActionRequired({ companyId, sessionId, agentInsta
         session,
         tokenHeaderValue: token,
     });
+    const terminal = ['completed', 'cancelled', 'expired', 'failed'];
+    if (terminal.includes(session.status) || session.autoCollection?.ownerStoppedAt || session.autoCollection?.stopRequested) {
+        return { session: sanitizeSession(session), ignored: true, reason: 'session_stopped' };
+    }
     session.status = 'manual_action_required';
     session.manualActionMessage = String(message || 'Manual action required').replace(/[\r\n]+/g, ' ').slice(0, 500);
     session.lastHeartbeatAt = new Date();
@@ -266,14 +323,19 @@ export async function failAssistedByAgent({ companyId, sessionId, agentInstanceI
         return { session: sanitizeSession(updated || session), ignoredFail: true };
     }
 
+    const failCode = String(code || 'AGENT_FAILED').slice(0, 80);
+    const failMessage = String(message || 'Assisted capture failed').replace(/[\r\n]+/g, ' ').slice(0, 500);
     const updated = await AssistedCaptureSession.findOneAndUpdate(
         { _id: session._id, companyId, status: { $nin: ['completed', 'cancelled', 'expired'] } },
         {
             $set: {
                 status: 'failed',
                 failedAt: new Date(),
-                failCode: String(code || 'AGENT_FAILED').slice(0, 80),
-                failMessage: String(message || 'Assisted capture failed').replace(/[\r\n]+/g, ' ').slice(0, 500),
+                failCode,
+                failMessage,
+                'autoCollection.lastErrorCode': failCode,
+                'autoCollection.lastErrorMessage': failMessage,
+                'autoCollection.discoveryStatus': 'failed',
             },
         },
         { new: true },

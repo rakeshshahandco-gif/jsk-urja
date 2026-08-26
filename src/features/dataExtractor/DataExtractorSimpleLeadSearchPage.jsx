@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
+import { PATHS } from '@/routes/paths';
 import { useFinancialYear } from '@/contexts/FinancialYearContext';
 import { dataExtractorApi } from '@/services/dataExtractorApi';
-import { PATHS } from '@/routes/paths';
 import {
     Rocket, Info, PlayCircle, ShieldAlert, Search, Database, Sparkles,
     CheckCircle2, AlertTriangle, XCircle, RefreshCw, ChevronRight, Layers, Ban,
@@ -12,13 +12,18 @@ import styles from './DataExtractorSimpleLeadSearchPage.module.css';
 import {
     AUTO_RESUME_BACKLOG_MESSAGE,
     CAMPAIGN_LOAD_ERROR_MESSAGE,
+    formatSimpleSearchLabel,
+    formatBusinessTypeField,
+    nextSimpleBusinessTypes,
     reconcileBucketsFromCounts,
     safeGeneratedQueries,
     safeQueryIndex,
+    lastVisibleRunError,
     safeQueryTotal,
     shouldKeepPollingForAutoProcessing,
 } from './simpleLeadSearchUi.js';
 import SimpleLeadSearchCapturedDataPanel from './SimpleLeadSearchCapturedDataPanel.jsx';
+import SimpleLeadSearchLiveActivityPanel from './SimpleLeadSearchLiveActivityPanel.jsx';
 import DataExtractorActiveRunsPanel from './DataExtractorActiveRunsPanel.jsx';
 
 class SimpleLeadSearchErrorBoundary extends React.Component {
@@ -89,7 +94,62 @@ const btn = (bg, disabled) => ({
 const INACTIVE = new Set(['completed', 'cancelled', 'expired', 'failed']);
 const GOOGLE_READY = new Set(['awaiting_user', 'ready_to_capture']);
 const OPENING = new Set(['queued', 'agent_assigned', 'opening']);
+const INDIA_DEFAULT_BUSINESS_TYPES = ['Manufacturer'];
+const SIMPLE_BUSINESS_TYPES = ['Manufacturer', 'Supplier', 'Distributor', 'Dealer', 'Exporter', 'Importer', 'Wholesaler', 'Service Provider', 'Any Business'];
+const CHINA_DEFAULT_BUSINESS_TYPES = ['Manufacturer', 'OEM / ODM', 'Supplier'];
+const CHINA_DEFAULT_SOURCES = ['1688', 'baidu', 'sogou', 'so360', 'alibaba', 'made_in_china', 'global_sources', 'google_global'];
+const CHINA_SOURCE_BADGES = [
+    { id: '1688', label: '1688 Direct', status: 'Ready' },
+    { id: 'baidu', label: 'Baidu', status: 'Ready' },
+    { id: 'sogou', label: 'Sogou', status: 'Ready' },
+    { id: 'so360', label: '360 Search', status: 'Ready' },
+    { id: 'alibaba', label: 'Alibaba Indexed', status: 'Ready' },
+    { id: 'made_in_china', label: 'Made-in-China Indexed', status: 'Ready' },
+    { id: 'global_sources', label: 'Global Sources Indexed', status: 'Ready' },
+    { id: 'google_global', label: 'Google Web', status: 'Secondary' },
+];
+
+function chinaSourcePreviewLabel(platform) {
+    const p = String(platform || '').toLowerCase();
+    if (p === '1688') return '1688';
+    if (p === 'baidu') return 'Baidu';
+    if (p === 'sogou') return 'Sogou';
+    if (p === 'so360') return '360';
+    if (p === 'alibaba') return 'Alibaba Indexed';
+    if (p === 'made_in_china') return 'Made-in-China Indexed';
+    if (p === 'global_sources') return 'Global Sources Indexed';
+    if (p === 'google_global' || p === 'google') return 'Google';
+    return platform || '—';
+}
+
+function openingSourceLabel(session) {
+    const s = String(session?.source || session?.sourceHint || '').toLowerCase();
+    if (s === '1688') return '1688';
+    if (s === 'baidu') return 'Baidu';
+    if (s === 'sogou') return 'Sogou';
+    if (s === 'so360' || s === '360') return '360 Search';
+    return 'Google';
+}
+
+function manualActionCopy(session) {
+    const name = openingSourceLabel(session);
+    if (name !== 'Google') {
+        return {
+            title: `${name} requires verification.`,
+            detail: 'Complete verification in the Discovery Agent browser, then click Continue After Manual Action.',
+        };
+    }
+    return {
+        title: 'Manual action required in the Google window.',
+        detail: 'Resolve consent or CAPTCHA in the managed Google window, then click Continue After Manual Action.',
+    };
+}
 const CAPTURE_OK = new Set(['awaiting_user', 'ready_to_capture', 'manual_action_required', 'capturing']);
+
+function isChinaCountryInput(country) {
+    const c = String(country || '').trim().toLowerCase();
+    return c === 'china' || c === 'cn' || c === 'prc' || c === "people's republic of china";
+}
 
 function agentLabel(status) {
     if (!status) return { text: 'Checking agent...', color: '#64748b', online: false };
@@ -102,11 +162,11 @@ function agentLabel(status) {
 function sessionBanner(session, uiLabel, manualMessage, opts = {}) {
     const status = session?.status || '';
     if (status === 'manual_action_required') {
+        const copy = manualActionCopy(session);
         return {
             tone: 'warn',
-            title: 'Manual action required in the Google window.',
-            detail: manualMessage
-                || 'Resolve consent or CAPTCHA in the managed Google window, then continue in CRM.',
+            title: copy.title,
+            detail: manualMessage || copy.detail,
         };
     }
     if (GOOGLE_READY.has(status)) {
@@ -147,11 +207,25 @@ function sessionBanner(session, uiLabel, manualMessage, opts = {}) {
                 || 'Discovery Agent could not claim/open managed Google Search. Fix the agent (listen on 5100), then Retry.',
         };
     }
-    if (INACTIVE.has(status)) {
+    if (status === 'cancelled' || opts.ownerStopped) {
         return {
             tone: 'done',
-            title: 'Session ended. Start a new search.',
-            detail: uiLabel && !INACTIVE.has(uiLabel) ? uiLabel : 'This session is no longer active. Export is still available for preserved captures.',
+            title: 'STOPPED BY USER',
+            detail: 'This search is stopped. Collected results remain viewable and exportable. Start a new search to continue.',
+        };
+    }
+    if (INACTIVE.has(status)) {
+        if (opts.campaignActive && !opts.ownerStopped) {
+            return {
+                tone: 'info',
+                title: 'Continuing next source',
+                detail: 'This query finished. The campaign is still running on the next source.',
+            };
+        }
+        return {
+            tone: 'done',
+            title: opts.ownerStopped ? 'STOPPED BY USER' : 'Campaign ended',
+            detail: uiLabel && !INACTIVE.has(uiLabel) ? uiLabel : 'This campaign is no longer active. Export is still available for preserved captures.',
         };
     }
     return { tone: 'info', title: uiLabel || status || 'Working...', detail: '' };
@@ -165,9 +239,14 @@ const toneStyle = {
 };
 
 function softSessionError(err) {
-    const msg = err?.response?.data?.message || err?.message || '';
-    if (/status|inactive|completed|expired|cancelled|failed|session ended|no longer active|ended/i.test(String(msg))) {
-        return 'Session ended. Start a new search.';
+    const apiMsg = String(err?.response?.data?.message || '').trim();
+    const msg = apiMsg || String(err?.message || '').trim();
+    if (/session ended\. start a new search/i.test(msg) && /before auto collection|then use open next/i.test(msg)) {
+        return msg;
+    }
+    if (/campaign validation failed/i.test(msg)) return msg.slice(0, 500);
+    if (/request failed with status code/i.test(msg)) {
+        return apiMsg || 'Request failed';
     }
     return msg || 'Request failed';
 }
@@ -256,12 +335,13 @@ function formatPhoneCell(phone) {
 
 export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = null, runMode = false } = {}) {
     const params = useParams();
+    const navigate = useNavigate();
     const resumeSessionId = initialSessionId || params.sessionId || null;
     const { selectedFY } = useFinancialYear();
     const [form, setForm] = useState({
         product: '',
         relatedKeywords: '',
-        businessTypes: ['Manufacturer', 'Provider', 'Supplier', 'System Integrator'],
+        businessTypes: ['Manufacturer'],
         locationScope: 'city',
         city: '',
         state: '',
@@ -320,6 +400,10 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
         requestedCaptureTarget: 100,
     });
     const [autoProcessing, setAutoProcessing] = useState(null);
+    const [liveActivity, setLiveActivity] = useState(null);
+    const [liveActivityFilter, setLiveActivityFilter] = useState('all');
+    const [liveActivityLimit, setLiveActivityLimit] = useState(50);
+    const [liveActivityLoading, setLiveActivityLoading] = useState(false);
     const [showManualStages, setShowManualStages] = useState(false);
     const [autoProcessingOptions, setAutoProcessingOptions] = useState({
         enabled: true,
@@ -340,19 +424,36 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
     const [ownerFullAuto, setOwnerFullAuto] = useState(true);
     const autoBootPendingRef = useRef(false);
     const autoBootInFlightRef = useRef(false);
+    const startInFlightRef = useRef(false);
     const bootFullAutomaticProcessRef = useRef(null);
     const lastRowCountRef = useRef(0);
     const pollBusyRef = useRef(false);
     const wasCapturingRef = useRef(false);
+    const lastErrorToastRef = useRef({ key: '', at: 0 });
+    const boundRunIdRef = useRef(resumeSessionId || '');
+    const [campaignActive, setCampaignActive] = useState(true);
+
+    const toastErrorOnce = useCallback((key, message) => {
+        const msg = String(message || '').trim() || 'Request failed';
+        if (lastErrorToastRef.current.key === key) return;
+        lastErrorToastRef.current = { key, at: Date.now() };
+        toast.error(msg);
+    }, []);
+
+    const bindRunId = useCallback((sid) => {
+        const id = String(sid || '').trim();
+        if (!id || boundRunIdRef.current === id) return;
+        boundRunIdRef.current = id;
+        const target = PATHS.DATA_EXTRACTOR.RUN(id);
+        if (params.sessionId !== id) {
+            navigate(target, { replace: true });
+        }
+    }, [navigate, params.sessionId]);
 
     const onChange = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
     const toggleBusinessType = (id) => {
-        setForm((f) => {
-            const has = f.businessTypes.includes(id);
-            const businessTypes = has ? f.businessTypes.filter((x) => x !== id) : [...f.businessTypes, id];
-            return { ...f, businessTypes };
-        });
+        setForm((f) => ({ ...f, businessTypes: nextSimpleBusinessTypes(f.businessTypes, id) }));
         setQueryPreview(null);
     };
 
@@ -421,6 +522,11 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
         if (data.autoCollection !== undefined) setAutoCollection(data.autoCollection);
                 lastUpdatedRef.current = Date.now();
         if (data.autoProcessing !== undefined) setAutoProcessing(data.autoProcessing);
+        if (data.campaignActive !== undefined) setCampaignActive(Boolean(data.campaignActive));
+        if (data.sessionEnded && data.campaignActive === false && data.sessionEndedMessage) {
+            const sid = data.session?._id || '';
+            toastErrorOnce(`ended:${sid}`, data.sessionEndedMessage);
+        }
         if (data.autoCollectionSessionId) {
             const newSid = data.autoCollectionSessionId;
             setSession((prev) => {
@@ -437,6 +543,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                     ? { selectedQuery: data.autoCollectionSelectedQuery }
                     : {}),
             }));
+            bindRunId(newSid);
         }
         if (data.session) {
             const key = pageCaptureKey(data.session);
@@ -450,7 +557,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
         if (Array.isArray(data.recentRawCaptures) && data.recentRawCaptures.length) {
             setRows((prev) => (prev.length >= data.recentRawCaptures.length ? prev : data.recentRawCaptures));
         }
-    }, []);
+    }, [toastErrorOnce, bindRunId]);
 
     const refreshAgent = useCallback(async (sessionId) => {
         try {
@@ -492,6 +599,22 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
         }
     }, []);
 
+    const refreshLiveActivity = useCallback(async (sessionId) => {
+        if (!sessionId) return;
+        try {
+            setLiveActivityLoading(true);
+            const data = await dataExtractorApi.simpleLeadSearchLiveActivity(sessionId, {
+                limit: liveActivityLimit,
+                filter: liveActivityFilter,
+            });
+            setLiveActivity(data || null);
+        } catch {
+            /* keep last snapshot */
+        } finally {
+            setLiveActivityLoading(false);
+        }
+    }, [liveActivityFilter, liveActivityLimit]);
+
     // Resume persistent run from dedicated /runs/:sessionId tab (or initialSessionId prop)
     useEffect(() => {
         if (!resumeSessionId) return undefined;
@@ -505,7 +628,10 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                 campaign: data.campaign || prev?.campaign,
             }));
             setSession(data.session || { _id: resumeSessionId });
-            await refreshResults(resumeSessionId);
+            if (ownerFullAuto) autoBootPendingRef.current = true;
+            const liveSid = data.autoCollectionSessionId || data.session?._id || resumeSessionId;
+            bindRunId(liveSid);
+            await refreshResults(liveSid);
         })();
         return () => { cancelled = true; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -518,10 +644,33 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
     }, [refreshAgent, session?._id]);
 
     useEffect(() => {
+        if (!isChinaCountryInput(form.country)) return;
+        setForm((f) => {
+            const alreadyChina = f.searchMarket === 'china_suppliers'
+                && Array.isArray(f.selectedSources)
+                && f.selectedSources.includes('baidu')
+                && f.selectedSources.includes('1688')
+                && f.selectedSources.includes('sogou')
+                && f.selectedSources.includes('so360');
+            const indiaDefaults = INDIA_DEFAULT_BUSINESS_TYPES.every((bt) => f.businessTypes.includes(bt))
+                && f.businessTypes.length === INDIA_DEFAULT_BUSINESS_TYPES.length;
+            if (alreadyChina && !indiaDefaults) return f;
+            return {
+                ...f,
+                searchMarket: 'china_suppliers',
+                selectedSources: CHINA_DEFAULT_SOURCES,
+                ...(indiaDefaults || !alreadyChina ? { businessTypes: CHINA_DEFAULT_BUSINESS_TYPES } : {}),
+            };
+        });
+    }, [form.country]);
+
+    useEffect(() => {
         const sid = session?._id || result?.session?._id;
         if (!sid) return undefined;
         const keepForAp = shouldKeepPollingForAutoProcessing(autoProcessing, ownerFullAuto);
-        if (INACTIVE.has(session?.status) && !keepForAp) return undefined;
+        const backlog = Number(autoProcessing?.counts?.processingBacklog || 0);
+        if (INACTIVE.has(session?.status) && campaignActive === false && backlog <= 0 && !keepForAp) return undefined;
+        if (INACTIVE.has(session?.status) && campaignActive === false && backlog <= 0 && autoProcessing?.status !== 'running') return undefined;
 
         let stopped = false;
         const tick = async () => {
@@ -537,7 +686,8 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                 || (data?.recentRawCaptures || []).length > lastRowCountRef.current
                 || autoRefreshing
                 || Number(data?.autoProcessing?.counts?.processingBacklog || 0) > 0;
-            const pollSid = data?.autoCollectionSessionId || sid;
+            const pollSid = data?.autoCollectionSessionId || data?.session?._id || sid;
+            if (pollSid && String(pollSid) !== String(sid)) bindRunId(pollSid);
 
             if (st === 'capturing') wasCapturingRef.current = true;
             if (wasCapturingRef.current && st !== 'capturing') {
@@ -557,6 +707,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                 && autoBootPendingRef.current
                 && !autoBootInFlightRef.current
                 && GOOGLE_READY.has(st)
+                && !INACTIVE.has(st)
                 && acSt !== 'running'
                 && !String(acSt || '').startsWith('paused_')
             ) {
@@ -567,6 +718,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
             if (ownerFullAuto && (acSt === 'running' || data?.autoProcessing?.status === 'running')) {
                 // stage tables refresh via their own intervals when jobs active; nudge here too
             }
+            await refreshLiveActivity(pollSid);
         };
         tick();
         const t = setInterval(tick, 2000);
@@ -574,7 +726,14 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
             stopped = true;
             clearInterval(t);
         };
-    }, [session?._id, session?.status, result?.session?._id, refreshSession, refreshResults, ownerFullAuto, autoProcessing?.status, autoProcessing?.enabled, autoProcessing?.counts?.processingBacklog]);
+    }, [session?._id, session?.status, result?.session?._id, refreshSession, refreshResults, refreshLiveActivity, ownerFullAuto, autoProcessing?.status, autoProcessing?.enabled, autoProcessing?.counts?.processingBacklog, campaignActive, bindRunId]);
+
+    useEffect(() => {
+        const sid = session?._id || result?.session?._id;
+        if (!sid) return undefined;
+        refreshLiveActivity(sid);
+        return undefined;
+    }, [session?._id, result?.session?._id, refreshLiveActivity]);
 
 
     const refreshEnrichment = useCallback(async (sessionId) => {
@@ -658,6 +817,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
 
     const onSearch = async (e) => {
         e.preventDefault();
+        if (busy || startInFlightRef.current) return;
         if (!form.product.trim()) {
             toast.error('Enter Product / Industry');
             return;
@@ -669,18 +829,11 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
             );
             if (!ok) return;
         }
+        startInFlightRef.current = true;
         setBusy('start');
         setCaptureCompletedFlash(false);
         setSamePageCaptureLocked(false);
         lastCapturedPageKeyRef.current = '';
-        // Popup-safe: open tab synchronously on user click, navigate after jobId exists
-        const runWindowName = 'de-run-pending';
-        let runWin = null;
-        try {
-            runWin = window.open('about:blank', runWindowName);
-        } catch {
-            runWin = null;
-        }
         try {
             const enabledQueryTexts = (queryPreview?.queries || [])
                 .filter((q) => q.enabled !== false)
@@ -704,12 +857,25 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                 financialYear: selectedFY,
                 idempotencyKey: `sls-ui-${Date.now()}`,
             });
+            const sid = data?.session?._id;
+            if (!sid) {
+                throw new Error('Start API failed: session was not created');
+            }
+            const sourceKey = String(data.session?.source || data.selectedQuery?.sourcePlatform || 'google').toLowerCase();
+            const sourceLabel = sourceKey.includes('baidu') ? 'Baidu' : (sourceKey.includes('1688') ? '1688' : 'Google');
+            const launchUrl = String(data.session?.searchUrl || '').trim();
             setResult(data);
             setSession(data.session || null);
+            lastErrorToastRef.current = { key: '', at: 0 };
+            bindRunId(sid);
+            if (!launchUrl || launchUrl === 'about:blank') {
+                toast.error(`Source launch failed: ${sourceLabel} — Source URL unavailable`);
+                return;
+            }
             setCaptureStats(null);
             setAutoCollection(null);
             setAutoProcessing(null);
-            setSessionUiLabel(data.agentStatus?.sessionLabel || 'Opening Google');
+            setSessionUiLabel(data.agentStatus?.sessionLabel || `Opening ${sourceLabel}`);
             captureCountRef.current = 0;
             lastRowCountRef.current = 0;
             wasCapturingRef.current = false;
@@ -727,46 +893,28 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                     continueWhileCollecting: true,
                     retryTemporaryFailures: true,
                     maxRetryAttempts: 2,
-                    batchSize: Number(o.batchSize) || 10,
+                    batchSize: Number(o.batchSize || 10),
                 }));
             } else {
                 autoBootPendingRef.current = false;
             }
-            const sid = data?.session?._id;
-            if (sid) {
-                const runUrl = `${window.location.origin}${PATHS.DATA_EXTRACTOR.RUN(sid)}`;
-                const winName = `de-run-${sid}`;
-                if (runWin && !runWin.closed) {
-                    try {
-                        runWin.name = winName;
-                        runWin.location.href = runUrl;
-                    } catch {
-                        window.open(runUrl, winName);
-                    }
-                } else {
-                    window.open(runUrl, winName);
-                }
-            } else if (runWin && !runWin.closed) {
-                runWin.close();
+            const agentOnline = data?.agentStatus?.online !== false
+                && data?.agentStatus?.agentOnline !== false
+                && data?.agentStatus?.connected !== false;
+            if (!agentOnline) {
+                toast.error(`Source launch failed: ${sourceLabel} — Agent Offline`);
+            } else {
+                toast.success(
+                    `Started ${sourceLabel}. Discovery Agent opens the search in its browser. This CRM page is the run.`,
+                );
             }
-            toast.success(
-                ownerFullAuto
-                    ? (data.campaignAction === 'reused'
-                        ? 'Campaign reused — opening Google, then automatic process will start'
-                        : 'Opening Google — automatic collect → enrich → qualify → verify will start when ready')
-                    : (data.campaignAction === 'reused'
-                        ? 'Campaign reused - opening Google'
-                        : 'Campaign created - opening Google'),
-            );
             if (data.autoCollectionStoppedWarning) {
                 toast.warning(data.autoCollectionStoppedWarning);
             }
         } catch (err) {
-            if (runWin && !runWin.closed) {
-                try { runWin.close(); } catch { /* ignore */ }
-            }
-            toast.error(ownerFacingSearchError(err));
+            toast.error(ownerFacingSearchError(err, 'Source launch failed: Start API failed'));
         } finally {
+            startInFlightRef.current = false;
             setBusy('');
         }
     };
@@ -1003,7 +1151,10 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                 pagesPerBatch: Number(autoCollectionOptions.pagesPerBatch) || 10,
                 maxSafetyPagesPerQuery: Number(autoCollectionOptions.maxSafetyPagesPerQuery) || 30,
                 pauseAfterEachBatch: false,
-                maxQueries: Number(autoCollectionOptions.maxQueries) || 24,
+                maxQueries: Math.max(
+                    Number(autoCollectionOptions.maxQueries) || 24,
+                    Number(campaignProgress?.queryTotal) || 0,
+                ) || 24,
                 delayMinSec: Number(autoCollectionOptions.delayMinSec) || 20,
                 delayMaxSec: Number(autoCollectionOptions.delayMaxSec) || 40,
                 stopAtUnique: 0,
@@ -1045,12 +1196,16 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
             refreshGenuineness(pipeSid);
             return true;
         } catch (err) {
-            toast.error(softSessionError(err) || 'Could not start automatic process yet — waiting for Google Ready');
+            const msg = softSessionError(err) || 'Could not start automatic process yet — waiting for Google Ready';
+            toastErrorOnce(`boot:${sessionId}:${msg.slice(0, 120)}`, msg);
+            if (err?.response?.status === 400 && (/campaign validation failed/i.test(msg) || /session ended/i.test(msg))) {
+                autoBootPendingRef.current = false;
+            }
             return false;
         } finally {
             autoBootInFlightRef.current = false;
         }
-    }, [autoCollectionOptions, autoProcessingOptions, applyStatusPayload, refreshSession, refreshEnrichment, refreshQualification, refreshGenuineness]);
+    }, [autoCollectionOptions, autoProcessingOptions, applyStatusPayload, refreshSession, refreshEnrichment, refreshQualification, refreshGenuineness, campaignProgress?.queryTotal, toastErrorOnce]);
     bootFullAutomaticProcessRef.current = bootFullAutomaticProcess;
 
     const onPauseAutomaticProcess = async () => {
@@ -1127,16 +1282,10 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
         if (!sid) return;
         setBusy('pipeStop');
         try {
-            try {
-                const ac = await dataExtractorApi.simpleLeadSearchAutoCollectionStop(sid);
-                applyStatusPayload(ac);
-                if (ac?.autoCollection) setAutoCollection(ac.autoCollection);
-            } catch { /* soft */ }
-            try {
-                const pipe = await dataExtractorApi.simpleLeadSearchAutoProcessingStop(sid, { stopJobs: true });
-                setAutoProcessing(pipe.autoProcessing || null);
-            } catch { /* soft */ }
-            toast.success('Stopped all processing. Completed work is preserved.');
+            const data = await dataExtractorApi.simpleLeadSearchStop(sid);
+            applyStatusPayload(data);
+            if (data?.autoCollection) setAutoCollection(data.autoCollection);
+            toast.success('STOPPED BY USER. Collected results are preserved.');
             await refreshSession(sid);
             await refreshResults(sid);
         } catch (err) {
@@ -1334,7 +1483,8 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
             return;
         }
         if (INACTIVE.has(activeSession.status)) {
-            toast.error('Session ended. Start a new search.');
+            if (campaignActive) return;
+            toastErrorOnce(`ended:${activeSession._id}`, 'Session ended. Start a new search.');
             return;
         }
         setBusy('capture');
@@ -1387,20 +1537,10 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
         setBusy('stop');
         setCaptureCompletedFlash(false);
         try {
-            // Owner Stop Search: stop Google/Auto Collection only; leave CP6→CP8 running on captured data
-            if (
-                ownerFullAuto
-                || ['running', 'paused_owner', 'paused_manual', 'paused_batch'].includes(autoCollection?.status)
-            ) {
-                const data = await dataExtractorApi.simpleLeadSearchAutoCollectionStop(activeSession._id);
-                applyStatusPayload(data);
-                if (data?.autoCollection) setAutoCollection(data.autoCollection);
-                toast.success('Search stopped. Already captured records continue enrich → qualify → verify.');
-            } else {
-                const data = await dataExtractorApi.simpleLeadSearchStop(activeSession._id);
-                applyStatusPayload(data);
-                toast.success('Search stopped');
-            }
+            const data = await dataExtractorApi.simpleLeadSearchStop(activeSession._id);
+            applyStatusPayload(data);
+            if (data?.autoCollection) setAutoCollection(data.autoCollection);
+            toast.success('STOPPED BY USER. Collected results are preserved.');
             await refreshSession(activeSession._id);
             await refreshResults(activeSession._id);
             refreshEnrichment(activeSession._id);
@@ -1871,7 +2011,11 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
         ? { ...activeSession, status: 'capture_completed_ui' }
         : activeSession;
     const banner = bannerSession
-        ? sessionBanner(bannerSession, sessionUiLabel || agentStatus?.sessionLabel, ownerErrorMessage || activeSession?.failMessage || activeSession?.manualActionMessage, { fullAuto: ownerFullAuto })
+        ? sessionBanner(bannerSession, sessionUiLabel || agentStatus?.sessionLabel, ownerErrorMessage || activeSession?.failMessage || activeSession?.manualActionMessage, {
+            fullAuto: ownerFullAuto,
+            campaignActive,
+            ownerStopped: Boolean(autoCollection?.ownerStoppedAt || autoCollection?.stopRequested || status === 'cancelled'),
+        })
         : null;
 
     const capturedUnique = Number(autoProcessing?.counts?.capturedUnique
@@ -1929,6 +2073,15 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
     const reconcile = reconcileBucketsFromCounts(autoProcessing?.counts || {});
     const queryIndex = safeQueryIndex(campaignProgress, result, autoCollection);
     const queryTotal = safeQueryTotal(campaignProgress, result, autoCollection);
+    const visibleRunError = lastVisibleRunError({
+        autoProcessing,
+        autoCollection,
+        session: activeSession,
+        status,
+    });
+    const sourceCaptured = campaignProgress?.capturedBySource
+        || result?.campaignProgress?.capturedBySource
+        || {};
     const generatedQueries = safeGeneratedQueries(campaignProgress, result);
     const googlePage = autoCollection?.googlePage
         || (campaignProgress || result?.campaignProgress)?.googlePage
@@ -1946,7 +2099,12 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
     let processTitle = 'Automatic Process';
     let pulseClass = styles.pulseGrey;
     let statusBadge = { text: 'Ready', cls: styles.badgeGrey };
-    if (processManual) {
+    const ownerStoppedUi = Boolean(autoCollection?.ownerStoppedAt || autoCollection?.stopRequested || status === 'cancelled');
+    if (ownerStoppedUi) {
+        processTitle = 'STOPPED BY USER';
+        pulseClass = styles.pulseGrey;
+        statusBadge = { text: 'STOPPED BY USER', cls: styles.badgeGrey };
+    } else if (processManual) {
         processTitle = 'Manual Action Required';
         pulseClass = styles.pulseAmber;
         statusBadge = { text: 'Manual action required', cls: styles.badgeAmber };
@@ -1971,13 +2129,14 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
         pulseClass = styles.pulseGrey;
         statusBadge = { text: 'Completed', cls: styles.badgeGreen };
     } else if (OPENING.has(status)) {
-        processTitle = 'Opening Google';
+        const srcLabel = openingSourceLabel(activeSession);
+        processTitle = `Opening ${srcLabel}`;
         pulseClass = styles.pulseBlue;
-        statusBadge = { text: 'Opening Google', cls: styles.badgeBlue };
+        statusBadge = { text: `Opening ${srcLabel}`, cls: styles.badgeBlue };
     } else if (GOOGLE_READY.has(status) && ownerFullAuto) {
         processTitle = 'Automatic Process Starting';
         pulseClass = styles.pulseBlue;
-        statusBadge = { text: 'Google Ready', cls: styles.badgeBlue };
+        statusBadge = { text: `${openingSourceLabel(activeSession)} Ready`, cls: styles.badgeBlue };
     }
 
     const activeStage = (enrichingCount > 0 || autoProcessing?.currentStage === 'enrich')
@@ -2101,7 +2260,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
             ? 'Discovery Agent is opening the managed Google search.'
             : (processRunning
                 ? (capturedUnique ? 'Captured records are moving through Enrichment, Qualification and Verification.' : 'Automatic collection is running.')
-                : (processManual ? 'Manual action required in the Google window.'
+                : (processManual ? manualActionCopy(activeSession).title
                     : (processDone ? ((reviewCount || failedCount) ? 'Some records require review or retry.' : 'Automatic processing completed successfully.')
                         : (capturedUnique ? '' : 'No unique results captured yet.'))));
 
@@ -2160,6 +2319,26 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                 <span className={styles.agentDot} style={{ background: connected.color }} aria-hidden />
                 {connected.text}
             </div>
+            {isChinaCountryInput(form.country) ? (
+                <div style={{ margin: '8px 0 12px', padding: '10px 12px', border: '1px solid #c7d2fe', background: '#eef2ff', borderRadius: 8, fontSize: 13 }}>
+                    <div style={{ fontWeight: 700, marginBottom: 6 }}>China Native Supplier Discovery</div>
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 8, fontSize: 12, color: '#3730a3' }}>
+                        <span><strong>SEARCH LANGUAGE:</strong> Chinese Native + English Secondary</span>
+                        <span><strong>SOURCE PRIORITY:</strong> Chinese Native First</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+                        {CHINA_SOURCE_BADGES.map((src) => (
+                            <span key={src.id} style={{ border: '1px solid #a5b4fc', borderRadius: 6, padding: '2px 8px', background: '#fff' }}>
+                                {src.label}
+                                <span style={{ marginLeft: 6, color: src.status === 'Secondary' ? '#b45309' : '#15803d', fontSize: 11 }}>{src.status}</span>
+                            </span>
+                        ))}
+                    </div>
+                    <div style={{ color: '#4338ca' }}>
+                        China discovery prioritizes Chinese-native sources including 1688, Baidu, Sogou and 360 Search, followed by Google-indexed export marketplaces and Google Web. Login/CAPTCHA may require manual confirmation.
+                    </div>
+                </div>
+            ) : null}
 
             {showHowItWorks && (
                 <div className={styles.modalBackdrop} role="dialog" aria-modal="true" aria-label="How it works">
@@ -2180,17 +2359,57 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
             )}
 
             <form className={styles.card} onSubmit={onSearch}>
+                {!isChinaCountryInput(form.country) && (form.product.trim() || form.city.trim()) ? (
+                    <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 8, background: '#f8fafc', border: '1px solid #e2e8f0', fontSize: 15, fontWeight: 700, color: '#0f172a' }}>
+                        {formatSimpleSearchLabel(form.product, form.businessTypes, form.city || form.state)}
+                    </div>
+                ) : null}
                 <div className={styles.formGrid}>
                     <label className={styles.fieldWrap}>
-                        <span className={styles.label}>Product / Industry *</span>
-                        <input className={styles.field} value={form.product} onChange={(e) => { onChange('product')(e); setQueryPreview(null); }} placeholder="e.g. Home Automation" autoComplete="off" disabled={formLocked} />
+                        <span className={styles.label}>Keyword / Product *</span>
+                        <input className={styles.field} value={form.product} onChange={(e) => { onChange('product')(e); setQueryPreview(null); }} placeholder={isChinaCountryInput(form.country) ? '智能触摸开关,玻璃触摸开关' : 'e.g. LED Light'} autoComplete="off" disabled={formLocked} />
                     </label>
+                    {isChinaCountryInput(form.country) ? (
                     <label className={styles.fieldWrap}>
                         <span className={styles.label}>Related Keywords</span>
-                        <input className={styles.field} value={form.relatedKeywords} onChange={(e) => { onChange('relatedKeywords')(e); setQueryPreview(null); }} placeholder="Smart Switch, Tuya, KNX" autoComplete="off" disabled={formLocked} />
+                        <input className={styles.field} value={form.relatedKeywords} onChange={(e) => { onChange('relatedKeywords')(e); setQueryPreview(null); }} placeholder="涂鸦, Zigbee, WiFi, 蓝牙Mesh, 智能家居, 场景开关" autoComplete="off" disabled={formLocked} />
                     </label>
+                    ) : (
+                    <div className={`${styles.fieldWrap} ${styles.fieldWrapWide}`}>
+                        <span className={styles.label}>Business Type</span>
+                        <div className={styles.chips}>
+                            {form.businessTypes.length === 0 ? (
+                                <span style={{ fontSize: 12, color: '#94a3b8', padding: '0 6px' }}>Select one or more</span>
+                            ) : form.businessTypes.map((bt) => (
+                                <span key={bt} className={styles.chip}>
+                                    {bt}
+                                    {!formLocked && (
+                                        <button type="button" className={styles.chipRemove} aria-label={`Remove ${bt}`} onClick={() => toggleBusinessType(bt)}>×</button>
+                                    )}
+                                </span>
+                            ))}
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 16px', marginTop: 8 }}>
+                            {SIMPLE_BUSINESS_TYPES.map((bt) => (
+                                <label key={bt} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: formLocked ? '#94a3b8' : '#334155', cursor: formLocked ? 'not-allowed' : 'pointer' }}>
+                                    <input
+                                        type="checkbox"
+                                        disabled={formLocked}
+                                        checked={form.businessTypes.includes(bt)}
+                                        onChange={() => toggleBusinessType(bt)}
+                                    />
+                                    {bt}
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+                    )}
+                    {isChinaCountryInput(form.country) ? (
                     <div className={`${styles.fieldWrap} ${styles.fieldWrapWide}`}>
                         <span className={styles.label}>Business Types</span>
+                        <div style={{ fontSize: 12, color: '#64748b', margin: '4px 0 6px' }}>
+                            For China supplier-manufacturer search, Manufacturer / OEM / ODM / Supplier / Factory vocabulary ranks highest. Consultant, Contractor, Service Provider and System Integrator do not dominate unless you add them.
+                        </div>
                         <div className={styles.chips}>
                             {form.businessTypes.map((bt) => (
                                 <span key={bt} className={styles.chip}>
@@ -2212,6 +2431,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                             </div>
                         )}
                     </div>
+                    ) : null}
                     <label className={styles.fieldWrap}>
                         <span className={styles.label}>Location Scope</span>
                         <select className={styles.select} value={form.locationScope} disabled={formLocked} onChange={(e) => { setForm((f) => ({ ...f, locationScope: e.target.value })); setQueryPreview(null); }}>
@@ -2224,7 +2444,22 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                     {form.locationScope !== 'worldwide' && (
                         <label className={styles.fieldWrap}>
                             <span className={styles.label}>Country{(form.locationScope === 'state' || form.locationScope === 'country' || form.searchMarket === 'china_suppliers') ? ' *' : ''}</span>
-                            <input className={styles.field} value={form.country} onChange={(e) => { onChange('country')(e); setQueryPreview(null); }} placeholder={form.searchMarket === 'china_suppliers' ? 'China' : 'e.g. India'} autoComplete="off" disabled={formLocked} />
+                            <input className={styles.field} value={form.country} onChange={(e) => {
+                                const country = e.target.value;
+                                const cn = country.trim().toLowerCase();
+                                const isChina = cn === 'china' || cn === 'cn' || cn === 'prc';
+                                setForm((f) => ({
+                                    ...f,
+                                    country,
+                                    ...(isChina ? {
+                                        searchMarket: 'china_suppliers',
+                                        selectedSources: CHINA_DEFAULT_SOURCES,
+                                        locationScope: f.city ? f.locationScope : 'country',
+                                        businessTypes: CHINA_DEFAULT_BUSINESS_TYPES,
+                                    } : {}),
+                                }));
+                                setQueryPreview(null);
+                            }} placeholder={form.searchMarket === 'china_suppliers' ? 'China' : 'e.g. India'} autoComplete="off" disabled={formLocked} />
                         </label>
                     )}
                     {(form.locationScope === 'state' || form.locationScope === 'city') && (
@@ -2246,6 +2481,12 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                 </button>
                 {showAdvanced && (
                     <div className={styles.advancedBox}>
+                        {!isChinaCountryInput(form.country) ? (
+                            <label className={styles.fieldWrap} style={{ marginBottom: 10 }}>
+                                <span className={styles.label}>Related Keywords (optional)</span>
+                                <input className={styles.field} value={form.relatedKeywords} onChange={(e) => { onChange('relatedKeywords')(e); setQueryPreview(null); }} placeholder="Smart Switch, Tuya, KNX" autoComplete="off" disabled={formLocked} />
+                            </label>
+                        ) : null}
                         <label className={styles.fieldWrap} style={{ marginBottom: 10 }}>
                             <span className={styles.label}>Search Market / Source Mode</span>
                             <select
@@ -2258,18 +2499,21 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                                         ...f,
                                         searchMarket,
                                         country: searchMarket === 'china_suppliers' && !f.country ? 'China' : f.country,
-                                        selectedSources: searchMarket === 'china_suppliers' ? ['google_global'] : ['google_web'],
+                                        selectedSources: searchMarket === 'china_suppliers' ? CHINA_DEFAULT_SOURCES : ['google_web'],
+                                        businessTypes: searchMarket === 'china_suppliers' ? CHINA_DEFAULT_BUSINESS_TYPES : INDIA_DEFAULT_BUSINESS_TYPES,
                                     }));
                                     setQueryPreview(null);
                                 }}
                             >
                                 <option value="india_global_web">India / Global Web</option>
-                                <option value="china_suppliers">China Suppliers</option>
+                                <option value="china_suppliers">China Native Supplier Discovery</option>
                                 <option value="custom_country_global">Custom Country / Global Suppliers</option>
                             </select>
                         </label>
                         <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
-                            First release uses Google assisted visible capture. Direct Alibaba / 1688 / IndiaMART adapters are not claimed complete.
+                            {form.searchMarket === 'china_suppliers' || isChinaCountryInput(form.country)
+                                ? 'China discovery is Chinese-native first: 1688, Baidu, Sogou, 360 Search, then indexed B2B, then Google. Login/CAPTCHA may require manual confirmation. Direct Alibaba API is not claimed.'
+                                : 'India / Global Web uses Google assisted visible capture. Direct IndiaMART adapters are not claimed complete.'}
                         </div>
                         {form.locationScope === 'state' && (
                             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, marginBottom: 8 }}>
@@ -2336,15 +2580,53 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                     </label>
                 )}
 
+                {isChinaCountryInput(form.country) ? (
+                    <>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
+                            <button type="button" className={styles.howBtn} disabled={!!busy || previewBusy || formLocked} onClick={onGenerateQueries}>
+                                {previewBusy ? 'Generating preview…' : 'Preview queries'}
+                            </button>
+                            <span className={styles.helperText} style={{ margin: 0 }}>
+                                Inspect Source, Query and Language before starting. This does not start a campaign.
+                            </span>
+                        </div>
+                        {queryPreview?.queries?.length ? (
+                            <div style={{ marginBottom: 14, overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: 8 }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                                    <thead>
+                                        <tr style={{ background: '#f8fafc', textAlign: 'left' }}>
+                                            <th style={{ padding: '6px 8px' }}>#</th>
+                                            <th style={{ padding: '6px 8px' }}>Source</th>
+                                            <th style={{ padding: '6px 8px' }}>Language</th>
+                                            <th style={{ padding: '6px 8px' }}>Query</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {queryPreview.queries.map((q, i) => (
+                                            <tr key={`${q.sourcePlatform}-${q.queryText}-${i}`} style={{ borderTop: '1px solid #e2e8f0' }}>
+                                                <td style={{ padding: '6px 8px' }}>{i + 1}</td>
+                                                <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>{chinaSourcePreviewLabel(q.sourcePlatform)}</td>
+                                                <td style={{ padding: '6px 8px' }}>{q.queryLanguage === 'zh' ? 'Chinese' : (q.queryLanguage || 'en')}</td>
+                                                <td style={{ padding: '6px 8px' }}><code>{q.queryText}</code></td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : null}
+                    </>
+                ) : null}
                 <button type="submit" className={styles.primaryBtn} disabled={!!busy || formLocked}>
                     <span className={styles.primaryBtnRow}>
                         <Rocket size={18} aria-hidden />
-                        {busy === 'start' ? 'Starting Automatic Process...' : 'Search & Start Automatic Process'}
+                        {busy === 'start' ? 'Starting...' : 'Search & Start Automatic Process'}
                     </span>
                     <span className={styles.primaryHint}>Auto Collection and all checkpoints will run automatically.</span>
                 </button>
                 <p className={styles.helperText}>
-                    CRM will automatically collect, enrich, qualify and verify the data. You only need to handle Google CAPTCHA or consent when requested.
+                    {isChinaCountryInput(form.country)
+                        ? 'CRM will automatically collect, enrich, qualify and verify. For China, handle 1688 / Baidu / Sogou / 360 / Google login or CAPTCHA only when requested.'
+                        : 'CRM will automatically collect, enrich, qualify and verify the data. You only need to handle Google CAPTCHA or consent when requested.'}
                 </p>
             </form>
 
@@ -2389,8 +2671,17 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                 <div className={styles.manualBanner} role="status">
                     <ShieldAlert size={22} aria-hidden />
                     <div>
-                        <h3>Manual action required in the Google window.</h3>
-                        <p>Complete the CAPTCHA or consent manually, then return here and click Continue Automatic Process.</p>
+                        <h3>{manualActionCopy(activeSession).title}</h3>
+                        <p>{manualActionCopy(activeSession).detail}</p>
+                        <button
+                            type="button"
+                            className={styles.ctrlBtn}
+                            disabled={!!busy}
+                            onClick={onContinueAutomaticProcess}
+                            style={{ marginTop: 10 }}
+                        >
+                            {busy === 'autoContinue' || busy === 'continue' ? 'Continuing...' : 'Continue After Manual Action'}
+                        </button>
                     </div>
                 </div>
             )}
@@ -2402,6 +2693,9 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                             <span className={`${styles.pulse} ${pulseClass}`} aria-hidden />
                             <h3 className={styles.liveTitle}>{processTitle}</h3>
                         </div>
+                        {liveActivity?.headline ? (
+                            <p className={styles.liveHeadline}>{liveActivity.headline}</p>
+                        ) : null}
                         {autoResumeBanner && (
                             <div style={{
                                 marginBottom: 12,
@@ -2485,7 +2779,43 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                             <div><div className={styles.metaLabel}>Current Batch</div><div className={styles.metaValue}>{autoProcessing?.currentBatchNumber || 0} · size {autoProcessing?.currentBatchSize || 0}</div></div>
                             <div><div className={styles.metaLabel}>Batches Completed</div><div className={styles.metaValue}>{autoProcessing?.counts?.batchesCompleted || 0}</div></div>
                             <div><div className={styles.metaLabel}>Last Batch Completed</div><div className={styles.metaValue}>{autoProcessing?.lastBatchCompletedAt ? new Date(autoProcessing.lastBatchCompletedAt).toLocaleString() : '—'}</div></div>
-                            <div><div className={styles.metaLabel}>Last Processing Error</div><div className={styles.metaValue} style={{ color: autoProcessing?.lastErrorMessage ? '#b45309' : undefined }}>{autoProcessing?.lastErrorMessage || '—'}</div></div>
+                            <div><div className={styles.metaLabel}>Last Processing Error</div><div className={styles.metaValue} style={{ color: visibleRunError ? '#b45309' : undefined }}>{visibleRunError || '—'}</div></div>
+                            <div><div className={styles.metaLabel}>1688 Direct</div><div className={styles.metaValue}>Captured {Number(sourceCaptured['1688'] || 0)}</div></div>
+                            <div><div className={styles.metaLabel}>Baidu</div><div className={styles.metaValue}>Captured {Number(sourceCaptured.baidu || 0)}</div></div>
+                            <div><div className={styles.metaLabel}>Sogou</div><div className={styles.metaValue}>Captured {Number(sourceCaptured.sogou || 0)}</div></div>
+                            <div><div className={styles.metaLabel}>360 Search</div><div className={styles.metaValue}>Captured {Number(sourceCaptured.so360 || 0)}</div></div>
+                            <div><div className={styles.metaLabel}>Alibaba (indexed)</div><div className={styles.metaValue}>Captured {Number(sourceCaptured.alibaba || 0)}</div></div>
+                            <div><div className={styles.metaLabel}>Made-in-China (indexed)</div><div className={styles.metaValue}>Captured {Number(sourceCaptured.made_in_china || 0)}</div></div>
+                            <div><div className={styles.metaLabel}>Global Sources (indexed)</div><div className={styles.metaValue}>Captured {Number(sourceCaptured.global_sources || 0)}</div></div>
+                            <div><div className={styles.metaLabel}>Google Web</div><div className={styles.metaValue}>Captured {Number(sourceCaptured.google || 0)}</div></div>
+                            <div><div className={styles.metaLabel}>Verified Manufacturers</div><div className={styles.metaValue}>{Number(campaignProgress?.verifiedManufacturers || 0)}</div></div>
+                            <div><div className={styles.metaLabel}>Chinese-Native Source Appearances</div><div className={styles.metaValue}>{
+                                Number(sourceCaptured['1688'] || 0)
+                                + Number(sourceCaptured.baidu || 0)
+                                + Number(sourceCaptured.sogou || 0)
+                                + Number(sourceCaptured.so360 || 0)
+                            }</div></div>
+                            <div><div className={styles.metaLabel}>Chinese-Language Records</div><div className={styles.metaValue}>{
+                                (rows || []).filter((r) => /[\u3400-\u9fff]/.test(`${r.title || ''} ${r.snippet || ''} ${r.companyNameOriginal || ''}`)).length
+                            }</div></div>
+                            <div><div className={styles.metaLabel}>Chinese Company Websites Crawled</div><div className={styles.metaValue}>{
+                                (rows || []).filter((r) => Number(r.pagesCrawled || 0) > 0).length
+                            }</div></div>
+                            <div><div className={styles.metaLabel}>Companies With Chinese Original Name</div><div className={styles.metaValue}>{
+                                (rows || []).filter((r) => /[\u3400-\u9fff]/.test(String(r.companyNameOriginal || ''))).length
+                            }</div></div>
+                            <div><div className={styles.metaLabel}>Companies With Public Phone</div><div className={styles.metaValue}>{
+                                (rows || []).filter((r) => Boolean(r.phone)).length
+                            }</div></div>
+                            <div><div className={styles.metaLabel}>Companies With Public WeChat</div><div className={styles.metaValue}>{
+                                (rows || []).filter((r) => Boolean(r.wechat || r.wechatPublic)).length
+                            }</div></div>
+                            <div><div className={styles.metaLabel}>English/Export Source Appearances</div><div className={styles.metaValue}>{
+                                Number(sourceCaptured.google || 0)
+                                + Number(sourceCaptured.alibaba || 0)
+                                + Number(sourceCaptured.made_in_china || 0)
+                                + Number(sourceCaptured.global_sources || 0)
+                            }</div></div>
                         </div>
 
                         <div className={styles.kpiRow}>
@@ -2588,7 +2918,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                                 <div>Current Batch: {autoProcessing?.currentBatchNumber || 0}</div>
                                 <div>Batches Completed: {autoProcessing?.counts?.batchesCompleted || 0}</div>
                                 <div>Last Batch Completed: {autoProcessing?.lastBatchCompletedAt ? new Date(autoProcessing.lastBatchCompletedAt).toLocaleString() : '—'}</div>
-                                <div>Last Processing Error: {autoProcessing?.lastErrorMessage || '—'}</div>
+                                <div>Last Processing Error: {visibleRunError || '—'}</div>
                             </div>
                         </details>
                     </section>
@@ -2610,15 +2940,15 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                             )}
                             {processManual && (
                                 <button type="button" className={`${styles.ctrlBtn} ${styles.ctrlContinue}`} disabled={!!busy} onClick={onContinueAutomaticProcess}>
-                                    Continue Automatic Process
-                                    <span>Use after CAPTCHA or consent is completed.</span>
+                                    Continue After Manual Action
+                                    <span>{manualActionCopy(activeSession).detail}</span>
                                 </button>
                             )}
                             <button type="button" className={`${styles.ctrlBtn} ${styles.ctrlStopSearch}`} disabled={!canStop && !(autoActive || processRunning)} onClick={onStop}>
                                 Stop Search
-                                <span>Stops Google collection only. CP6–CP8 continue.</span>
+                                <span>Stops this run completely. Collected results are kept.</span>
                             </button>
-                            <button type="button" className={`${styles.ctrlBtn} ${styles.ctrlStopAll}`} disabled={!!busy || !(session?._id || result?.session?._id)} onClick={onStopAllProcessing}>
+                            <button type="button" className={`${styles.ctrlBtn} ${styles.ctrlStopAll}`} disabled={!!busy || !(session?._id || result?.session?._id) || inactive} onClick={onStopAllProcessing}>
                                 Stop All Processing
                                 <span>Stops collection and all future processing safely.</span>
                             </button>
@@ -2667,10 +2997,25 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                 </div>
             )}
 
+            {!!(session?._id || result?.session?._id) && (
+                <SimpleLeadSearchLiveActivityPanel
+                    activity={liveActivity}
+                    filter={liveActivityFilter}
+                    onFilterChange={setLiveActivityFilter}
+                    displayLimit={liveActivityLimit}
+                    onDisplayLimitChange={setLiveActivityLimit}
+                    loading={liveActivityLoading}
+                />
+            )}
+
             {!!(session?._id || result?.session?._id) && capturedUnique > 0 && (
                 <SimpleLeadSearchCapturedDataPanel
                     sessionId={session?._id || result?.session?._id}
                     campaignName={campaignName}
+                    isChinaCampaign={
+                        String(form.country || result?.searchProfile?.country || '').toLowerCase() === 'china'
+                        || result?.searchProfile?.searchMarket === 'china_suppliers'
+                    }
                     processRunning={processRunning || pipeRunning}
                     onRetrySelected={async (ids) => {
                         const sid = session?._id || result?.session?._id;
@@ -3197,7 +3542,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                         </div>
                         {autoCollection && autoStatus !== 'idle' && (
                             <div style={{ marginTop: 4, padding: '10px 12px', borderRadius: 8, background: '#fff', border: '1px solid #c7d2fe', fontSize: 13, color: '#312e81' }}>
-                                <strong>{autoCollection.uiLabel || 'Auto Collection'}</strong>
+                                <strong>{autoCollection.searchLabel || autoCollection.ownerDisplayLabel || formatSimpleSearchLabel(form.product, form.businessTypes, autoCollection.locationLabel || form.city) || autoCollection.uiLabel || 'Auto Collection'}</strong>
                                 <div style={{ marginTop: 6 }}>
                                     Query {autoCollection.queryIndex || 1} of {autoCollection.queryTotal || autoCollectionOptions.maxQueries || 1}
                                     {autoCollection.businessType ? (' · Business Type: ' + autoCollection.businessType) : ''}
@@ -3307,7 +3652,13 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                     )}
 {/* ADMIN_AUTO_COLLECTION_END */}
 
-                    <h3 style={{ fontSize: 15, marginBottom: 8 }}>Generated queries</h3>
+                    <details style={{ marginBottom: 16 }}>
+                        <summary style={{ cursor: 'pointer', fontSize: 14, fontWeight: 700, color: '#334155' }}>
+                            Advanced / Debug Details — generated Google queries
+                        </summary>
+                        <p style={{ fontSize: 12, color: '#64748b', margin: '8px 0' }}>
+                            Internal operators such as -jobs / -course / -training stay here. The normal search label is Product · Business Type · Location.
+                        </p>
                     <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 16px' }}>
                         {generatedQueries.length === 0 ? (
                             <li style={{ padding: '8px 10px', fontSize: 13, color: '#64748b' }}>
@@ -3342,6 +3693,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                                 }}>
                                     {q?.slsCaptureStatus || q?.status || 'pending'}
                                 </span>
+                                <span style={{ marginRight: 8 }}>{q?.ownerDisplayLabel || ''}</span>
                                 <code style={{ fontSize: 12 }}>{q?.queryText || '—'}</code>
                                 {q?.captureEvents != null && (
                                     <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
@@ -3356,6 +3708,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                             </li>
                         ))}
                     </ul>
+                    </details>
 
                     {(inactive || showAdminControls || !ownerFullAuto) && (
                     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
@@ -3484,6 +3837,18 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                     </div>
                     )}
 
+                    {!!campaignProgress?.sourceStatus?.length && (
+                        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12, fontSize: 12 }}>
+                            {campaignProgress.sourceStatus.map((s) => (
+                                <span key={s.source} style={{ border: '1px solid #cbd5e1', borderRadius: 6, padding: '4px 8px' }}>
+                                    <strong>{s.source}:</strong> {s.status}
+                                    {` · Captured ${Number(s.captured || 0)}`}
+                                    {s.queryCount ? ` (${s.queryCount} queries)` : ''}
+                                </span>
+                            ))}
+                        </div>
+                    )}
+
                     {captureStats && (
                         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 12, fontSize: 13 }}>
                             <span><strong>Visible:</strong> {captureStats.visibleResultCount ?? 0}</span>
@@ -3506,7 +3871,8 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                             <thead>
                                 <tr style={{ background: '#f8fafc', textAlign: 'left' }}>
                                     <th style={{ padding: 8 }}>Sel</th>
-                                    <th style={{ padding: 8 }}>Title</th>
+                                    <th style={{ padding: 8 }}>Title (original)</th>
+                                    <th style={{ padding: 8 }}>Source</th>
                                     <th style={{ padding: 8 }}>Domain</th>
                                     <th style={{ padding: 8 }}>URL</th>
                                     <th style={{ padding: 8 }}>Stage A</th>
@@ -3518,8 +3884,8 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                             <tbody>
                                 {rows.length === 0 ? (
                                     <tr>
-                                        <td colSpan={8} style={{ padding: 12, color: '#64748b' }}>
-                                            Results appear here automatically as Google pages are collected.
+                                        <td colSpan={9} style={{ padding: 12, color: '#64748b' }}>
+                                            Results appear here as pages are collected. China campaigns keep original Chinese titles.
                                         </td>
                                     </tr>
                                 ) : (
@@ -3533,6 +3899,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                                                 />
                                             </td>
                                             <td style={{ padding: 8 }}>{r.title || '-'}</td>
+                                            <td style={{ padding: 8 }}>{r.source || r.sourceName || '-'}</td>
                                             <td style={{ padding: 8 }}>{r.displayDomain || '-'}</td>
                                             <td style={{ padding: 8, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                 {r.resultUrl || r.resultUrlOriginal || r.resultUrlNormalized || '-'}
@@ -3791,6 +4158,9 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                                     <th style={{ padding: 8 }}>Relevance Score</th>
                                     <th style={{ padding: 8 }}>Confidence</th>
                                     <th style={{ padding: 8 }}>Business Type</th>
+                                    <th style={{ padding: 8 }}>Requested</th>
+                                    <th style={{ padding: 8 }}>Detected</th>
+                                    <th style={{ padding: 8 }}>Type match</th>
                                     <th style={{ padding: 8 }}>Products Matched</th>
                                     <th style={{ padding: 8 }}>Contact Quality</th>
                                     <th style={{ padding: 8 }}>Reason</th>
@@ -3800,7 +4170,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                             </thead>
                             <tbody>
                                 {qualificationRows.length === 0 ? (
-                                    <tr><td colSpan={11} style={{ padding: 12, color: '#64748b' }}>No qualification records yet. Run Qualify All Enriched after enrichment.</td></tr>
+                                    <tr><td colSpan={14} style={{ padding: 12, color: '#64748b' }}>No qualification records yet. Run Qualify All Enriched after enrichment.</td></tr>
                                 ) : (
                                     qualificationRows.map((q) => (
                                         <tr key={String(q._id)} style={{ borderTop: '1px solid #e2e8f0' }}>
@@ -3812,6 +4182,9 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                                             <td style={{ padding: 8 }}>{q.relevanceScore ?? '-'}</td>
                                             <td style={{ padding: 8 }}>{q.confidence || '-'}</td>
                                             <td style={{ padding: 8 }}>{q.ownerBusinessTypeOverride || q.businessType || '-'}</td>
+                                            <td style={{ padding: 8 }}>{formatBusinessTypeField(q, 'requestedBusinessTypes', 'requestedBusinessType')}</td>
+                                            <td style={{ padding: 8 }}>{formatBusinessTypeField(q, 'detectedBusinessTypes', 'detectedBusinessType')}</td>
+                                            <td style={{ padding: 8 }}>{q.businessTypeMatch || '-'}</td>
                                             <td style={{ padding: 8 }}>{(q.productsMatched || []).slice(0, 4).join(', ') || '-'}</td>
                                             <td style={{ padding: 8 }}>{q.contactQualityScore ?? '-'}</td>
                                             <td style={{ padding: 8, maxWidth: 220 }}>{q.decisionReason || '-'}</td>
@@ -3841,6 +4214,10 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                                         <div><strong>Products matched:</strong> {(q.productsMatched || []).join(', ') || '-'}</div>
                                         <div><strong>Conflicting / unmatched:</strong> {(q.unmatchedOrConflictingEvidence || []).join(', ') || '-'}</div>
                                         <div><strong>Business type:</strong> {q.businessType}{q.ownerBusinessTypeOverride ? (' (owner: ' + q.ownerBusinessTypeOverride + ')') : ''}</div>
+                                        <div><strong>Requested:</strong> {formatBusinessTypeField(q, 'requestedBusinessTypes', 'requestedBusinessType')}</div>
+                                        <div><strong>Detected:</strong> {formatBusinessTypeField(q, 'detectedBusinessTypes', 'detectedBusinessType')}</div>
+                                        <div><strong>Business type match:</strong> {q.businessTypeMatch || '-'}</div>
+                                        <div><strong>Evidence / reason:</strong> {q.businessTypeMatchReason || '-'}</div>
                                         <div><strong>Location match:</strong> {q.locationMatch}</div>
                                         <div><strong>Contact quality:</strong> {q.contactQualityScore}</div>
                                         <div><strong>Qualified at:</strong> {q.qualifiedAt ? new Date(q.qualifiedAt).toLocaleString() : '-'}</div>

@@ -1,11 +1,17 @@
 import { AiContactRoleMaster } from '../../../models/aiContactRoleMaster.model.js';
+import { ensureModelIndexes } from '../../../utils/ensureModelIndexes.js';
 import { DEFAULT_ROLE_SEED } from './constants.js';
+
+async function ensureContactRoleMasterStore() {
+    await ensureModelIndexes(AiContactRoleMaster);
+}
 
 function cleanList(list = []) {
     return [...new Set((list || []).map((x) => String(x || '').trim()).filter(Boolean))];
 }
 
 export async function listContactRoles(companyId, query = {}) {
+    await ensureContactRoleMasterStore();
     const q = { companyId };
     if (query.isActive === 'true') q.isActive = true;
     if (query.isActive === 'false') q.isActive = false;
@@ -17,6 +23,7 @@ export async function listContactRoles(companyId, query = {}) {
 }
 
 export async function seedDefaultRoles(companyId, userId = null) {
+    await ensureContactRoleMasterStore();
     const existing = await AiContactRoleMaster.find({ companyId }).select('roleName').lean();
     const have = new Set(existing.map((x) => String(x.roleName).toLowerCase()));
     const created = [];
@@ -40,6 +47,7 @@ export async function seedDefaultRoles(companyId, userId = null) {
 }
 
 export async function saveContactRoles(companyId, rows = [], userId = null) {
+    await ensureContactRoleMasterStore();
     const results = [];
     for (const row of rows || []) {
         const roleName = String(row.roleName || '').trim();
@@ -72,6 +80,7 @@ export async function saveContactRoles(companyId, rows = [], userId = null) {
 }
 
 export async function getActiveRoles(companyId) {
+    await ensureContactRoleMasterStore();
     const { results } = await listContactRoles(companyId, { isActive: 'true' });
     return results;
 }

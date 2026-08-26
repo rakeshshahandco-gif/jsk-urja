@@ -104,7 +104,7 @@ const getStockData = async (itemIds) => {
 
     // Reserved qty from active work orders
     const reservedAgg = await WorkOrder.aggregate([
-        { $match: { status: { $in: ['Released', 'In Process', 'WIP – Waiting Material'] } } },
+        { $match: { status: { $in: ['Released', 'In Process', 'WIP – Waiting Material'] }, woKind: { $ne: 'section' } } },
         { $unwind: '$materialStatus' },
         { $match: { 'materialStatus.itemId': { $in: validIds } } },
         { $group: { _id: '$materialStatus.itemId', reserved: { $sum: '$materialStatus.requiredQty' } } }

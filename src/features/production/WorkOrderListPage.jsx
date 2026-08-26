@@ -17,6 +17,7 @@ const STATUS_COLORS = {
     'On Hold': { bg: '#faf5ff', text: '#9333ea', border: '#d8b4fe' },
     'Completed': { bg: '#f0fdf4', text: '#059669', border: '#6ee7b7' },
     'Closed': { bg: '#f8fafc', text: '#94a3b8', border: '#e2e8f0' },
+    'Cancelled': { bg: '#fef2f2', text: '#b91c1c', border: '#fecaca' },
 };
 
 const STATUS_CARD_BORDER = {
@@ -27,6 +28,7 @@ const STATUS_CARD_BORDER = {
     'On Hold': '#d8b4fe',
     'Completed': '#6ee7b7',
     'Closed': '#e2e8f0',
+    'Cancelled': '#fecaca',
 };
 
 const PRIORITY_COLORS = {
@@ -35,6 +37,15 @@ const PRIORITY_COLORS = {
     'High': '#d97706',
     'Urgent': '#dc2626',
 };
+
+function woProductDisplay(wo) {
+    const fp = wo?.finishedProductId && typeof wo.finishedProductId === 'object' ? wo.finishedProductId : {};
+    return {
+        productName: wo?.finishedProductName || fp.itemName || fp.name || '—',
+        modelNo: fp.modelNo || wo?.finishedProductModelNo || wo?.modelNo || '—',
+        itemCode: fp.itemCode || wo?.finishedProductItemCode || '—',
+    };
+}
 
 export default function WorkOrderListPage() {
     const navigate = useNavigate();
@@ -46,17 +57,22 @@ export default function WorkOrderListPage() {
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [statusFilter, setStatus] = useState(sp.get('status') || '');
+    const [kindFilter, setKindFilter] = useState('main');
     const [deleting, setDeleting] = useState(null);
 
     const fetchWorkOrders = () => {
         setLoading(true);
-        getWorkOrders({ search, status: statusFilter || undefined })
+        getWorkOrders({
+            search,
+            status: statusFilter || undefined,
+            kind: kindFilter === 'main' ? undefined : kindFilter,
+        })
             .then(d => setWos(d.workOrders || []))
             .catch(e => toast.error(e.message || 'Failed to load WOs'))
             .finally(() => setLoading(false));
     };
 
-    useEffect(() => { fetchWorkOrders(); }, [search, statusFilter]);
+    useEffect(() => { fetchWorkOrders(); }, [search, statusFilter, kindFilter]);
 
     useGlobalSync('workorder', (payload) => {
         if (payload.action === 'create') setWos(prev => [payload.data, ...prev]);
@@ -136,6 +152,19 @@ export default function WorkOrderListPage() {
                         .map(s => <option key={s} value={s}>{s}</option>)
                     }
                 </select>
+                {!isTextile && (
+                    <select
+                        value={kindFilter}
+                        onChange={e => setKindFilter(e.target.value)}
+                        style={{
+                            padding: '7px 12px', background: '#fff', border: '1px solid #d1d5db',
+                            borderRadius: 7, color: '#374151', fontSize: 13, cursor: 'pointer', outline: 'none',
+                        }}
+                    >
+                        <option value="main">Main</option>
+                        <option value="section">Section</option>
+                    </select>
+                )}
             </div>
 
             {loading ? (
@@ -187,9 +216,23 @@ export default function WorkOrderListPage() {
                                                     background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5',
                                                 }}>⚠️ Material Shortage</span>
                                             )}
+                                            {wo.woKind === 'section' && (
+                                                <span style={{
+                                                    padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                                                    background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d',
+                                                }}>{wo.bomSectionName || 'Section WO'}</span>
+                                            )}
+                                            {!!wo.sectionWoCount && (
+                                                <span
+                                                    onClick={() => navigate(PATHS.PRODUCTION.WO_DETAIL(wo._id))}
+                                                    style={{
+                                                    padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                                                    background: '#ecfeff', color: '#0e7490', border: '1px solid #67e8f9', cursor: 'pointer',
+                                                }}>{wo.sectionWoCount} Section WO{wo.sectionWoCount === 1 ? '' : 's'}</span>
+                                            )}
                                         </div>
                                         <div style={{ margin: '6px 0 0', color: '#6b7280', fontSize: 13 }}>
-                                            {wo.finishedProductName || 'N/A'}
+                                            {(() => { const p = woProductDisplay(wo); return `${p.productName} · Model No: ${p.modelNo} · Item Code: ${p.itemCode}`; })()}
                                             {isTextile && wo.textile?.designNo ? ` · Design: ${wo.textile.designNo}` : ''}
                                             {isTextile && wo.textile?.requiredFabricMeter ? ` · Fabric: ${wo.textile.requiredFabricMeter} m` : ''}
                                             {' · Qty: '}{wo.targetQty}{isTextile ? ' PCS' : ''}

@@ -44,6 +44,7 @@ import {
     listCampaignCapturedData,
     exportAllCurrentCampaignData,
 } from '../services/dataExtractor/searchCampaign/simpleLeadSearch/simpleLeadSearch.capturedData.service.js';
+import { listLiveProcessingActivity } from '../services/dataExtractor/searchCampaign/simpleLeadSearch/simpleLeadSearch.liveActivity.service.js';
 import { listSimpleLeadSearchRuns } from '../services/dataExtractor/searchCampaign/simpleLeadSearch/simpleLeadSearch.runs.service.js';
 import {
     persistSessionExportArtifacts,
@@ -371,6 +372,16 @@ export const autoProcessingStatus = withSafeErrors(async (req, res) => {
     });
     res.send(new ApiResponse(200, data, 'Automatic processing status'));
 });
+export const liveProcessingActivity = withSafeErrors(async (req, res) => {
+    const data = await listLiveProcessingActivity({
+        companyId: requireCompany(req),
+        user: req.user,
+        sessionId: req.params.sessionId,
+        query: req.query || {},
+    });
+    res.send(new ApiResponse(200, data, 'Live processing activity'));
+});
+
 export const campaignCapturedData = withSafeErrors(async (req, res) => {
     const data = await listCampaignCapturedData({
         companyId: requireCompany(req),

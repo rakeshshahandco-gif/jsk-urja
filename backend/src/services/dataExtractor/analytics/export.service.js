@@ -1,9 +1,14 @@
 import { AiAnalyticsAudit } from '../../../models/aiAnalyticsAudit.model.js';
+import { ensureModelIndexes } from '../../../utils/ensureModelIndexes.js';
 import { ApiError } from '../../../utils/ApiError.js';
 import { getAnalyticsSettings } from './settings.service.js';
 import { assertCanExport, isAggregateOnly } from './permissions.util.js';
 import { assertNoSecrets } from './filters.util.js';
 import * as agg from './aggregate.service.js';
+
+async function ensureAnalyticsAuditStore() {
+    await ensureModelIndexes(AiAnalyticsAudit);
+}
 
 const SECTION_FN = {
     executive: agg.getExecutiveSummary,
@@ -23,6 +28,7 @@ const SECTION_FN = {
 };
 
 export async function buildAnalyticsExport(companyId, userId, query = {}, user = null) {
+    await ensureAnalyticsAuditStore();
     assertCanExport(user);
     const section = String(query.section || 'executive');
     const fn = SECTION_FN[section];

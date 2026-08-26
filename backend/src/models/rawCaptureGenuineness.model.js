@@ -67,7 +67,7 @@ const rawCaptureGenuinenessSchema = new mongoose.Schema(
         createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
         updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     },
-    { timestamps: true, collection: 'raw_capture_genuineness' },
+    { timestamps: true, collection: 'raw_capture_genuineness', autoCreate: false, autoIndex: false },
 );
 
 rawCaptureGenuinenessSchema.index(
@@ -104,7 +104,7 @@ const genuinenessJobSchema = new mongoose.Schema(
         finishedAt: { type: Date, default: null },
         createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     },
-    { timestamps: true, collection: 'raw_capture_genuineness_jobs' },
+    { timestamps: true, collection: 'raw_capture_genuineness_jobs', autoCreate: false, autoIndex: false },
 );
 
 genuinenessJobSchema.index({ companyId: 1, sessionId: 1, createdAt: -1 });

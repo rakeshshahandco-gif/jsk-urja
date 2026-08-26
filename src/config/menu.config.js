@@ -115,6 +115,55 @@ export const menuConfig = [
                 permission: 'data_extractor.extractor.view',
                 children: [
                     {
+                        id: 'data-extractor-simple-lead',
+                        title: 'Simple Lead Search',
+                        path: PATHS.DATA_EXTRACTOR.SIMPLE_LEAD_SEARCH,
+                        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+                        permission: 'data_extractor.assisted_capture.start',
+                    },
+                    {
+                        id: 'data-extractor-quick',
+                        title: 'Quick Search',
+                        path: PATHS.DATA_EXTRACTOR.QUICK_SEARCH,
+                        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+                        permission: 'data_extractor.extractor.search',
+                    },
+                    {
+                        id: 'data-extractor-operations',
+                        title: 'Operations',
+                        path: PATHS.DATA_EXTRACTOR.OPERATIONS,
+                        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+                        permission: 'data_extractor.extractor.view',
+                    },
+                    {
+                        id: 'data-extractor-contactable',
+                        title: 'Contactable Prospects',
+                        path: PATHS.DATA_EXTRACTOR.CONTACTABLE_PROSPECTS,
+                        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+                        permission: 'data_extractor.extractor.view',
+                    },
+                    {
+                        id: 'data-extractor-qualified',
+                        title: 'Qualified Companies',
+                        path: PATHS.DATA_EXTRACTOR.QUALIFIED_COMPANIES,
+                        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+                        permission: 'data_extractor.extractor.view',
+                    },
+                    {
+                        id: 'data-extractor-facebook',
+                        title: 'Facebook',
+                        path: PATHS.DATA_EXTRACTOR.FACEBOOK,
+                        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+                        permission: 'data_extractor.assisted_capture.start',
+                    },
+                    {
+                        id: 'data-extractor-instagram',
+                        title: 'Instagram',
+                        path: PATHS.DATA_EXTRACTOR.INSTAGRAM,
+                        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+                        permission: 'data_extractor.assisted_capture.start',
+                    },
+                    {
                         id: 'data-extractor-keyword',
                         title: 'Keyword Search',
                         path: PATHS.DATA_EXTRACTOR.KEYWORD_SEARCH,
@@ -246,6 +295,7 @@ export const menuConfig = [
         permission: 'sales',
         children: [
             { id: 'sales-orders', title: 'Sales Orders', path: PATHS.SALES.ORDERS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'sales.sales_orders.view' },
+            { id: 'customer-price-lists', title: 'Customer Price List', path: PATHS.SALES.CUSTOMER_PRICE_LISTS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'sales.sales_orders.view' },
             { id: 'sales-invoices', title: 'Tax Invoices (GST)', path: PATHS.SALES.INVOICES, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'sales.sales_invoices.view' },
             { id: 'eway-bills', title: 'E-Way Bill Tracking', path: PATHS.EWAY_BILL.LIST, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'sales.sales_invoices.view' },
             { id: 'e-invoices', title: 'E-Invoice / IRN Tracking', path: PATHS.E_INVOICE.LIST, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'sales.sales_invoices.view' },

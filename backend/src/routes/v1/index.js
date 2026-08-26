@@ -30,6 +30,7 @@ import grnRoute from './grn.routes.js';
 import purchaseInvoiceRoute from './purchaseInvoice.routes.js';
 import paymentEntryRoute from './paymentEntry.routes.js';
 import salesOrderRoute from './salesOrder.routes.js';
+import customerPriceListRoute from './customerPriceList.routes.js';
 import salesInvoiceRoute from './salesInvoice.routes.js';
 import accountReportRoutes from './accountReport.routes.js';
 import accountingReportRoutes from './accountingReport.routes.js';
@@ -179,6 +180,7 @@ router.get('/health', (req, res) => {
         industryType: identity.industryType,
         port: identity.port,
         environment: identity.environment,
+        appEnv: identity.appEnv,
         databaseName: identity.databaseName,
     });
 });
@@ -315,6 +317,10 @@ const defaultRoutes = [
     {
         path: '/sales-orders',
         route: salesOrderRoute,
+    },
+    {
+        path: '/customer-price-lists',
+        route: customerPriceListRoute,
     },
     {
         path: '/sales-invoices',

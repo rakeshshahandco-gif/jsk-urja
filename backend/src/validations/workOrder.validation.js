@@ -91,6 +91,28 @@ const updateMaterialStatusSchema = Joi.object({
     eta: Joi.date().optional().allow(null, ''),
 });
 
+const createSectionWorkOrderSchema = Joi.object({
+    bomSectionNo: Joi.number().integer().min(1).required(),
+    targetQty: Joi.number().min(1).optional(),
+    supervisor: Joi.string().optional().allow(''),
+    remarks: Joi.string().optional().allow(''),
+    requiredQtyPerFinishedUnit: Joi.number().min(0).optional(),
+    isMandatory: Joi.boolean().optional(),
+    plannedStart: Joi.date().optional().allow(null, ''),
+});
+
+const updateSectionConfigSchema = Joi.object({
+    enabled: Joi.boolean().optional(),
+    sections: Joi.array().items(
+        Joi.object({
+            bomSectionNo: Joi.number().integer().min(1).required(),
+            bomSectionName: Joi.string().optional().allow(''),
+            requiredQtyPerFinishedUnit: Joi.number().min(0).default(1),
+            isMandatory: Joi.boolean().default(true),
+        })
+    ).min(1).required(),
+});
+
 const addProductionLogSchema = Joi.object({
     date: Joi.date().required(),
     shift: Joi.string().optional().allow(''),
@@ -126,4 +148,6 @@ export {
     updateStageSchema,
     updateMaterialStatusSchema,
     addProductionLogSchema,
+    createSectionWorkOrderSchema,
+    updateSectionConfigSchema,
 };

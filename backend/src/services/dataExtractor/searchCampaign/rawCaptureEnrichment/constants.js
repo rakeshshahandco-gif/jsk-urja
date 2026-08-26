@@ -27,6 +27,8 @@ export const CONTACT_PATH_HINTS = Object.freeze([
     '/contact', '/contact-us', '/contactus', '/about', '/about-us', '/aboutus',
     '/company', '/company-profile', '/profile', '/team', '/management',
     '/products', '/product', '/services', '/service', '/solutions', '/solution',
+    '/gsjj', '/gsjs', '/lxwm', '/lianxi', '/chanpin', '/rongyu', '/zizhi',
+    '/factory', '/manufacturing', '/certificate', '/certification',
 ]);
 
 export const SOCIAL_HOSTS = Object.freeze({
@@ -34,5 +36,6 @@ export const SOCIAL_HOSTS = Object.freeze({
     instagram: ['instagram.com'],
     linkedin: ['linkedin.com'],
     youtube: ['youtube.com', 'youtu.be'],
+    twitter: ['twitter.com', 'x.com', 'mobile.twitter.com'],
     whatsapp: ['wa.me', 'api.whatsapp.com', 'whatsapp.com'],
 });

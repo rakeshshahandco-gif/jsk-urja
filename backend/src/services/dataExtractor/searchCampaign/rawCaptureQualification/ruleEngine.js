@@ -9,6 +9,8 @@ import {
     LOCATION_MATCH_MODES,
     resolveLocationMatchMode,
 } from './locationMatch.util.js';
+import { matchRequestedBusinessType } from '../simpleLeadSearch/simpleBusinessType.util.js';
+import { classifyEntityType } from '../simpleLeadSearch/entityClassification.util.js';
 
 const STRONG_PRODUCT = [
     'home automation', 'smart home', 'smarthome', 'smart-home',
@@ -121,7 +123,18 @@ export function computeContactQuality(enrichment = {}) {
     return { contactQualityScore: score, contactQualityBreakdown: breakdown };
 }
 
-export function classifyBusinessTypeFromEvidence(blobText, enrichment = {}) {
+export function classifyBusinessTypeFromEvidence(blobText, enrichment = {}, captures = []) {
+    const urls = [
+        enrichment.websiteUrl,
+        enrichment.canonicalDomain,
+        enrichment.directoryProfileUrl,
+        ...(captures || []).map((c) => c.resultUrlNormalized || c.resultUrlOriginal || c.displayDomain),
+    ].filter(Boolean);
+    const hostHit = urls.some((u) => {
+        const raw = String(u || '').toLowerCase();
+        return /indiamart\.com|tradeindia\.com|justdial\.com|exportersindia\.com|dial4trade\.com|yellowpages\.co\.in/.test(raw);
+    });
+    if (enrichment.isDirectorySource || hostHit) return 'directory_marketplace';
     if (enrichment.businessType && enrichment.businessType !== 'unknown') {
         const map = {
             manufacturer: 'manufacturer',
@@ -149,7 +162,6 @@ export function classifyBusinessTypeFromEvidence(blobText, enrichment = {}) {
         if (t.includes('distributor')) return 'distributor';
         return 'supplier';
     }
-    if (enrichment.isDirectorySource) return 'directory_marketplace';
     return 'unknown';
 }
 
@@ -167,6 +179,9 @@ export function scoreLocation(campaign = {}, enrichment = {}) {
         servesSelectedCity: Boolean(loc.servesSelectedCity),
         locationEvidenceUrl: loc.locationEvidenceUrl || '',
         addressCount: loc.addressCount || 0,
+        selectedCity: loc.selectedCity || campaign.city || '',
+        selectedState: loc.selectedState || campaign.state || '',
+        selectedCountry: loc.selectedCountry || campaign.country || '',
     };
 }
 
@@ -202,10 +217,30 @@ export function qualifyWithRules(input = {}) {
 
     const rejectHits = includesAny(companyEvidenceText, REJECT_STRONG);
     const industrialHits = includesAny(companyEvidenceText, INDUSTRIAL_ONLY);
-    const strongOfficial = includesAny(officialEvidenceText, STRONG_PRODUCT);
-    const strongGoogle = includesAny(googleOnlyText, STRONG_PRODUCT);
-    const strongHits = [...new Set([...strongOfficial, ...includesAny(companyEvidenceText, STRONG_PRODUCT)])];
-    const possibleHits = includesAny(companyEvidenceText, POSSIBLE_PRODUCT);
+    const campaignProductTerms = [...new Set([
+        campaign.product,
+        campaign.targetIndustry,
+        campaign.name,
+        ...(Array.isArray(campaign.targetProducts) ? campaign.targetProducts : []),
+    ].flatMap((s) => {
+        const n = norm(s);
+        if (!n || n.length < 3) return [];
+        const parts = n.split(' ').filter((w) => w.length > 2 && !['and', 'the', 'for', 'with'].includes(w));
+        return [n, ...parts];
+    }))];
+    const strongOfficial = [...new Set([
+        ...includesAny(officialEvidenceText, STRONG_PRODUCT),
+        ...includesAny(officialEvidenceText, campaignProductTerms),
+    ])];
+    const strongGoogle = [...new Set([
+        ...includesAny(googleOnlyText, STRONG_PRODUCT),
+        ...includesAny(googleOnlyText, campaignProductTerms),
+    ])];
+    const strongHits = [...new Set([...strongOfficial, ...includesAny(companyEvidenceText, STRONG_PRODUCT), ...includesAny(companyEvidenceText, campaignProductTerms)])];
+    const possibleHits = [...new Set([
+        ...includesAny(companyEvidenceText, POSSIBLE_PRODUCT),
+        ...includesAny(companyEvidenceText, campaignProductTerms),
+    ])];
     const locationInfo = scoreLocation(campaign, enrichment);
     const {
         locationMatch,
@@ -218,10 +253,72 @@ export function qualifyWithRules(input = {}) {
         servesSelectedCity,
         locationEvidenceUrl,
         addressCount,
+        selectedCity,
+        selectedState,
+        selectedCountry,
     } = locationInfo;
-    const businessType = classifyBusinessTypeFromEvidence(blobText, enrichment);
+    const businessType = classifyBusinessTypeFromEvidence(blobText, enrichment, captures);
     const contact = computeContactQuality(enrichment);
     const mode = resolveLocationMatchMode(campaign);
+    const requestedTypes = Array.isArray(campaign.businessTypes) && campaign.businessTypes.length
+        ? campaign.businessTypes.map((t) => String(t || '').trim()).filter(Boolean)
+        : (campaign.requestedBusinessType ? [String(campaign.requestedBusinessType)] : []);
+    const requestedType = requestedTypes[0] || '';
+    const manufacturerRequested = requestedTypes.some((t) => /manufacturer/i.test(t));
+
+    function finalize(result) {
+        const bt = matchRequestedBusinessType({
+            requested: requestedType,
+            requestedList: requestedTypes,
+            internalType: result.businessType,
+            enrichment,
+            captures,
+            evidenceText: blobText,
+        });
+        let systemDecision = result.systemDecision;
+        let relevanceScore = Number(result.relevanceScore) || 0;
+        let decisionReason = result.decisionReason || '';
+        if (manufacturerRequested) {
+            if (bt.match === 'yes') relevanceScore = Math.min(100, Math.max(relevanceScore, 72));
+            if (bt.match === 'possibly') relevanceScore = Math.min(relevanceScore, 58);
+            if (bt.match === 'no') {
+                relevanceScore = Math.min(relevanceScore, 28);
+                if (systemDecision === 'strong_match') {
+                    systemDecision = result.businessType === 'directory_marketplace'
+                        ? 'human_review_required'
+                        : 'possible_match';
+                    decisionReason = `${decisionReason} | ${bt.reason}`;
+                }
+            }
+        }
+        const entity = classifyEntityType({
+            url: enrichment.websiteUrl || enrichment.canonicalDomain || '',
+            title: enrichment.canonicalCompanyName || enrichment.companyName || '',
+            enrichment,
+            qualification: { businessType: result.businessType },
+        });
+        return {
+            ...result,
+            systemDecision,
+            relevanceScore,
+            decisionReason,
+            requestedBusinessType: bt.requested,
+            requestedBusinessTypes: bt.requestedBusinessTypes || requestedTypes,
+            detectedBusinessType: bt.detected,
+            detectedBusinessTypes: bt.detectedBusinessTypes || [],
+            businessTypeMatch: bt.match,
+            businessTypeMatchReason: bt.reason,
+            entityType: entity.entityType,
+            qualificationMode: entity.entityType === 'COMPANY' ? 'company' : 'discovery_only',
+            canonicalCompanyName: enrichment.canonicalCompanyName || '',
+            companyEntityConfidence: enrichment.companyEntityConfidence || entity.companyEntityConfidence || '',
+            companyNameEvidence: enrichment.companyNameEvidence || entity.reason || '',
+            qualificationMethod: 'rule_based',
+            ruleEngineVersion: RULE_ENGINE_VERSION,
+            aiModel: '',
+            aiSchemaVersion: '',
+        };
+    }
 
     const unmatchedOrConflictingEvidence = [];
     const productsMatched = [...new Set([
@@ -249,7 +346,9 @@ export function qualifyWithRules(input = {}) {
         locationEvidenceUrl,
         addressCount,
         productMatchStrength,
-        selectedCity: campaign.city || '',
+        selectedCity: selectedCity || campaign.city || '',
+        selectedState: selectedState || campaign.state || '',
+        selectedCountry: selectedCountry || campaign.country || '',
     };
 
     if (rejectHits.length) {
@@ -331,7 +430,10 @@ export function qualifyWithRules(input = {}) {
     relevanceScore += Math.min(20, possibleHits.filter((h) => !strongOfficial.includes(h)).length * 6);
     if (locationMatch === 'match') relevanceScore += 15;
     else if (locationMatch === 'partial') relevanceScore += 6;
-    else if (norm(campaign.city) && locationMatch === 'unknown') {
+    else if (
+        (norm(campaign.city) || (mode === LOCATION_MATCH_MODES.STRICT_STATE && norm(campaign.state)))
+        && locationMatch === 'unknown'
+    ) {
         unmatchedOrConflictingEvidence.push('location_not_confirmed');
         relevanceScore -= 5;
     }
@@ -340,13 +442,23 @@ export function qualifyWithRules(input = {}) {
     relevanceScore += Math.min(5, Math.floor(contact.contactQualityScore / 25));
     relevanceScore = Math.max(0, Math.min(100, relevanceScore));
 
-    if (mode === LOCATION_MATCH_MODES.STRICT_CITY && norm(campaign.city) && locationMatch === 'mismatch') {
+    const strictLocationMismatch = locationMatch === 'mismatch' && (
+        (mode === LOCATION_MATCH_MODES.STRICT_CITY && norm(campaign.city))
+        || (mode === LOCATION_MATCH_MODES.STRICT_STATE && norm(campaign.state))
+        || (mode === LOCATION_MATCH_MODES.STRICT_COUNTRY && norm(campaign.country))
+    );
+    if (strictLocationMismatch) {
         unmatchedOrConflictingEvidence.push('location_mismatch');
+        const selectedLabel = mode === LOCATION_MATCH_MODES.STRICT_STATE
+            ? (campaign.state || 'selected state')
+            : mode === LOCATION_MATCH_MODES.STRICT_COUNTRY
+                ? (campaign.country || 'selected country')
+                : (campaign.city || 'selected city');
         return finalize({
             systemDecision: 'rejected',
             relevanceScore: Math.min(relevanceScore, 55),
             confidence: 'high',
-            decisionReason: `Location Mismatch — ${locationClassification}. Confirmed: ${(confirmedCities || []).join(', ') || 'other cities'}. Selected city ${campaign.city} office not confirmed.`,
+            decisionReason: `Location Mismatch — ${locationClassification}. Confirmed: ${(confirmedCities || []).concat(confirmedStates || []).filter(Boolean).join(', ') || 'other location'}. Requested ${selectedLabel} office not confirmed.`,
             matchedKeywords,
             unmatchedOrConflictingEvidence,
             productsMatched,
@@ -469,16 +581,6 @@ export function qualifyWithRules(input = {}) {
         ...locationExtras,
         productMatchStrength: strength,
     });
-}
-
-function finalize(result) {
-    return {
-        ...result,
-        qualificationMethod: 'rule_based',
-        ruleEngineVersion: RULE_ENGINE_VERSION,
-        aiModel: '',
-        aiSchemaVersion: '',
-    };
 }
 
 export { RULE_ENGINE_VERSION };

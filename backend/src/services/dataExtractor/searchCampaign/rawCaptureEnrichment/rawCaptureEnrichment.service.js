@@ -9,6 +9,11 @@ import { AssistedCaptureSession } from '../../../../models/assistedCaptureSessio
 import { RawCapture } from '../../../../models/rawCapture.model.js';
 import { RawCaptureEnrichment, RawCaptureEnrichmentJob } from '../../../../models/rawCaptureEnrichment.model.js';
 import { classifyStageA } from '../simpleLeadSearch/stageAPreFilter.util.js';
+import { isChinaCountry } from '../simpleLeadSearch/queryBuilder.util.js';
+import { SearchCampaign } from '../../../../models/searchCampaign.model.js';
+import { crawlCompanyWebsite, resolveDestinationUrl } from '../chinaWebsiteCrawler/crawl.service.js';
+import { isMarketplaceHost, isDirectoryHostCn, isSearchEngineHost } from '../chinaWebsiteCrawler/destinationType.util.js';
+import { packChinaNotes, unpackChinaNotes } from '../simpleLeadSearch/chinaBilingual.util.js';
 import { DOMAIN_ENRICH_TIMEOUT_MS, MAX_CONCURRENCY } from './constants.js';
 import { enrichDomainFromWebsite } from './fetch.util.js';
 import {
@@ -17,6 +22,14 @@ import {
     normalizeDomain,
     scoreEnrichmentConfidence,
 } from './parse.util.js';
+import { websiteFromInstagramCapture } from '../../socialSources/instagramWebsiteBridge.util.js';
+import { fetchPublicHtml } from '../chinaWebsiteCrawler/safeFetch.util.js';
+import {
+    classifyEntityType,
+    extractDirectoryListings,
+    isGenericSeoCompanyTitle,
+    resolveCanonicalCompanyName,
+} from '../simpleLeadSearch/entityClassification.util.js';
 
 function requireCompanyId(companyId) {
     if (!companyId || !mongoose.isValidObjectId(companyId)) throw new ApiError(400, 'Company context required');
@@ -59,16 +72,57 @@ function captureMongoForSession(session) {
 }
 
 function pickSeedUrl(capture) {
-    return capture.resultUrlOriginal || capture.resultUrlNormalized || '';
+    return capture._resolvedSeed || capture.resultUrlOriginal || capture.resultUrlNormalized || '';
+}
+
+async function campaignIsChina(campaignId) {
+    const camp = await SearchCampaign.findById(campaignId).select('country searchMarket').lean();
+    if (!camp) return false;
+    return isChinaCountry(camp.country) || camp.searchMarket === 'china_suppliers';
+}
+
+function chinaDirectoryLike(urlOrHost) {
+    return isMarketplaceHost(urlOrHost) || isDirectoryHostCn(urlOrHost) || isSearchEngineHost(urlOrHost);
+}
+
+async function applyChinaCrawlToCaptures(captures, crawl) {
+    if (!crawl?.data) return;
+    for (const cap of captures) {
+        const prev = unpackChinaNotes(cap.notes) || {};
+        const notes = packChinaNotes({
+            ...prev,
+            companyNameOriginal: crawl.data.companyNameOriginal || prev.companyNameOriginal || cap.title || '',
+            evidenceOriginal: crawl.data.evidenceOriginal || prev.evidenceOriginal || cap.snippet || '',
+            addressOriginal: crawl.data.addressOriginal || prev.addressOriginal || '',
+            wechat: crawl.data.publicWeChat || prev.wechat || '',
+            phone: crawl.data.phone || prev.phone || '',
+            email: crawl.data.email || prev.email || '',
+            destinationDomain: crawl.destinationDomain || '',
+            destinationType: crawl.destinationType || '',
+            crawlStatus: crawl.crawlStatus || '',
+            hasChineseOriginal: crawl.data.hasChineseOriginal ? 1 : 0,
+            pagesCrawled: (crawl.pagesVisited || []).length,
+            discoveredThrough: cap.source || prev.sourceName || '',
+            sourceName: cap.source || prev.sourceName || '',
+        });
+        await RawCapture.updateOne({ _id: cap._id }, { $set: { notes } });
+    }
 }
 
 function groupByDomain(captures) {
     const map = new Map();
     for (const c of captures) {
-        const domain = normalizeDomain(c.displayDomain || c.resultUrlNormalized || c.resultUrlOriginal);
+        if (String(c.source || '') === 'instagram') {
+            const site = websiteFromInstagramCapture(c);
+            if (!site) continue;
+            c._resolvedSeed = site;
+        }
+        const domain = normalizeDomain(c._resolvedSeed || c.displayDomain || c.resultUrlNormalized || c.resultUrlOriginal);
         if (!domain) continue;
-        const stageA = classifyStageA(c);
-        if (stageA.decision === 'rejected') continue; // skip obvious unwanted
+        if (String(c.source || '') !== 'instagram') {
+            const stageA = classifyStageA(c);
+            if (stageA.decision === 'rejected') continue;
+        }
         if (!map.has(domain)) map.set(domain, []);
         map.get(domain).push(c);
     }
@@ -116,7 +170,7 @@ async function markCapturesStatus(captureIds, companyId, status, blockedReason =
     );
 }
 
-async function enrichOneDomain({ companyId, campaignId, sessionId, domain, captures, userId, isDirectory }) {
+async function enrichOneDomain({ companyId, campaignId, sessionId, domain, captures, userId, isDirectory, chinaMode = false }) {
     const captureIds = captures.map((c) => c._id);
     await markCapturesStatus(captureIds, companyId, 'pending');
 
@@ -135,9 +189,28 @@ async function enrichOneDomain({ companyId, campaignId, sessionId, domain, captu
         return { status: 'failed', withPhone: 0, withEmail: 0, withWhatsApp: 0, withFacebook: 0, withInstagram: 0, review: 0 };
     }
 
+    if (chinaMode && chinaDirectoryLike(seed)) {
+        isDirectory = true;
+    }
+
     if (isDirectory) {
-        // Keep directory as source; do not treat platform contact as supplier contact.
+        // Keep directory as discovery source; do not treat the category title as a company.
         const titleName = String(captures[0].title || '').split('|')[0].split('-')[0].trim().slice(0, 200);
+        const classified = classifyEntityType({
+            url: seed,
+            title: titleName,
+            snippet: captures[0].snippet || '',
+            enrichment: { isDirectorySource: true, canonicalDomain: domain, websiteUrl: seed },
+        });
+        let discoveredListings = [];
+        try {
+            const fetched = await fetchPublicHtml(seed);
+            if (fetched?.ok && fetched.html) {
+                discoveredListings = extractDirectoryListings(fetched.html, fetched.finalUrl || seed);
+            }
+        } catch {
+            discoveredListings = [];
+        }
         const doc = await upsertEnrichmentDoc({
             companyId, campaignId, sessionId, domain, captureIds, userId,
             patch: {
@@ -146,15 +219,23 @@ async function enrichOneDomain({ companyId, campaignId, sessionId, domain, captu
                 directoryPlatform: domain,
                 directoryProfileUrl: seed,
                 companyName: titleName,
+                canonicalCompanyName: '',
+                entityType: classified.entityType || 'DIRECTORY',
+                companyEntityConfidence: 'Low',
+                companyNameEvidence: 'Directory/category page — not an individual company.',
+                qualificationMode: 'discovery_only',
+                discoveredListings,
                 enrichmentStatus: 'review_required',
-                confidence: titleName ? 25 : 10,
+                confidence: 10,
                 errorReason: '',
-                missingFields: ['phone', 'email', 'whatsapp', 'official_website'],
+                missingFields: ['phone', 'email', 'whatsapp', 'official_website', 'canonical_company'],
                 sourceEvidence: [{
                     field: 'directoryProfile',
                     value: titleName || domain,
                     sourceUrl: seed,
-                    note: 'Directory listing — supplier identity needs review; platform contacts not used',
+                    note: discoveredListings.length
+                        ? `Discovery source — ${discoveredListings.length} listed businesses parsed from public HTML`
+                        : 'Directory listing — discovery source only; category title is not a company',
                 }],
                 facebook: {},
                 instagram: {},
@@ -179,8 +260,66 @@ async function enrichOneDomain({ companyId, campaignId, sessionId, domain, captu
     let timedOut = false;
     const timer = setTimeout(() => { timedOut = true; }, DOMAIN_ENRICH_TIMEOUT_MS);
     let result;
+    let chinaCrawl = null;
     try {
-        result = await enrichDomainFromWebsite(seed, { maxPages: 5 });
+        if (chinaMode) {
+            chinaCrawl = await crawlCompanyWebsite(seed);
+            if (chinaCrawl.skippedSiteCrawl) {
+                const titleName = String(captures[0].title || '').split('|')[0].split('-')[0].trim().slice(0, 200);
+                const doc = await upsertEnrichmentDoc({
+                    companyId, campaignId, sessionId, domain, captureIds, userId,
+                    patch: {
+                        websiteUrl: chinaCrawl.finalUrl || seed,
+                        isDirectorySource: true,
+                        directoryPlatform: chinaCrawl.destinationDomain || domain,
+                        directoryProfileUrl: chinaCrawl.finalUrl || seed,
+                        companyName: titleName,
+                        enrichmentStatus: 'review_required',
+                        confidence: 20,
+                        missingFields: ['official_website'],
+                        chinaCrawl: {
+                            discoveredThrough: captures[0].source || '',
+                            destinationType: chinaCrawl.destinationType,
+                            destinationDomain: chinaCrawl.destinationDomain,
+                            crawlStatus: chinaCrawl.crawlStatus,
+                            pagesCrawled: (chinaCrawl.pagesVisited || []).length,
+                            internalPagesCrawled: chinaCrawl.internalPagesCrawled || 0,
+                            skippedSiteCrawl: true,
+                        },
+                    },
+                });
+                await markCapturesStatus(captureIds, companyId, 'blocked', 'Marketplace or directory listing — not a company website crawl');
+                await applyChinaCrawlToCaptures(captures, chinaCrawl);
+                return {
+                    status: 'review_required',
+                    withPhone: 0, withEmail: 0, withWhatsApp: 0, withFacebook: 0, withInstagram: 0, review: 1,
+                    enrichmentId: doc._id,
+                };
+            } else if (chinaCrawl.ok && chinaCrawl.data?.parsed) {
+                result = {
+                    ok: true,
+                    error: chinaCrawl.error || '',
+                    pagesVisited: chinaCrawl.pagesVisited || [],
+                    data: {
+                        ...chinaCrawl.data.parsed,
+                        websiteUrl: chinaCrawl.data.websiteUrl,
+                        canonicalDomain: chinaCrawl.data.canonicalDomain || domain,
+                        manufacturerEvidence: chinaCrawl.data.manufacturerEvidence
+                            || chinaCrawl.data.parsed.manufacturerEvidence || '',
+                    },
+                };
+            } else {
+                result = {
+                    ok: false,
+                    error: chinaCrawl.error || 'China website crawl failed',
+                    pagesVisited: chinaCrawl.pagesVisited || [],
+                    data: null,
+                };
+            }
+        }
+        if (!result) {
+            result = await enrichDomainFromWebsite(seed, { maxPages: chinaMode ? 8 : 5 });
+        }
     } finally {
         clearTimeout(timer);
     }
@@ -205,10 +344,58 @@ async function enrichOneDomain({ companyId, campaignId, sessionId, domain, captu
     }
 
     const data = result.data;
-    // Prefer Google title if website name empty
-    if (!data.companyName) {
-        data.companyName = String(captures[0].title || '').split('|')[0].split('-')[0].trim().slice(0, 200);
-        if (data.companyName) {
+    if (chinaCrawl?.data?.companyNameOriginal && !data.companyName) {
+        data.companyName = chinaCrawl.data.companyNameOriginal;
+    }
+    if (chinaCrawl?.data?.phone) {
+        data.phones = [
+            ...(data.phones || []),
+            {
+                original: chinaCrawl.data.phone,
+                normalized: String(chinaCrawl.data.phone).startsWith('+')
+                    ? chinaCrawl.data.phone
+                    : `+86${String(chinaCrawl.data.phone).replace(/\D/g, '')}`,
+                kind: 'mobile',
+                sourceUrl: chinaCrawl.finalUrl || seed,
+                labelledWhatsApp: false,
+                confidence: 'visible_labelled_phone',
+                originalText: chinaCrawl.data.phone,
+                reviewRequired: false,
+            },
+        ];
+    }
+    if (chinaCrawl?.data?.email) {
+        data.emails = [...(data.emails || []), { value: String(chinaCrawl.data.email).toLowerCase(), kind: 'general', sourceUrl: chinaCrawl.finalUrl || seed }];
+    }
+    if (chinaCrawl?.data?.addressOriginal && !(data.addresses || []).length) {
+        data.addresses = [{
+            raw: chinaCrawl.data.addressOriginal,
+            city: '',
+            state: '',
+            country: 'China',
+            type: 'Office',
+            evidenceLabel: 'Chinese website address label',
+            confidence: 'medium',
+            sourceUrl: chinaCrawl.finalUrl || seed,
+        }];
+        data.country = 'China';
+    }
+    // Prefer first-party canonical name; do not use generic SEO Google titles as company name.
+    if (!data.companyName || !String(data.canonicalCompanyName || '').trim()) {
+        const googleTitle = String(captures[0].title || '').split('|')[0].split('-')[0].trim().slice(0, 200);
+        const resolved = resolveCanonicalCompanyName({
+            jsonLdName: data.companyName || '',
+            legalName: data.legalOrDisplayedName || '',
+            googleTitle,
+            isDirectory: false,
+        });
+        if (resolved.name) {
+            data.companyName = resolved.name;
+            data.canonicalCompanyName = resolved.name;
+            data.companyEntityConfidence = resolved.confidence;
+            data.companyNameEvidence = resolved.evidence;
+        } else if (!data.companyName && googleTitle && !isGenericSeoCompanyTitle(googleTitle)) {
+            data.companyName = googleTitle;
             data.sourceEvidence = [
                 ...(data.sourceEvidence || []),
                 { field: 'companyName', value: data.companyName, sourceUrl: seed, note: 'from Google result title (unverified)' },
@@ -229,6 +416,11 @@ async function enrichOneDomain({ companyId, campaignId, sessionId, domain, captu
             isDirectorySource: false,
             companyName: data.companyName || '',
             legalOrDisplayedName: data.legalOrDisplayedName || '',
+            canonicalCompanyName: data.canonicalCompanyName || data.companyName || '',
+            entityType: 'COMPANY',
+            companyEntityConfidence: data.companyEntityConfidence || '',
+            companyNameEvidence: data.companyNameEvidence || '',
+            qualificationMode: 'company',
             contactPersons: data.contactPersons || [],
             phones: data.phones || [],
             whatsappNumbers: data.whatsappNumbers || [],
@@ -249,6 +441,18 @@ async function enrichOneDomain({ companyId, campaignId, sessionId, domain, captu
             rejectedPhones: data.rejectedPhones || [],
             sourceEvidence: data.sourceEvidence || [],
             pagesVisited: result.pagesVisited || [],
+            chinaCrawl: chinaCrawl ? {
+                discoveredThrough: captures[0].source || '',
+                destinationType: chinaCrawl.destinationType,
+                destinationDomain: chinaCrawl.destinationDomain,
+                crawlStatus: chinaCrawl.crawlStatus,
+                pagesCrawled: (chinaCrawl.pagesVisited || []).length,
+                internalPagesCrawled: chinaCrawl.internalPagesCrawled || 0,
+                hasChineseOriginal: Boolean(chinaCrawl.data?.hasChineseOriginal),
+                publicWeChat: chinaCrawl.data?.publicWeChat || '',
+                companyNameOriginal: chinaCrawl.data?.companyNameOriginal || '',
+                evidenceOriginal: String(chinaCrawl.data?.evidenceOriginal || '').slice(0, 400),
+            } : {},
             enrichmentStatus,
             confidence,
             missingFields,
@@ -262,6 +466,9 @@ async function enrichOneDomain({ companyId, campaignId, sessionId, domain, captu
         enrichmentStatus === 'failed' ? 'failed' : 'completed',
         '',
     );
+    if (chinaMode && chinaCrawl) {
+        await applyChinaCrawlToCaptures(captures, chinaCrawl);
+    }
 
     return {
         status: enrichmentStatus,
@@ -315,6 +522,23 @@ async function processJob(jobId) {
             }
         }
 
+        const chinaMode = await campaignIsChina(job.campaignId);
+        if (chinaMode) {
+            for (const c of captures) {
+                const seed = c.resultUrlOriginal || c.resultUrlNormalized || '';
+                if (!seed) continue;
+                try {
+                    const dest = await resolveDestinationUrl(seed);
+                    if (dest.ok && dest.finalUrl) {
+                        c._resolvedSeed = dest.finalUrl;
+                        if (dest.rootDomain) c.displayDomain = dest.rootDomain;
+                    }
+                } catch {
+                    /* keep original seed */
+                }
+            }
+        }
+
         const grouped = groupByDomain(captures);
         job.totalDomains = grouped.size;
         await job.save();
@@ -332,7 +556,7 @@ async function processJob(jobId) {
                 const [domain, list] = entries[my];
                 await RawCaptureEnrichmentJob.updateOne({ _id: jobId }, { $set: { currentDomain: domain } });
 
-                const isDirectory = isDirectoryHost(domain);
+                const isDirectory = isDirectoryHost(domain) || (chinaMode && chinaDirectoryLike(domain));
                 let stats;
                 try {
                     stats = await enrichOneDomain({
@@ -343,6 +567,7 @@ async function processJob(jobId) {
                         captures: list,
                         userId: job.createdBy,
                         isDirectory,
+                        chinaMode,
                     });
                 } catch (err) {
                     stats = { status: 'failed', withPhone: 0, withEmail: 0, withWhatsApp: 0, withFacebook: 0, withInstagram: 0, review: 0 };
@@ -371,7 +596,10 @@ async function processJob(jobId) {
             }
         }
 
-        const workers = Array.from({ length: Math.min(MAX_CONCURRENCY, Math.max(1, entries.length)) }, () => worker());
+        const workers = Array.from(
+            { length: Math.min(chinaMode ? 1 : MAX_CONCURRENCY, Math.max(1, entries.length)) },
+            () => worker(),
+        );
         await Promise.all(workers);
 
         job = await RawCaptureEnrichmentJob.findById(jobId);
@@ -423,6 +651,44 @@ export async function startEnrichmentJob({ companyId, user, sessionId, mode = 'a
     });
 
     return { job: job.toObject(), alreadyRunning: false };
+}
+
+/**
+ * Run existing Phase 1 website enrichment now for already-loaded captures.
+ * Instagram seeds come from notes/snippet website — not instagram.com.
+ */
+export async function enrichCapturesNow({ companyId, user, sessionId = null, captures = [] }) {
+    const cid = requireCompanyId(companyId);
+    assertEnrichPerm(user);
+    if (!captures.length) return { results: [], skipped: 0 };
+    let session = null;
+    if (sessionId) {
+        session = await loadSession(cid, sessionId);
+    }
+    const grouped = groupByDomain(captures);
+    const results = [];
+    for (const [domain, list] of grouped.entries()) {
+        const isDirectory = isDirectoryHost(domain);
+        const stats = await enrichOneDomain({
+            companyId: cid,
+            campaignId: session?.campaignId || list[0].campaignId,
+            sessionId: session?._id || sessionId || list[0].sessionId || null,
+            domain,
+            captures: list,
+            userId: actorId(user),
+            isDirectory,
+            chinaMode: false,
+        });
+        results.push({
+            domain,
+            rawCaptureIds: list.map((c) => String(c._id)),
+            ...stats,
+        });
+    }
+    return {
+        results,
+        skipped: Math.max(0, captures.length - [...grouped.values()].flat().length),
+    };
 }
 
 export async function stopEnrichmentJob({ companyId, user, sessionId, jobId }) {

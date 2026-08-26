@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { useFinancialYear } from '@/contexts/FinancialYearContext';
 import { dataExtractorApi } from '@/services/dataExtractorApi';
 import { PATHS } from '@/routes/paths';
+import DataExtractorClearHistoryModal, { useCanClearExtractorHistory } from './DataExtractorClearHistoryModal';
 
 const sourceLabel = (j) => {
     if (j.jobType === 'search') return j.adapterId || j.inputPayload?.sourceId || 'search';
@@ -13,9 +14,11 @@ const sourceLabel = (j) => {
 export default function DataExtractorHistoryPage() {
     const { selectedFY } = useFinancialYear();
     const navigate = useNavigate();
+    const canClear = useCanClearExtractorHistory();
     const [jobs, setJobs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [busyId, setBusyId] = useState('');
+    const [clearScope, setClearScope] = useState('');
 
     const loadJobs = () => dataExtractorApi.listJobs({ limit: 50 })
         .then((data) => setJobs(data?.results || []))
@@ -60,6 +63,12 @@ export default function DataExtractorHistoryPage() {
             <p style={{ color: '#64748b', fontSize: 13, marginBottom: 16 }}>
                 Re-run past keyword searches or apply AI classification/translation to preview results.
             </p>
+            {canClear ? (
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                    <button type="button" onClick={() => setClearScope('processing')} style={{ fontSize: 12, cursor: 'pointer' }}>Clear Selected History</button>
+                    <button type="button" onClick={() => setClearScope('all_extractor')} style={{ fontSize: 12, cursor: 'pointer', color: '#b91c1c' }}>Clear All Extractor History</button>
+                </div>
+            ) : null}
             <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: 8 }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                     <thead>
@@ -113,6 +122,12 @@ export default function DataExtractorHistoryPage() {
                     </tbody>
                 </table>
             </div>
+            <DataExtractorClearHistoryModal
+                open={Boolean(clearScope)}
+                onClose={() => setClearScope('')}
+                defaultScope={clearScope || 'processing'}
+                onCleared={() => loadJobs()}
+            />
         </div>
     );
 }
