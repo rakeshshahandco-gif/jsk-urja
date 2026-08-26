@@ -60,7 +60,8 @@ describe('Multi-BT location query builder', () => {
             locationScope: 'city', country: 'India',
         }), 'Home Automation — Mumbai');
         assert.ok(queries.length >= 2);
-        assert.match(queries[0].queryText, /manufacturers Mumbai/i);
+        assert.match(queries[0].queryText, /manufacturer Mumbai/i);
+        assert.ok(queries.some((q) => /manufacturers Mumbai/i.test(q.queryText)));
         assert.ok(queries.some((q) => /providers Mumbai/i.test(q.queryText)));
         for (const q of queries) {
             assert.doesNotMatch(q.queryText, /\bindia\b/i);
@@ -153,7 +154,8 @@ describe('Multi-BT start + role criteria', () => {
         assert.ok(roles.has('Provider'));
         assert.ok(roles.has('Supplier'));
         assert.ok(roles.has('System Integrator'));
-        assert.match(data.queries[0].queryText, /manufacturers Maharashtra/i);
+        assert.match(data.queries[0].queryText, /manufacturer Maharashtra/i);
+        assert.ok(data.queries.some((q) => /manufacturers Maharashtra/i.test(q.queryText)));
         assert.ok(data.platformAdaptersNote);
     });
 
