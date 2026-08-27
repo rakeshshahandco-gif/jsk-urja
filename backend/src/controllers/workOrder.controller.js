@@ -34,6 +34,9 @@ import {
     shouldSyncWorkOrderInventory,
     getAuthoritativeCompletedQty,
     getCurrentStageName,
+    getUnresolvedRequiredMaterials,
+    isDeferredMaterial,
+    buildUnresolvedRequiredBlockMessage,
 } from '../services/workOrderSection.service.js';
 import mongoose from 'mongoose';
 
@@ -166,6 +169,7 @@ export const createWorkOrder = asyncHandler(async (req, res) => {
             reservedQty: 0,
             shortQty,
             isMandatory: c.isMandatory !== undefined ? c.isMandatory : true,
+            bomIsMandatory: c.isMandatory !== undefined ? c.isMandatory : true,
             isCritical: c.isCritical || false,
             alternateAvailable: !!c.alternateItem,
             consumptionStage: c.consumptionStage || '',
@@ -291,13 +295,27 @@ export const getWorkOrderById = asyncHandler(async (req, res) => {
         json.phase1ProcessTrackingOnly = true;
     } else {
         const children = await WorkOrder.find({ parentWorkOrderId: wo._id, woKind: SECTION_WO_KIND })
-            .select('woNumber bomSectionNo bomSectionName targetQty status stages supervisor createdAt isMandatorySection requiredQtyPerFinishedUnit')
+            .select('woNumber bomSectionNo bomSectionName targetQty status stages supervisor createdAt isMandatorySection requiredQtyPerFinishedUnit materialStatus')
             .lean();
         json.sectionWorkOrders = children.map((c) => ({
             ...c,
             completedQty: getAuthoritativeCompletedQty(c),
             currentStageName: getCurrentStageName(c),
+            materialStatus: undefined,
         }));
+        json.sectionDeferredMaterials = children.flatMap((c) =>
+            (c.materialStatus || [])
+                .filter((m) => isDeferredMaterial(m))
+                .map((m) => ({
+                    itemId: m.itemId,
+                    itemName: m.itemName,
+                    requiredQty: m.requiredQty,
+                    availableStock: m.availableStock,
+                    shortQty: m.shortQty,
+                    sectionWoNumber: c.woNumber,
+                    bomSectionName: c.bomSectionName,
+                }))
+        );
         const mandatory = (wo.sectionConfig?.sections || []).filter((s) => s.isMandatory);
         json.completeSets = computeCompleteSetsAvailable({
             parentTargetQty: wo.targetQty,
@@ -403,22 +421,13 @@ export const updateStage = asyncHandler(async (req, res) => {
             }
         }
 
-        // ── Shortage gate: prevent Completed on Final QC (seq 9) if mandatory shortage ──
+        // ── Shortage gate: prevent Completed on Final QC (seq 9) if BOM-required material is still unresolved ──
+        // Uses original BOM requirement (bomIsMandatory), not the temporary WO Mandatory tick.
         // Section WOs skip this — they never post finished goods.
         if (seq === 9 && value.status === 'Completed' && !isSectionWorkOrder(wo)) {
-            const mandatoryShortages = wo.materialStatus.filter(
-                m => m.isMandatory && m.shortQty > 0
-            );
-            if (mandatoryShortages.length > 0) {
-                stage.status = 'QC Hold';
-                wo.status = 'WIP – Waiting Material';
-                wo.wip.isOnHold = true;
-                wo.wip.holdReason = 'Mandatory material shortage – cannot complete FG';
-                wo.wip.missingMandatoryItems = mandatoryShortages.map(m => m.itemName);
-                await wo.save({ session });
-                await session.commitTransaction();
-                return res.status(200).json(new ApiResponse(200, wo,
-                    'Final QC blocked: mandatory material shortage. WO set to WIP – Waiting Material.'));
+            const pendingRequired = getUnresolvedRequiredMaterials(wo.materialStatus);
+            if (pendingRequired.length > 0) {
+                throw new ApiError(400, buildUnresolvedRequiredBlockMessage(pendingRequired));
             }
         }
 
@@ -502,17 +511,15 @@ const recalculateStageAndWo = (wo, stage) => {
         stage.status = 'Not Started';
     }
 
-    // ── Shortage gate: prevent Completed on Final QC (seq 9) if mandatory shortage ──
+    // ── Shortage gate: prevent Completed on Final QC (seq 9) if BOM-required material is still unresolved ──
     if (stage.seq === 9 && stage.status === 'Completed' && !isSectionWorkOrder(wo)) {
-        const mandatoryShortages = wo.materialStatus.filter(
-            m => m.isMandatory && m.shortQty > 0
-        );
-        if (mandatoryShortages.length > 0) {
+        const pendingRequired = getUnresolvedRequiredMaterials(wo.materialStatus);
+        if (pendingRequired.length > 0) {
             stage.status = 'QC Hold';
             wo.status = 'WIP – Waiting Material';
             wo.wip.isOnHold = true;
-            wo.wip.holdReason = 'Mandatory material shortage – cannot complete FG';
-            wo.wip.missingMandatoryItems = mandatoryShortages.map(m => m.itemName);
+            wo.wip.holdReason = buildUnresolvedRequiredBlockMessage(pendingRequired);
+            wo.wip.missingMandatoryItems = pendingRequired.map(m => m.itemName);
             return { blocked: true };
         }
     }
@@ -629,7 +636,7 @@ export const addProductionLog = asyncHandler(async (req, res) => {
         await session.commitTransaction();
 
         const responseMsg = blocked
-            ? 'Production logged, but Final QC blocked due to material shortage'
+            ? (wo.wip?.holdReason || 'Production logged, but Final QC blocked due to unresolved required material')
             : `Production logged successfully for Stage "${stage.stageName}"`;
 
         res.status(201).json(new ApiResponse(201, wo, responseMsg));
@@ -678,13 +685,19 @@ export const updateMaterialStatus = asyncHandler(async (req, res) => {
 
     const wo = await WorkOrder.findById(req.params.id);
     if (!wo) throw new ApiError(404, 'Work Order not found');
-    if (isSectionWorkOrder(wo)) {
-        throw new ApiError(400, 'Section Work Order materials are read-only in Phase 1 (process tracking only). Stock is managed on the parent Work Order.');
+    if (['Closed', 'Cancelled', 'Completed'].includes(wo.status)) {
+        throw new ApiError(400, `WO in status "${wo.status}" cannot have material status changed`);
     }
 
     for (const upd of value.materialUpdates) {
         const mat = wo.materialStatus.id(upd.materialId);
         if (!mat) continue;
+        if (isSectionWorkOrder(wo)) {
+            // Phase 1: no stock reserve/consume. WO-specific Mandatory and remarks only.
+            if (upd.isMandatory !== undefined) mat.isMandatory = upd.isMandatory;
+            if (upd.remarks !== undefined) mat.remarks = upd.remarks;
+            continue;
+        }
         Object.assign(mat, {
             shortQty: upd.shortQty ?? mat.shortQty,
             availableStock: upd.availableStock ?? mat.availableStock,
@@ -945,11 +958,12 @@ export const createSectionWorkOrder = asyncHandler(async (req, res) => {
             reservedQty: 0,
             shortQty: Math.max(0, requiredQtyMat - itemInfo.currentStock),
             isMandatory: true,
+            bomIsMandatory: true,
             isCritical: false,
             alternateAvailable: false,
             consumptionStage: '',
             procurementStatus: 'Not Ordered',
-            remarks: 'Phase 1 read-only snapshot — Section WO does not reserve or consume stock',
+            remarks: '',
         };
     });
 

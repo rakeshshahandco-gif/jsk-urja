@@ -18,6 +18,10 @@ import {
     shouldSyncWorkOrderInventory,
     filterBomComponentsBySection,
     cloneStagesForSectionWo,
+    isBomRequiredMaterial,
+    isDeferredMaterial,
+    getUnresolvedRequiredMaterials,
+    buildUnresolvedRequiredBlockMessage,
 } from '../src/services/workOrderSection.service.js';
 
 describe('section WO display numbers do not consume main series', () => {
@@ -217,5 +221,43 @@ describe('inventory qty source matches existing Final QC rule', () => {
             targetQty: 500,
             stages: [{ seq: 9, outputQty: 0 }],
         }), 500);
+    });
+});
+
+describe('WO-specific mandatory deferral vs original BOM requirement', () => {
+    it('treats legacy lines without bomIsMandatory as BOM-required', () => {
+        assert.equal(isBomRequiredMaterial({ isMandatory: false, shortQty: 10 }), true);
+        assert.equal(isDeferredMaterial({ isMandatory: false, shortQty: 10 }), true);
+    });
+
+    it('unticked shortage does not count as currently mandatory but remains unresolved', () => {
+        const lines = [
+            { itemName: 'A', isMandatory: true, bomIsMandatory: true, shortQty: 0 },
+            { itemName: 'B', isMandatory: false, bomIsMandatory: true, shortQty: 500 },
+        ];
+        const unresolved = getUnresolvedRequiredMaterials(lines);
+        assert.equal(unresolved.length, 1);
+        assert.equal(unresolved[0].itemName, 'B');
+        assert.equal(isDeferredMaterial(lines[1]), true);
+        const stillBlocksRelease = lines.filter((m) => m.isMandatory && m.shortQty > 0);
+        assert.equal(stillBlocksRelease.length, 0);
+    });
+
+    it('checked mandatory shortage still blocks Release', () => {
+        const lines = [
+            { itemName: 'A', isMandatory: true, bomIsMandatory: true, shortQty: 0 },
+            { itemName: 'B', isMandatory: true, bomIsMandatory: true, shortQty: 500 },
+        ];
+        const stillBlocksRelease = lines.filter((m) => m.isMandatory && m.shortQty > 0);
+        assert.equal(stillBlocksRelease.length, 1);
+        assert.equal(getUnresolvedRequiredMaterials(lines).length, 1);
+    });
+
+    it('final completion message lists pending required components', () => {
+        const msg = buildUnresolvedRequiredBlockMessage([
+            { itemName: 'SMD-B' },
+        ]);
+        assert.match(msg, /Cannot complete finished production: 1 required component is still pending/);
+        assert.match(msg, /SMD-B/);
     });
 });

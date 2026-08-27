@@ -183,7 +183,7 @@ export default function WorkOrderListPage() {
                         const pc = PRIORITY_COLORS[wo.priority] || '#64748b';
                         const { done, total } = stageProgress(wo.stages);
                         const pct = total ? Math.round((done / total) * 100) : 0;
-                        const hasShortage = (wo.materialStatus || []).some(m => m.isMandatory && m.shortQty > 0);
+                        const hasShortage = (wo.materialStatus || []).some(m => m.shortQty > 0 && (m.isMandatory || m.bomIsMandatory !== false));
 
                         return (
                             <div key={wo._id} style={{

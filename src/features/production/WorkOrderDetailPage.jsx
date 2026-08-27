@@ -55,6 +55,25 @@ function woProductDisplay(wo) {
     };
 }
 
+function isBomRequiredLine(m) {
+    return m?.bomIsMandatory !== false;
+}
+
+function isDeferredLine(m) {
+    return isBomRequiredLine(m) && m?.isMandatory === false;
+}
+
+const AUTO_MATERIAL_REMARKS = [
+    'Phase 1 read-only snapshot — Section WO does not reserve or consume stock',
+];
+
+function displayMaterialRemark(raw) {
+    const s = String(raw || '').trim();
+    if (!s) return '';
+    if (AUTO_MATERIAL_REMARKS.includes(s)) return '';
+    return String(raw || '');
+}
+
 import { BrandedLoader } from '@/components/ui/BrandedLoading';
 
 
@@ -114,7 +133,8 @@ export default function WorkOrderDetailPage() {
 
     const sc = WO_STATUS_COLORS[wo.status] || WO_STATUS_COLORS['Draft'];
     const pct = wo.stages?.length ? Math.round((wo.stages.filter(s => s.status === 'Completed').length / wo.stages.length) * 100) : 0;
-    const mandatoryShortages = (wo.materialStatus || []).filter(m => m.isMandatory && m.shortQty > 0);
+    const unresolvedRequired = (wo.materialStatus || []).filter(m => isBomRequiredLine(m) && m.shortQty > 0);
+    const deferredPending = (wo.materialStatus || []).filter(m => isDeferredLine(m));
     const isSectionWo = isSectionWorkOrderForPrint(wo);
     const parentRef = wo.parentWorkOrderId && typeof wo.parentWorkOrderId === 'object' ? wo.parentWorkOrderId : null;
 
@@ -191,14 +211,19 @@ export default function WorkOrderDetailPage() {
                 </div>
             )}
 
-            {/* Mandatory shortage banner */}
-            {!isSectionWo && mandatoryShortages.length > 0 && (
+            {/* Unresolved / deferred material banner */}
+            {unresolvedRequired.length > 0 && (
                 <div style={{ background: '#450a0a', borderBottom: '1px solid #dc2626', padding: '12px 28px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <span style={{ fontSize: '16px' }}>⚠️</span>
                     <div>
-                        <strong style={{ color: '#fca5a5', fontSize: '13px' }}>Mandatory Material Shortage</strong>
+                        <strong style={{ color: '#fca5a5', fontSize: '13px' }}>
+                            {deferredPending.length > 0 ? 'Pending / Deferred Material' : 'Mandatory Material Shortage'}
+                        </strong>
                         <div style={{ color: '#f87171', fontSize: '12px' }}>
-                            {mandatoryShortages.map(m => m.itemName).join(', ')} — FG cannot be completed until resolved.
+                            {unresolvedRequired.map(m => m.itemName).join(', ')}
+                            {isSectionWo
+                                ? ' — still pending for this section. Unticking Mandatory does not hide the shortage.'
+                                : ' — FG cannot be completed until resolved.'}
                         </div>
                     </div>
                     <button onClick={() => setTab(1)} style={{ marginLeft: 'auto', padding: '6px 14px', borderRadius: '6px', background: '#7f1d1d', color: '#fca5a5', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>
@@ -225,7 +250,7 @@ export default function WorkOrderDetailPage() {
             {/* Tab Content */}
             <div style={{ padding: '28px' }}>
                 {tab === 0 && <OverviewTab wo={wo} load={load} isTextile={isTextile} labels={labels} />}
-                {tab === 1 && <BomMaterialTab wo={wo} load={load} readOnly={wo.woKind === 'section'} />}
+                {tab === 1 && <BomMaterialTab wo={wo} load={load} />}
                 {tab === 2 && <ProcessExecutionTab wo={wo} load={load} />}
                 {tab === 3 && <QcTestingTab wo={wo} load={load} />}
                 {tab === 4 && <WipTab wo={wo} />}
@@ -392,15 +417,28 @@ function OverviewTab({ wo, load, isTextile, labels }) {
 }
 
 // ─── BOM & Material Tab ───────────────────────────────────────────────────────
-function BomMaterialTab({ wo, load, readOnly = false }) {
+function BomMaterialTab({ wo, load }) {
     const [updates, setUpdates] = useState({});
     const [saving, setSaving] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
+    const isSection = wo.woKind === 'section';
+    const materialLocked = ['Closed', 'Cancelled', 'Completed'].includes(wo.status);
+    const stockInputsDisabled = isSection || materialLocked;
+    const mandatoryDisabled = materialLocked;
+    const remarksDisabled = materialLocked;
+    const canSaveMandatory = !materialLocked;
+    const sectionDeferredIds = new Set((wo.sectionDeferredMaterials || []).map(d => String(d.itemId)));
 
     const setUpd = (id, k, v) => setUpdates(u => ({ ...u, [id]: { ...(u[id] || {}), [k]: v } }));
 
     const save = async () => {
-        const materialUpdates = Object.entries(updates).map(([materialId, vals]) => ({ materialId, ...vals }));
+        const materialUpdates = Object.entries(updates).map(([materialId, vals]) => {
+            if (!isSection) return { materialId, ...vals };
+            const patch = { materialId };
+            if (vals.isMandatory !== undefined) patch.isMandatory = vals.isMandatory;
+            if (vals.remarks !== undefined) patch.remarks = vals.remarks;
+            return patch;
+        });
         if (!materialUpdates.length) return toast('No changes to save');
         setSaving(true);
         try {
@@ -430,9 +468,9 @@ function BomMaterialTab({ wo, load, readOnly = false }) {
             m.requiredQty,
             m.availableStock,
             m.shortQty,
-            m.isMandatory ? 'Yes' : 'No',
+            m.isMandatory ? 'Yes' : (isDeferredLine(m) ? 'Deferred' : 'No'),
             `"${m.procurementStatus}"`,
-            `"${m.remarks || ''}"`
+            `"${displayMaterialRemark(m.remarks)}"`
         ]);
         const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -461,9 +499,9 @@ function BomMaterialTab({ wo, load, readOnly = false }) {
               <td>${m.requiredQty}</td>
               <td>${m.availableStock}</td>
               <td style="color:${m.shortQty > 0 ? 'red' : 'inherit'}"><strong>${m.shortQty}</strong></td>
-              <td>${m.isMandatory ? 'Yes' : 'No'}</td>
+              <td>${m.isMandatory ? 'Yes' : (isDeferredLine(m) ? 'Deferred' : 'No')}</td>
               <td>${m.procurementStatus}</td>
-              <td>${m.remarks || ''}</td>
+              <td>${displayMaterialRemark(m.remarks)}</td>
             </tr>`;
         });
         tableHtml += `</tbody></table>`;
@@ -496,7 +534,7 @@ function BomMaterialTab({ wo, load, readOnly = false }) {
         <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
                 <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>
-                    {readOnly && wo.bomSectionName ? `BOM Components — ${wo.bomSectionName} (read-only)` : 'BOM Components & Availability'}
+                    {isSection && wo.bomSectionName ? `BOM Components — ${wo.bomSectionName}` : 'BOM Components & Availability'}
                 </h2>
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                     <button onClick={handleExportExcel}
@@ -507,23 +545,26 @@ function BomMaterialTab({ wo, load, readOnly = false }) {
                         style={{ padding: '8px 16px', borderRadius: '8px', background: '#e2e8f0', color: '#475569', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         📥 PDF
                     </button>
-                    {!readOnly && (
+                    {!materialLocked && (
                         <>
                     <button onClick={handleRefreshStock} disabled={refreshing}
                         style={{ padding: '8px 16px', borderRadius: '8px', background: '#334155', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         {refreshing ? '↻ Refreshing...' : '↻ Refresh Stock'}
                     </button>
+                    {canSaveMandatory && (
                     <button onClick={save} disabled={saving}
                         style={{ padding: '8px 16px', borderRadius: '8px', background: '#1d4ed8', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '13px' }}>
                         {saving ? 'Saving...' : 'Save Changes'}
                     </button>
+                    )}
                         </>
                     )}
                 </div>
             </div>
-            {readOnly && (
+            {isSection && (
                 <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: 12, color: '#475569' }}>
                     Showing only {wo.bomSectionName || 'this section'} components. Phase 1 does not reserve or consume stock from Section WOs.
+                    Mandatory may be unticked on this Section WO to continue process tracking; shortage remains visible as Pending Material.
                 </div>
             )}
             <div style={{ overflowX: 'auto' }}>
@@ -537,41 +578,45 @@ function BomMaterialTab({ wo, load, readOnly = false }) {
                     </thead>
                     <tbody>
                         {(wo.materialStatus || []).map((m, i) => {
-                            const isShort = m.shortQty > 0;
-                            const isMandShort = isShort && m.isMandatory;
                             const upd = updates[m._id] || {};
+                            const currentMandatory = upd.isMandatory !== undefined ? upd.isMandatory : m.isMandatory;
+                            const isShort = m.shortQty > 0;
+                            const deferred = (isBomRequiredLine(m) && currentMandatory === false) || sectionDeferredIds.has(String(m.itemId));
+                            const isMandShort = isShort && currentMandatory;
                             return (
                                 <tr key={m._id}
-                                    style={{ background: isMandShort ? '#fff1f2' : i % 2 === 0 ? '#ffffff' : '#f9fafb' }}>
-                                    <td style={{ padding: '10px 12px', color: isMandShort ? '#dc2626' : '#374151', fontWeight: isMandShort ? 600 : 400, borderBottom: '1px solid #e5e7eb' }}>
+                                    style={{ background: isMandShort ? '#fff1f2' : deferred ? '#fffbeb' : i % 2 === 0 ? '#ffffff' : '#f9fafb' }}>
+                                    <td style={{ padding: '10px 12px', color: isMandShort ? '#dc2626' : '#374151', fontWeight: isMandShort || deferred ? 600 : 400, borderBottom: '1px solid #e5e7eb' }}>
                                         {m.itemName}
                                         {isMandShort && <span style={{ marginLeft: '6px', fontSize: '10px', background: '#dc2626', color: '#fff', padding: '1px 5px', borderRadius: '3px' }}>SHORT</span>}
+                                        {deferred && <span style={{ marginLeft: '6px', fontSize: '10px', background: '#f59e0b', color: '#fff', padding: '1px 5px', borderRadius: '3px' }}>Pending Material</span>}
                                     </td>
                                     <td style={{ padding: '10px 12px', color: '#6b7280', borderBottom: '1px solid #e5e7eb' }}>{m.uom || '—'}</td>
                                     <td style={{ padding: '10px 12px', color: '#1e293b', borderBottom: '1px solid #e5e7eb' }}>{m.requiredQty}</td>
                                     <td style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb' }}>
-                                        <input type="number" defaultValue={m.availableStock} disabled={readOnly}
+                                        <input type="number" defaultValue={m.availableStock} disabled={stockInputsDisabled}
                                             onChange={e => setUpd(m._id, 'availableStock', Number(e.target.value))}
                                             style={{ ...inp, width: '80px' }} />
                                     </td>
                                     <td style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb' }}>
-                                        <input type="number" defaultValue={m.shortQty} disabled={readOnly}
+                                        <input type="number" defaultValue={m.shortQty} disabled={stockInputsDisabled}
                                             onChange={e => setUpd(m._id, 'shortQty', Number(e.target.value))}
                                             style={{ ...inp, width: '70px', color: isShort ? '#dc2626' : '#1e293b' }} />
                                     </td>
                                     <td style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb' }}>
-                                        <input type="checkbox" defaultChecked={m.isMandatory} disabled={readOnly}
+                                        <input type="checkbox" checked={!!currentMandatory} disabled={mandatoryDisabled}
                                             onChange={e => setUpd(m._id, 'isMandatory', e.target.checked)} />
                                     </td>
                                     <td style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb' }}>
-                                        <select defaultValue={m.procurementStatus} disabled={readOnly}
+                                        <select defaultValue={m.procurementStatus} disabled={stockInputsDisabled}
                                             onChange={e => setUpd(m._id, 'procurementStatus', e.target.value)}
                                             style={{ ...inp, width: '140px', cursor: 'pointer' }}>
                                             {['Not Ordered', 'Ordered', 'In Transit', 'Received'].map(s => <option key={s}>{s}</option>)}
                                         </select>
                                     </td>
                                     <td style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb' }}>
-                                        <input type="text" defaultValue={m.remarks} disabled={readOnly}
+                                        <input type="text" value={upd.remarks !== undefined ? upd.remarks : displayMaterialRemark(m.remarks)}
+                                            disabled={remarksDisabled}
                                             onChange={e => setUpd(m._id, 'remarks', e.target.value)}
                                             placeholder="Notes..." style={{ ...inp, width: '120px' }} />
                                     </td>
@@ -1027,6 +1072,7 @@ function QcStagePanel({ stage, woId, canEdit, load }) {
 function WipTab({ wo }) {
     const shortages = (wo.materialStatus || []).filter(m => m.shortQty > 0);
     const mandShortages = shortages.filter(m => m.isMandatory);
+    const deferredShortages = shortages.filter(m => isDeferredLine(m));
     const fmt = (d) => d ? new Date(d).toLocaleDateString() : '—';
 
     return (
@@ -1063,15 +1109,17 @@ function WipTab({ wo }) {
                     <div style={{ fontSize: '14px', fontWeight: 600, color: '#e2e8f0', marginBottom: '12px' }}>
                         All Shortages ({shortages.length} items)
                         {mandShortages.length > 0 && <span style={{ marginLeft: '8px', color: '#ef4444', fontSize: '12px' }}>⚠️ {mandShortages.length} mandatory</span>}
+                        {deferredShortages.length > 0 && <span style={{ marginLeft: '8px', color: '#f59e0b', fontSize: '12px' }}>⏳ {deferredShortages.length} deferred</span>}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                         {shortages.map(m => (
                             <div key={m._id} style={{ display: 'flex', alignItems: 'center', gap: '12px', background: m.isMandatory ? '#1a0608' : '#1e293b', border: `1px solid ${m.isMandatory ? '#7f1d1d' : '#334155'}`, borderRadius: '8px', padding: '12px 16px' }}>
                                 <div style={{ flex: 1 }}>
                                     <div style={{ fontWeight: 600, color: m.isMandatory ? '#fca5a5' : '#f1f5f9', fontSize: '14px' }}>{m.itemName}</div>
-                                    <div style={{ color: '#64748b', fontSize: '12px' }}>Required: {m.requiredQty} | Short: {m.shortQty} | {m.procurementStatus}</div>
+                                    <div style={{ color: '#64748b', fontSize: '12px' }}>Required: {m.requiredQty} | Available: {m.availableStock} | Short: {m.shortQty} | {m.procurementStatus}</div>
                                 </div>
                                 {m.isMandatory && <span style={{ padding: '3px 8px', borderRadius: '10px', background: '#450a0a', color: '#fca5a5', fontSize: '11px', fontWeight: 700, border: '1px solid #dc2626' }}>MANDATORY</span>}
+                                {isDeferredLine(m) && <span style={{ padding: '3px 8px', borderRadius: '10px', background: '#78350f', color: '#fde68a', fontSize: '11px', fontWeight: 700, border: '1px solid #f59e0b' }}>DEFERRED — MATERIAL PENDING</span>}
                             </div>
                         ))}
                     </div>

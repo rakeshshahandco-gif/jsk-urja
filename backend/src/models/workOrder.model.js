@@ -110,6 +110,8 @@ const materialStatusSchema = new mongoose.Schema({
     reservedQty: { type: Number, default: 0 },
     shortQty: { type: Number, default: 0 },
     isMandatory: { type: Boolean, default: true },
+    /** Snapshot of BOM-required flag at WO create. Unticking isMandatory must not clear this. */
+    bomIsMandatory: { type: Boolean, default: true },
     isCritical: { type: Boolean, default: false },
     alternateAvailable: { type: Boolean, default: false },
     consumptionStage: { type: String, default: '' },

@@ -187,3 +187,25 @@ export function shouldSyncWorkOrderInventory(wo) {
     if (isSectionWorkOrder(wo)) return false;
     return wo.status === 'Completed' && !wo.inventorySynced;
 }
+
+/** Original BOM-required flag on a WO material line (legacy docs without the field are required). */
+export function isBomRequiredMaterial(m) {
+    return m?.bomIsMandatory !== false;
+}
+
+/** Owner temporarily unticked Mandatory on a BOM-required WO line. */
+export function isDeferredMaterial(m) {
+    return isBomRequiredMaterial(m) && m?.isMandatory === false;
+}
+
+/** BOM-required lines still short — used for FG completion, not Release. */
+export function getUnresolvedRequiredMaterials(materialStatus = []) {
+    return (materialStatus || []).filter((m) => isBomRequiredMaterial(m) && Number(m.shortQty) > 0);
+}
+
+export function buildUnresolvedRequiredBlockMessage(items = []) {
+    const n = items.length;
+    const names = items.map((m) => m.itemName).filter(Boolean).join(', ');
+    const noun = n === 1 ? 'component is' : 'components are';
+    return `Cannot complete finished production: ${n} required ${noun} still pending.${names ? ` ${names}.` : ''}`;
+}
