@@ -28,7 +28,9 @@ router.use(requirePlatformAdmin);
 
 router.get('/', backupCtrl.getBackups);
 router.post('/trigger', backupCtrl.triggerBackup);
+router.get('/jobs/:id', backupCtrl.getBackupJob);
 router.get('/download/:id', backupCtrl.downloadBackup);
+router.delete('/:id', backupCtrl.deleteBackup);
 router.post('/restore/:id', backupCtrl.restoreFromBackup);
 router.post('/upload', (req, res, next) => {
     upload.single('file')(req, res, (err) => {

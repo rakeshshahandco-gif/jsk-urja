@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
     Database, 
     Download, 
@@ -12,7 +13,8 @@ import {
     FileArchive,
     UploadCloud,
     ArrowLeftRight,
-    Lock
+    Lock,
+    Trash2
 } from 'lucide-react';
 import { Button, Modal } from '@/components/ui';
 import { toast } from 'react-hot-toast';
@@ -51,11 +53,22 @@ const BackupRestorePage = () => {
     const [backups, setBackups] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isBackingUp, setIsBackingUp] = useState(false);
+    const [activeJobId, setActiveJobId] = useState(null);
+    const [backupStatusMessage, setBackupStatusMessage] = useState('');
     const [isRestoring, setIsRestoring] = useState(false);
     const [systemInfo, setSystemInfo] = useState(null);
     const [backupReason, setBackupReason] = useState('Manual Backup before deployment');
     const [restoreTargetId, setRestoreTargetId] = useState(null);
     const [restoreConfirmation, setRestoreConfirmation] = useState('');
+    const [deleteTargetId, setDeleteTargetId] = useState(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    const backupStatusOf = (backup) => backup?.status || 'Completed';
+    const isBackupReady = (backup) => backupStatusOf(backup) === 'Completed';
+    const canDeleteBackup = (backup) => {
+        const status = backupStatusOf(backup);
+        return status === 'Completed' || status === 'Failed';
+    };
 
     const fetchBackups = async () => {
         try {
@@ -89,16 +102,66 @@ const BackupRestorePage = () => {
         fetchBackups();
     }, []);
 
+    useEffect(() => {
+        const active = backups.find((b) => b.status === 'Queued' || b.status === 'Running');
+        if (active) {
+            setIsBackingUp(true);
+            setActiveJobId(active.id);
+            setBackupStatusMessage('Backup is running in background. You can continue using CRM.');
+        }
+        if (!active && isBackingUp && activeJobId) {
+            const done = backups.find((b) => b.id === activeJobId);
+            if (done?.status === 'Completed') {
+                toast.success('Backup completed.');
+                setBackupStatusMessage('');
+                setIsBackingUp(false);
+                setActiveJobId(null);
+            } else if (done?.status === 'Failed') {
+                toast.error(`Backup failed: ${done.error || 'Unknown error'}`);
+                setBackupStatusMessage('');
+                setIsBackingUp(false);
+                setActiveJobId(null);
+            }
+        }
+    }, [backups, isBackingUp, activeJobId]);
+
+    useEffect(() => {
+        if (!isBackingUp) return undefined;
+        const timer = setInterval(() => {
+            backupApi.getBackups()
+                .then((backupData) => {
+                    if (backupData?.data) setBackups(backupData.data);
+                })
+                .catch(() => {});
+        }, 2000);
+        return () => clearInterval(timer);
+    }, [isBackingUp]);
+
     const handleTakeBackup = async () => {
+        if (isBackingUp || backups.some((b) => b.status === 'Queued' || b.status === 'Running')) {
+            toast.error('A full backup is already in progress.');
+            setIsBackingUp(true);
+            return;
+        }
         try {
             setIsBackingUp(true);
+            setBackupStatusMessage('Backup is running in background. You can continue using CRM.');
             const response = await backupApi.triggerBackup(backupReason);
-            toast.success('Backup generated successfully!');
+            const job = response?.data;
+            if (job?.id) setActiveJobId(job.id);
+            toast.success(response?.message || 'Backup is running in background. You can continue using CRM.');
             fetchBackups();
         } catch (error) {
-            toast.error('Backup failed: ' + (error.response?.data?.message || error.message));
-        } finally {
+            const status = error.response?.status;
+            const msg = error.response?.data?.message || error.message;
+            if (status === 409) {
+                toast.error('A full backup is already in progress.');
+                fetchBackups();
+                return;
+            }
             setIsBackingUp(false);
+            setBackupStatusMessage('');
+            toast.error('Backup failed: ' + msg);
         }
     };
 
@@ -157,6 +220,32 @@ const BackupRestorePage = () => {
     const handleRestoreInitiate = (id) => {
         setRestoreTargetId(id);
         setRestoreConfirmation('');
+    };
+
+    const handleDeleteInitiate = (event, backup) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (isDeleting || !canDeleteBackup(backup)) return;
+        setDeleteTargetId(backup.id);
+    };
+
+    const handleDeleteExecute = async () => {
+        if (!deleteTargetId || isDeleting) return;
+        try {
+            setIsDeleting(true);
+            const result = await backupApi.deleteBackup(deleteTargetId);
+            const msg = result?.data?.archiveMissing
+                ? 'Backup archive was already missing. History entry removed.'
+                : (result?.message || 'Backup archive deleted. CRM data was not changed.');
+            toast.success(msg);
+            setDeleteTargetId(null);
+            await fetchBackups();
+        } catch (error) {
+            const msg = error.response?.data?.message || error.message || 'Delete failed';
+            toast.error('Delete failed: ' + msg);
+        } finally {
+            setIsDeleting(false);
+        }
     };
 
     const formatSize = (bytes) => {
@@ -240,6 +329,9 @@ const BackupRestorePage = () => {
                     <p className={styles.description}>
                         Create a complete ZIP archive containing the database collections and all uploaded attachments.
                     </p>
+                    {backupStatusMessage ? (
+                        <p className={styles.statusMessage}>{backupStatusMessage}</p>
+                    ) : null}
                     <div className={styles.formGroup}>
                         <label>Reason for backup</label>
                         <input 
@@ -253,11 +345,12 @@ const BackupRestorePage = () => {
                         variant="primary" 
                         onClick={handleTakeBackup} 
                         isLoading={isBackingUp}
+                        disabled={isBackingUp}
                         fullWidth
                         startIcon={<Database size={18} />}
                         style={{ marginTop: 'auto', background: '#0f172a' }}
                     >
-                        {isBackingUp ? 'Generating Archive...' : 'Take Full Backup Now'}
+                        {isBackingUp ? 'Backup running…' : 'Take Full Backup Now'}
                     </Button>
                 </div>
 
@@ -334,25 +427,36 @@ const BackupRestorePage = () => {
                         <thead>
                             <tr>
                                 <th>Date & Time</th>
+                                <th>Status</th>
                                 <th>Reason / Note</th>
                                 <th>Size</th>
                                 <th>Items Count</th>
-                                <th style={{ width: '200px' }}>Actions</th>
+                                <th style={{ width: '220px' }}>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {backups.length === 0 ? (
                                 <tr>
-                                    <td colSpan="5" className={styles.empty}>No backup history found.</td>
+                                    <td colSpan="6" className={styles.empty}>No backup history found.</td>
                                 </tr>
                             ) : backups.map((b) => {
                                 const stats = backupDisplayStats(b);
-                                const looksEmpty = stats.totalDocs < 50 && (b.size || 0) < 100_000;
+                                const status = backupStatusOf(b);
+                                const ready = isBackupReady(b);
+                                const looksEmpty = ready && stats.totalDocs < 50 && (b.size || 0) < 100_000;
                                 return (
                                 <tr key={b.id}>
                                     <td>
                                         <div style={{ fontWeight: 600 }}>{moment(b.date).format('DD MMM YYYY')}</div>
                                         <div style={{ fontSize: '11px', color: '#64748b' }}>{moment(b.date).format('hh:mm A')}</div>
+                                    </td>
+                                    <td>
+                                        <span className={`${styles.statusBadge} ${styles[`status${status}`] || ''}`}>
+                                            {status}
+                                        </span>
+                                        {status === 'Failed' && b.error ? (
+                                            <div className={styles.statusError}>{b.error}</div>
+                                        ) : null}
                                     </td>
                                     <td>
                                         <div style={{ fontSize: '13px' }}>{b.reason}</div>
@@ -373,20 +477,35 @@ const BackupRestorePage = () => {
                                     </td>
                                     <td>
                                         <div className={styles.btnGroup}>
+                                            {ready ? (
+                                                <>
+                                                    <button 
+                                                        className={styles.iconBtn} 
+                                                        title="Download ZIP"
+                                                        onClick={() => handleDownload(b.id)}
+                                                    >
+                                                        <Download size={18} />
+                                                    </button>
+                                                    <button 
+                                                        className={`${styles.iconBtn} ${styles.restoreBtn}`} 
+                                                        title="Restore this backup"
+                                                        onClick={() => handleRestoreInitiate(b.id)}
+                                                        disabled={isRestoring}
+                                                    >
+                                                        <ArrowLeftRight size={18} />
+                                                    </button>
+                                                </>
+                                            ) : null}
                                             <button 
-                                                className={styles.iconBtn} 
-                                                title="Download ZIP"
-                                                onClick={() => handleDownload(b.id)}
+                                                type="button"
+                                                className={`${styles.iconBtn} ${styles.deleteBtn}`} 
+                                                data-jsk-action="delete-backup"
+                                                data-backup-id={b.id}
+                                                title={canDeleteBackup(b) ? 'Delete this backup archive' : `Cannot delete while ${status}`}
+                                                onClick={(event) => handleDeleteInitiate(event, b)}
+                                                disabled={!canDeleteBackup(b) || isDeleting}
                                             >
-                                                <Download size={18} />
-                                            </button>
-                                            <button 
-                                                className={`${styles.iconBtn} ${styles.restoreBtn}`} 
-                                                title="Restore this backup"
-                                                onClick={() => handleRestoreInitiate(b.id)}
-                                                disabled={isRestoring}
-                                            >
-                                                <ArrowLeftRight size={18} />
+                                                <Trash2 size={18} />
                                             </button>
                                         </div>
                                     </td>
@@ -483,6 +602,53 @@ const BackupRestorePage = () => {
                         </div>
                     </div>
                 </Modal>
+            )}
+
+            {deleteTargetId && createPortal(
+                <div
+                    data-jsk-ui="backup-delete-modal"
+                    style={{ position: 'fixed', inset: 0, zIndex: 11000 }}
+                >
+                    <Modal 
+                        title="Delete Backup Archive"
+                        onClose={() => !isDeleting && setDeleteTargetId(null)}
+                        size="md"
+                        zIndex={11001}
+                        footer={
+                            <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
+                                <Button 
+                                    variant="outline" 
+                                    onClick={() => !isDeleting && setDeleteTargetId(null)}
+                                    disabled={isDeleting}
+                                    style={{ flex: 1 }}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button 
+                                    variant="primary" 
+                                    onClick={handleDeleteExecute}
+                                    isLoading={isDeleting}
+                                    disabled={isDeleting}
+                                    data-jsk-action="confirm-delete-backup"
+                                    style={{ flex: 1, backgroundColor: '#ef4444' }}
+                                    startIcon={<Trash2 size={18} />}
+                                >
+                                    {isDeleting ? 'Deleting...' : 'Delete Backup'}
+                                </Button>
+                            </div>
+                        }
+                    >
+                        <div style={{ textAlign: 'center', padding: '10px 0' }}>
+                            <p style={{ color: '#4b5563', fontSize: '14px', lineHeight: 1.6, marginBottom: '8px' }}>
+                                Delete this backup archive permanently? This does not delete CRM data.
+                            </p>
+                            <p style={{ fontFamily: 'monospace', color: '#111827', fontSize: '13px', fontWeight: 600 }}>
+                                {deleteTargetId}
+                            </p>
+                        </div>
+                    </Modal>
+                </div>,
+                document.body
             )}
         </div>
     );

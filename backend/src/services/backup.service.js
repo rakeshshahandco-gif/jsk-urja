@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import AdmZip from 'adm-zip';
@@ -322,18 +323,101 @@ const dropCollectionsNotInBackup = async (db, backupCollectionNames) => {
     return dropped;
 };
 
+const INDEX_PATH = path.join(BACKUP_DIR, 'index.json');
+const ACTIVE_BACKUP_STATUSES = new Set(['Queued', 'Running']);
+let backupMutex = false;
+let recoveredStaleJobs = false;
+
+const readIndex = () => {
+    if (!fs.existsSync(INDEX_PATH)) return [];
+    try {
+        const index = JSON.parse(fs.readFileSync(INDEX_PATH, 'utf8'));
+        return Array.isArray(index) ? index : [];
+    } catch {
+        return [];
+    }
+};
+
+const writeIndex = (index) => {
+    const trimmed = index.slice(0, 40);
+    fs.writeFileSync(INDEX_PATH, JSON.stringify(trimmed, null, 2));
+};
+
+const sanitizeBackupError = (error) => {
+    let msg = String(error?.message || error || 'Backup failed');
+    msg = msg.replace(/mongodb(\+srv)?:\/\/\S+/gi, '[redacted-mongo-uri]');
+    msg = msg.replace(/\/\/([^:/@]+):([^@/]+)@/g, '//$1:****@');
+    return msg.replace(/\s+/g, ' ').trim().slice(0, 280);
+};
+
+const upsertIndexEntry = (entry) => {
+    const index = readIndex().filter((b) => b.id !== entry.id);
+    index.unshift(entry);
+    writeIndex(index);
+    return enrichBackupEntry(entry);
+};
+
+export const recoverStaleBackupJobs = () => {
+    if (recoveredStaleJobs) return;
+    recoveredStaleJobs = true;
+    const index = readIndex();
+    let changed = false;
+    const next = index.map((entry) => {
+        if (!ACTIVE_BACKUP_STATUSES.has(entry.status)) return entry;
+        changed = true;
+        return {
+            ...entry,
+            status: 'Failed',
+            error: 'Server restarted before backup completed.',
+            finishedAt: new Date().toISOString(),
+        };
+    });
+    if (changed) writeIndex(next);
+};
+
+const reapOrphanActiveJobs = () => {
+    if (backupMutex) return;
+    const index = readIndex();
+    let changed = false;
+    const next = index.map((entry) => {
+        if (!ACTIVE_BACKUP_STATUSES.has(entry.status)) return entry;
+        changed = true;
+        return {
+            ...entry,
+            status: 'Failed',
+            error: 'Backup worker is no longer running.',
+            finishedAt: new Date().toISOString(),
+        };
+    });
+    if (changed) writeIndex(next);
+};
+
+export const getActiveBackupJob = () => {
+    recoverStaleBackupJobs();
+    reapOrphanActiveJobs();
+    return readIndex().find((b) => ACTIVE_BACKUP_STATUSES.has(b.status)) || null;
+};
+
 /**
- * Generate a full database and uploads backup
+ * Generate a full database and uploads backup (read collections only; writes ZIP on disk).
  */
-export const generateBackup = async (userId, reason = 'Manual Backup') => {
+export const generateBackup = async (userId, reason = 'Manual Backup', options = {}) => {
+    const { backupName: requestedName, recordInIndex = true, alreadyLocked = false } = options;
+    if (!alreadyLocked) {
+        if (backupMutex) {
+            throw new ApiError(httpStatus.CONFLICT, 'A full backup is already in progress.');
+        }
+        backupMutex = true;
+    }
+
     const db = mongoose.connection.db;
     const dbName = mongoose.connection.name;
     const timestamp = moment().format('YYYY-MM-DD-HHmm');
     const env = process.env.NODE_ENV || 'production';
-    const backupName = `${dbName}-backup-${timestamp}-${env}`;
+    const backupName = requestedName || `${dbName}-backup-${timestamp}-${env}`;
     const zipPath = path.join(BACKUP_DIR, `${backupName}.zip`);
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'jsk-crm-backup-'));
 
-    const zip = new AdmZip();
     const metadata = {
         name: backupName,
         dbName,
@@ -347,29 +431,30 @@ export const generateBackup = async (userId, reason = 'Manual Backup') => {
     };
 
     try {
+        fs.mkdirSync(path.join(tmpDir, 'db'), { recursive: true });
         const collections = await db.listCollections().toArray();
         for (const col of collections) {
             const data = await db.collection(col.name).find({}).toArray();
-            zip.addFile(
-                `db/${col.name}.json`,
-                Buffer.from(EJSON.stringify(data, { relaxed: false }), 'utf8')
+            fs.writeFileSync(
+                path.join(tmpDir, 'db', `${col.name}.json`),
+                EJSON.stringify(data, { relaxed: false }),
+                'utf8'
             );
             metadata.recordCounts[col.name] = data.length;
             metadata.collections.push(col.name);
         }
 
         if (fs.existsSync(UPLOADS_DIR)) {
-            zip.addLocalFolder(UPLOADS_DIR, 'uploads');
+            const destUploads = path.join(tmpDir, 'uploads');
+            fs.cpSync(UPLOADS_DIR, destUploads, { recursive: true });
         }
 
-        zip.addFile('metadata.json', Buffer.from(JSON.stringify(metadata, null, 2), 'utf8'));
+        fs.writeFileSync(path.join(tmpDir, 'metadata.json'), JSON.stringify(metadata, null, 2));
+
+        const zip = new AdmZip();
+        zip.addLocalFolder(tmpDir, '');
         zip.writeZip(zipPath);
-
-        const indexPath = path.join(BACKUP_DIR, 'index.json');
-        let index = [];
-        if (fs.existsSync(indexPath)) {
-            index = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
-        }
+        fs.rmSync(tmpDir, { recursive: true, force: true });
 
         metadata.uiCounts = buildUiCounts(metadata.recordCounts);
 
@@ -379,23 +464,112 @@ export const generateBackup = async (userId, reason = 'Manual Backup') => {
             date: new Date(),
             reason,
             createdBy: userId,
+            status: 'Completed',
             counts: metadata.recordCounts,
             uiCounts: metadata.uiCounts,
             totalDocs: totalDocCount(metadata.recordCounts),
             collectionCount: metadata.collections.length,
             dbName: metadata.dbName,
-            size: fs.statSync(zipPath).size
+            size: fs.statSync(zipPath).size,
         });
 
-        index.unshift(backupEntry);
-        if (index.length > 30) index = index.slice(0, 30);
-
-        fs.writeFileSync(indexPath, JSON.stringify(index, null, 2));
+        if (recordInIndex) {
+            upsertIndexEntry(backupEntry);
+        }
 
         return backupEntry;
     } catch (error) {
-        console.error('Backup generation failed:', error);
-        throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Backup failed: ' + error.message);
+        try {
+            if (fs.existsSync(tmpDir)) fs.rmSync(tmpDir, { recursive: true, force: true });
+        } catch {
+            /* ignore temp cleanup */
+        }
+        console.error('Backup generation failed:', sanitizeBackupError(error));
+        throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Backup failed: ' + sanitizeBackupError(error));
+    } finally {
+        if (!alreadyLocked) backupMutex = false;
+    }
+};
+
+export const startBackupJob = (userId, reason = 'Manual Backup') => {
+    recoverStaleBackupJobs();
+    if (backupMutex) {
+        const err = new ApiError(httpStatus.CONFLICT, 'A full backup is already in progress.');
+        err.details = { job: getActiveBackupJob() };
+        throw err;
+    }
+    const active = getActiveBackupJob();
+    if (active) {
+        const err = new ApiError(httpStatus.CONFLICT, 'A full backup is already in progress.');
+        err.details = { job: active };
+        throw err;
+    }
+
+    backupMutex = true;
+
+    const dbName = mongoose.connection.name;
+    const timestamp = moment().format('YYYY-MM-DD-HHmmss');
+    const env = process.env.NODE_ENV || 'production';
+    const backupName = `${dbName}-backup-${timestamp}-${env}`;
+    const job = {
+        id: backupName,
+        filename: `${backupName}.zip`,
+        date: new Date(),
+        reason,
+        createdBy: userId,
+        status: 'Queued',
+        dbName,
+        counts: {},
+        totalDocs: 0,
+        collectionCount: 0,
+        size: 0,
+    };
+    try {
+        upsertIndexEntry(job);
+    } catch (error) {
+        backupMutex = false;
+        throw error;
+    }
+
+    setImmediate(() => {
+        runBackupJob(job.id, userId, reason)
+            .catch((error) => {
+                console.error('[backup] background job failed:', sanitizeBackupError(error));
+            })
+            .finally(() => {
+                backupMutex = false;
+            });
+    });
+
+    return enrichBackupEntry(job);
+};
+
+const runBackupJob = async (backupName, userId, reason) => {
+    const running = {
+        ...readIndex().find((b) => b.id === backupName),
+        status: 'Running',
+        startedAt: new Date().toISOString(),
+    };
+    upsertIndexEntry(running);
+    try {
+        const completed = await generateBackup(userId, reason, {
+            backupName,
+            recordInIndex: false,
+            alreadyLocked: true,
+        });
+        upsertIndexEntry({
+            ...completed,
+            status: 'Completed',
+            startedAt: running.startedAt,
+            finishedAt: new Date().toISOString(),
+        });
+    } catch (error) {
+        upsertIndexEntry({
+            ...running,
+            status: 'Failed',
+            error: sanitizeBackupError(error),
+            finishedAt: new Date().toISOString(),
+        });
     }
 };
 
@@ -403,10 +577,21 @@ export const generateBackup = async (userId, reason = 'Manual Backup') => {
  * List all available backups
  */
 export const listBackups = () => {
-    const indexPath = path.join(BACKUP_DIR, 'index.json');
-    if (!fs.existsSync(indexPath)) return [];
-    const index = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
-    return index.map(enrichBackupEntry);
+    recoverStaleBackupJobs();
+    reapOrphanActiveJobs();
+    return readIndex().map((entry) =>
+        enrichBackupEntry({
+            ...entry,
+            status: entry.status || 'Completed',
+        })
+    );
+};
+
+export const getBackupJob = (backupId) => {
+    const id = safeBackupId(backupId);
+    const job = listBackups().find((b) => b.id === id);
+    if (!job) throw new ApiError(httpStatus.NOT_FOUND, 'Backup job not found');
+    return job;
 };
 
 /**
@@ -520,6 +705,7 @@ export const processUploadedBackup = async (file, userId) => {
             date: new Date(),
             reason: metadata.reason || 'Uploaded Backup',
             createdBy: userId,
+            status: 'Completed',
             counts: recordCounts,
             uiCounts: metadata.uiCounts || buildUiCounts(recordCounts),
             totalDocs: totalDocCount(recordCounts),
@@ -547,9 +733,60 @@ export const processUploadedBackup = async (file, userId) => {
  */
 export const getBackupFilePath = (backupId) => {
     const id = safeBackupId(backupId);
+    const job = readIndex().find((b) => b.id === id);
+    if (job && job.status && job.status !== 'Completed') {
+        throw new ApiError(httpStatus.BAD_REQUEST, `Backup is not ready to download (status: ${job.status}).`);
+    }
     const filePath = path.join(BACKUP_DIR, `${id}.zip`);
     if (!fs.existsSync(filePath)) {
         throw new ApiError(httpStatus.NOT_FOUND, 'Backup file not found');
     }
     return filePath;
+};
+
+const deletingBackupIds = new Set();
+
+/**
+ * Delete one backup ZIP and its history row only. Never touches MongoDB/CRM data.
+ */
+export const deleteBackup = (backupId) => {
+    const id = safeBackupId(backupId);
+    if (deletingBackupIds.has(id)) {
+        throw new ApiError(httpStatus.CONFLICT, 'This backup is already being deleted.');
+    }
+    deletingBackupIds.add(id);
+    try {
+        const index = readIndex();
+        const job = index.find((b) => b.id === id);
+        if (!job) {
+            throw new ApiError(httpStatus.NOT_FOUND, 'Backup not found in history.');
+        }
+        const status = job.status || 'Completed';
+        if (ACTIVE_BACKUP_STATUSES.has(status)) {
+            throw new ApiError(
+                httpStatus.CONFLICT,
+                'Cannot delete a backup that is still in progress.'
+            );
+        }
+
+        const zipPath = path.join(BACKUP_DIR, `${id}.zip`);
+        let archiveMissing = false;
+        if (fs.existsSync(zipPath)) {
+            fs.unlinkSync(zipPath);
+        } else {
+            archiveMissing = true;
+        }
+
+        writeIndex(index.filter((b) => b.id !== id));
+
+        return {
+            id,
+            archiveMissing,
+            message: archiveMissing
+                ? 'Backup archive was already missing. History entry removed.'
+                : 'Backup archive deleted. CRM data was not changed.',
+        };
+    } finally {
+        deletingBackupIds.delete(id);
+    }
 };

@@ -6,8 +6,11 @@ const BACKUP_LONG_TIMEOUT_MS = 15 * 60 * 1000;
 export const getBackups = () => 
     apiClient.get('/backups').then(r => r.data);
 
-export const triggerBackup = (reason) => 
-    apiClient.post('/backups/trigger', { reason }, { timeout: BACKUP_LONG_TIMEOUT_MS }).then(r => r.data);
+export const triggerBackup = (reason) =>
+    apiClient.post('/backups/trigger', { reason }).then((r) => r.data);
+
+export const getBackupJob = (id) =>
+    apiClient.get(`/backups/jobs/${encodeURIComponent(id)}`).then((r) => r.data);
 
 export const downloadBackup = (id) => {
     // For download, we usually want to use a direct link or blob
@@ -58,3 +61,6 @@ export const uploadBackup = (file) => {
         maxBodyLength: Infinity,
     }).then(r => r.data);
 };
+
+export const deleteBackup = (id) =>
+    apiClient.delete(`/backups/${encodeURIComponent(id)}`).then((r) => r.data);

@@ -4,11 +4,19 @@ import * as backupService from '../services/backup.service.js';
 
 export const triggerBackup = asyncHandler(async (req, res) => {
     const { reason } = req.body;
-    const backup = await backupService.generateBackup(req.user.id, reason);
-    res.status(httpStatus.CREATED).json({
+    const job = backupService.startBackupJob(req.user.id, reason);
+    res.status(httpStatus.ACCEPTED).json({
         success: true,
-        message: 'Backup generated successfully',
-        data: backup
+        message: 'Backup is running in background. You can continue using CRM.',
+        data: job,
+    });
+});
+
+export const getBackupJob = asyncHandler(async (req, res) => {
+    const job = backupService.getBackupJob(req.params.id);
+    res.json({
+        success: true,
+        data: job,
     });
 });
 
@@ -45,5 +53,14 @@ export const uploadBackup = asyncHandler(async (req, res) => {
         success: true,
         message: 'Backup uploaded and indexed successfully',
         data: backup
+    });
+});
+
+export const deleteBackup = asyncHandler(async (req, res) => {
+    const result = backupService.deleteBackup(req.params.id);
+    res.json({
+        success: true,
+        message: result.message,
+        data: result,
     });
 });
