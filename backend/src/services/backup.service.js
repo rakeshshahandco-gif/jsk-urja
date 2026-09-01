@@ -3,7 +3,9 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { finished } from 'stream/promises';
 import AdmZip from 'adm-zip';
+import archiver from 'archiver';
 import moment from 'moment';
 import { EJSON } from 'bson';
 import { ApiError } from '../utils/ApiError.js';
@@ -17,6 +19,8 @@ const BACKUP_DIR = path.join(__dirname, '../../backups');
 const UPLOADS_DIR = path.join(__dirname, '../../uploads');
 
 const INSERT_BATCH_SIZE = 500;
+const DUMP_CURSOR_BATCH = 200;
+const STALE_PROGRESS_MS = 15 * 60 * 1000;
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$/;
 
 // Ensure backup directory exists
@@ -51,8 +55,32 @@ const buildUiCounts = (recordCounts = {}) => {
 const totalDocCount = (recordCounts = {}) =>
     Object.values(recordCounts).reduce((sum, n) => sum + (Number(n) || 0), 0);
 
+const buildProgressMessage = (entry) => {
+    const status = entry?.status || 'Completed';
+    if (status === 'Queued') return 'Queued…';
+    if (status !== 'Running') return entry?.progressMessage || '';
+    const phase = entry.phase || 'Reading Database';
+    if (phase === 'Reading Database') {
+        const done = Number(entry.collectionsProcessed) || 0;
+        const total = Number(entry.collectionsTotal) || 0;
+        return `Reading Database: ${done} / ${total} collections`;
+    }
+    if (phase === 'Copying Attachments') return 'Copying Attachments...';
+    if (phase === 'Creating ZIP') return 'Creating ZIP...';
+    if (phase === 'Finalizing') return 'Finalizing...';
+    return `${phase}...`;
+};
+
+const elapsedMsOf = (entry) => {
+    const start = entry?.startedAt || entry?.date;
+    if (!start) return 0;
+    const ms = Date.now() - new Date(start).getTime();
+    return Number.isFinite(ms) && ms > 0 ? ms : 0;
+};
+
 const enrichBackupEntry = (entry) => {
     const counts = entry.counts || {};
+    const progressMessage = buildProgressMessage(entry);
     return {
         ...entry,
         counts,
@@ -60,6 +88,12 @@ const enrichBackupEntry = (entry) => {
         totalDocs: entry.totalDocs ?? totalDocCount(counts),
         collectionCount: entry.collectionCount ?? Object.keys(counts).length,
         dbName: entry.dbName || null,
+        progressMessage,
+        elapsedMs: elapsedMsOf(entry),
+        documentsProcessed: Number(entry.documentsProcessed) || 0,
+        collectionsProcessed: Number(entry.collectionsProcessed) || 0,
+        collectionsTotal: Number(entry.collectionsTotal) || 0,
+        phase: entry.phase || null,
     };
 };
 
@@ -324,18 +358,78 @@ const dropCollectionsNotInBackup = async (db, backupCollectionNames) => {
 };
 
 const INDEX_PATH = path.join(BACKUP_DIR, 'index.json');
+const DELETED_IDS_PATH = path.join(BACKUP_DIR, '.deleted-ids.json');
 const ACTIVE_BACKUP_STATUSES = new Set(['Queued', 'Running']);
 let backupMutex = false;
 let recoveredStaleJobs = false;
 
+const readDeletedIds = () => {
+    if (!fs.existsSync(DELETED_IDS_PATH)) return new Set();
+    try {
+        const parsed = JSON.parse(fs.readFileSync(DELETED_IDS_PATH, 'utf8'));
+        return new Set(Array.isArray(parsed) ? parsed.map(String) : []);
+    } catch {
+        return new Set();
+    }
+};
+
+const writeDeletedIds = (ids) => {
+    fs.writeFileSync(DELETED_IDS_PATH, JSON.stringify([...ids], null, 2));
+};
+
+const rememberDeletedBackupId = (id) => {
+    const ids = readDeletedIds();
+    ids.add(id);
+    writeDeletedIds(ids);
+};
+
+const forgetDeletedBackupId = (id) => {
+    const ids = readDeletedIds();
+    if (!ids.delete(id)) return;
+    writeDeletedIds(ids);
+};
+
+const removeResurrectedZip = (id) => {
+    const zipPath = path.join(BACKUP_DIR, `${id}.zip`);
+    if (!fs.existsSync(zipPath)) return;
+    try {
+        fs.unlinkSync(zipPath);
+    } catch {
+        /* ignore */
+    }
+};
+
+const applyDeletedTombstones = (index) => {
+    const deleted = readDeletedIds();
+    if (!deleted.size) return index;
+    const kept = [];
+    let stripped = false;
+    for (const entry of index) {
+        if (deleted.has(entry.id)) {
+            stripped = true;
+            removeResurrectedZip(entry.id);
+            continue;
+        }
+        kept.push(entry);
+    }
+    return stripped ? kept : index;
+};
+
 const readIndex = () => {
     if (!fs.existsSync(INDEX_PATH)) return [];
+    let index = [];
     try {
-        const index = JSON.parse(fs.readFileSync(INDEX_PATH, 'utf8'));
-        return Array.isArray(index) ? index : [];
+        const parsed = JSON.parse(fs.readFileSync(INDEX_PATH, 'utf8'));
+        index = Array.isArray(parsed) ? parsed : [];
     } catch {
         return [];
     }
+    const filtered = applyDeletedTombstones(index);
+    if (filtered !== index) {
+        writeIndex(filtered);
+        return filtered;
+    }
+    return index;
 };
 
 const writeIndex = (index) => {
@@ -357,6 +451,16 @@ const upsertIndexEntry = (entry) => {
     return enrichBackupEntry(entry);
 };
 
+const patchJobProgress = (backupName, patch) => {
+    if (!backupName) return;
+    const current = readIndex().find((b) => b.id === backupName) || { id: backupName };
+    upsertIndexEntry({
+        ...current,
+        ...patch,
+        lastProgressAt: new Date().toISOString(),
+    });
+};
+
 export const recoverStaleBackupJobs = () => {
     if (recoveredStaleJobs) return;
     recoveredStaleJobs = true;
@@ -370,23 +474,39 @@ export const recoverStaleBackupJobs = () => {
             status: 'Failed',
             error: 'Server restarted before backup completed.',
             finishedAt: new Date().toISOString(),
+            phase: null,
         };
     });
     if (changed) writeIndex(next);
 };
 
-const reapOrphanActiveJobs = () => {
-    if (backupMutex) return;
+const failStaleOrOrphanBackupJobs = () => {
+    const now = Date.now();
     const index = readIndex();
     let changed = false;
     const next = index.map((entry) => {
         if (!ACTIVE_BACKUP_STATUSES.has(entry.status)) return entry;
+        if (backupMutex) {
+            const parsed = Date.parse(entry.lastProgressAt || entry.startedAt || entry.date);
+            const ts = Number.isFinite(parsed) ? parsed : now;
+            if (now - ts < STALE_PROGRESS_MS) return entry;
+            changed = true;
+            backupMutex = false;
+            return {
+                ...entry,
+                status: 'Failed',
+                error: 'Backup stalled with no progress.',
+                finishedAt: new Date().toISOString(),
+                phase: null,
+            };
+        }
         changed = true;
         return {
             ...entry,
             status: 'Failed',
             error: 'Backup worker is no longer running.',
             finishedAt: new Date().toISOString(),
+            phase: null,
         };
     });
     if (changed) writeIndex(next);
@@ -394,9 +514,78 @@ const reapOrphanActiveJobs = () => {
 
 export const getActiveBackupJob = () => {
     recoverStaleBackupJobs();
-    reapOrphanActiveJobs();
+    failStaleOrOrphanBackupJobs();
     return readIndex().find((b) => ACTIVE_BACKUP_STATUSES.has(b.status)) || null;
 };
+
+const yieldEventLoop = () => new Promise((resolve) => setImmediate(resolve));
+
+const dumpCollectionStreaming = async (collection, filePath) => {
+    const fh = fs.createWriteStream(filePath, { encoding: 'utf8' });
+    let first = true;
+    let count = 0;
+    fh.write('[');
+    const cursor = collection.find({}).batchSize(DUMP_CURSOR_BATCH);
+    for await (const doc of cursor) {
+        const json = EJSON.stringify(doc, { relaxed: false });
+        const ok = fh.write(first ? json : `,${json}`);
+        first = false;
+        count += 1;
+        if (!ok) {
+            await new Promise((resolve) => fh.once('drain', resolve));
+        }
+    }
+    fh.end(']');
+    await finished(fh);
+    return count;
+};
+
+const walkUploadFiles = (dir, base = dir, acc = []) => {
+    if (!fs.existsSync(dir)) return acc;
+    let entries = [];
+    try {
+        entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+        return acc;
+    }
+    for (const entry of entries) {
+        const abs = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+            walkUploadFiles(abs, base, acc);
+        } else if (entry.isFile()) {
+            acc.push({
+                abs,
+                rel: path.relative(base, abs).split(path.sep).join('/'),
+            });
+        }
+    }
+    return acc;
+};
+
+const writeZipStreaming = (zipPath, tmpDir, metadata, onFile) =>
+    new Promise((resolve, reject) => {
+        const output = fs.createWriteStream(zipPath);
+        const archive = archiver('zip', { zlib: { level: 6 } });
+        output.on('close', resolve);
+        output.on('error', reject);
+        archive.on('error', reject);
+        archive.on('warning', (err) => {
+            if (err?.code !== 'ENOENT') reject(err);
+        });
+        archive.pipe(output);
+
+        const dbDir = path.join(tmpDir, 'db');
+        if (fs.existsSync(dbDir)) {
+            archive.directory(dbDir, 'db');
+        }
+        archive.append(JSON.stringify(metadata, null, 2), { name: 'metadata.json' });
+        const uploads = walkUploadFiles(UPLOADS_DIR);
+        for (const file of uploads) {
+            archive.file(file.abs, { name: `uploads/${file.rel}` });
+            if (typeof onFile === 'function') onFile(file.rel);
+        }
+        archive.finalize().catch(reject);
+    });
 
 /**
  * Generate a full database and uploads backup (read collections only; writes ZIP on disk).
@@ -433,27 +622,54 @@ export const generateBackup = async (userId, reason = 'Manual Backup', options =
     try {
         fs.mkdirSync(path.join(tmpDir, 'db'), { recursive: true });
         const collections = await db.listCollections().toArray();
-        for (const col of collections) {
-            const data = await db.collection(col.name).find({}).toArray();
-            fs.writeFileSync(
-                path.join(tmpDir, 'db', `${col.name}.json`),
-                EJSON.stringify(data, { relaxed: false }),
-                'utf8'
-            );
-            metadata.recordCounts[col.name] = data.length;
+        patchJobProgress(backupName, {
+            status: 'Running',
+            phase: 'Reading Database',
+            collectionsProcessed: 0,
+            collectionsTotal: collections.length,
+            documentsProcessed: 0,
+        });
+
+        let documentsProcessed = 0;
+        for (let i = 0; i < collections.length; i += 1) {
+            const col = collections[i];
+            const filePath = path.join(tmpDir, 'db', `${col.name}.json`);
+            const count = await dumpCollectionStreaming(db.collection(col.name), filePath);
+            metadata.recordCounts[col.name] = count;
             metadata.collections.push(col.name);
+            documentsProcessed += count;
+            patchJobProgress(backupName, {
+                status: 'Running',
+                phase: 'Reading Database',
+                collectionsProcessed: i + 1,
+                collectionsTotal: collections.length,
+                documentsProcessed,
+                counts: { ...metadata.recordCounts },
+            });
+            await yieldEventLoop();
         }
 
-        if (fs.existsSync(UPLOADS_DIR)) {
-            const destUploads = path.join(tmpDir, 'uploads');
-            fs.cpSync(UPLOADS_DIR, destUploads, { recursive: true });
-        }
+        patchJobProgress(backupName, {
+            status: 'Running',
+            phase: 'Copying Attachments',
+            collectionsProcessed: collections.length,
+            collectionsTotal: collections.length,
+            documentsProcessed,
+        });
+        await yieldEventLoop();
 
-        fs.writeFileSync(path.join(tmpDir, 'metadata.json'), JSON.stringify(metadata, null, 2));
+        patchJobProgress(backupName, {
+            status: 'Running',
+            phase: 'Creating ZIP',
+            documentsProcessed,
+        });
+        await writeZipStreaming(zipPath, tmpDir, metadata);
 
-        const zip = new AdmZip();
-        zip.addLocalFolder(tmpDir, '');
-        zip.writeZip(zipPath);
+        patchJobProgress(backupName, {
+            status: 'Running',
+            phase: 'Finalizing',
+            documentsProcessed,
+        });
         fs.rmSync(tmpDir, { recursive: true, force: true });
 
         metadata.uiCounts = buildUiCounts(metadata.recordCounts);
@@ -465,10 +681,14 @@ export const generateBackup = async (userId, reason = 'Manual Backup', options =
             reason,
             createdBy: userId,
             status: 'Completed',
+            phase: null,
             counts: metadata.recordCounts,
             uiCounts: metadata.uiCounts,
             totalDocs: totalDocCount(metadata.recordCounts),
             collectionCount: metadata.collections.length,
+            documentsProcessed,
+            collectionsProcessed: collections.length,
+            collectionsTotal: collections.length,
             dbName: metadata.dbName,
             size: fs.statSync(zipPath).size,
         });
@@ -483,6 +703,11 @@ export const generateBackup = async (userId, reason = 'Manual Backup', options =
             if (fs.existsSync(tmpDir)) fs.rmSync(tmpDir, { recursive: true, force: true });
         } catch {
             /* ignore temp cleanup */
+        }
+        try {
+            if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
+        } catch {
+            /* ignore partial zip */
         }
         console.error('Backup generation failed:', sanitizeBackupError(error));
         throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Backup failed: ' + sanitizeBackupError(error));
@@ -518,10 +743,15 @@ export const startBackupJob = (userId, reason = 'Manual Backup') => {
         reason,
         createdBy: userId,
         status: 'Queued',
+        phase: 'Queued',
+        lastProgressAt: new Date().toISOString(),
         dbName,
         counts: {},
         totalDocs: 0,
         collectionCount: 0,
+        collectionsProcessed: 0,
+        collectionsTotal: 0,
+        documentsProcessed: 0,
         size: 0,
     };
     try {
@@ -548,7 +778,9 @@ const runBackupJob = async (backupName, userId, reason) => {
     const running = {
         ...readIndex().find((b) => b.id === backupName),
         status: 'Running',
+        phase: 'Reading Database',
         startedAt: new Date().toISOString(),
+        lastProgressAt: new Date().toISOString(),
     };
     upsertIndexEntry(running);
     try {
@@ -578,7 +810,7 @@ const runBackupJob = async (backupName, userId, reason) => {
  */
 export const listBackups = () => {
     recoverStaleBackupJobs();
-    reapOrphanActiveJobs();
+    failStaleOrOrphanBackupJobs();
     return readIndex().map((entry) =>
         enrichBackupEntry({
             ...entry,
@@ -719,6 +951,7 @@ export const processUploadedBackup = async (file, userId) => {
         if (index.length > 30) index = index.slice(0, 30);
 
         fs.writeFileSync(indexPath, JSON.stringify(index, null, 2));
+        forgetDeletedBackupId(backupName);
 
         return backupEntry;
     } catch (error) {
@@ -778,6 +1011,7 @@ export const deleteBackup = (backupId) => {
         }
 
         writeIndex(index.filter((b) => b.id !== id));
+        rememberDeletedBackupId(id);
 
         return {
             id,
@@ -790,3 +1024,5 @@ export const deleteBackup = (backupId) => {
         deletingBackupIds.delete(id);
     }
 };
+
+recoverStaleBackupJobs();

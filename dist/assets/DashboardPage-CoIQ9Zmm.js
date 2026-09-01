@@ -1,1 +1,0 @@
-import{j as e}from"./index-CnOgcxWH.js";import a from"./ModuleHomePage-DojYq_dm.js";const s=()=>e.jsxDEV(a,{moduleName:"dashboard",title:"Home",subtitle:"Your Global Shortcuts"},void 0,!1,{fileName:"D:/JSK-URJA-release-backup-2026-09-01/src/features/dashboard/DashboardPage.jsx",lineNumber:5,columnNumber:12},void 0);export{s as default};

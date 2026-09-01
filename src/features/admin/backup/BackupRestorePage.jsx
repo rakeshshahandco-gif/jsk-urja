@@ -65,6 +65,24 @@ const BackupRestorePage = () => {
 
     const backupStatusOf = (backup) => backup?.status || 'Completed';
     const isBackupReady = (backup) => backupStatusOf(backup) === 'Completed';
+    const formatElapsed = (ms) => {
+        const total = Math.floor(Number(ms) / 1000);
+        if (!Number.isFinite(total) || total < 0) return '';
+        const m = Math.floor(total / 60);
+        const s = total % 60;
+        return m > 0 ? `${m}m ${String(s).padStart(2, '0')}s` : `${s}s`;
+    };
+    const activeJob = backups.find((b) => {
+        const status = backupStatusOf(b);
+        return status === 'Queued' || status === 'Running';
+    });
+    const liveProgressMessage = (() => {
+        if (!activeJob) return backupStatusMessage;
+        const elapsed = formatElapsed(activeJob.elapsedMs);
+        const line = activeJob.progressMessage || backupStatusMessage;
+        if (!line) return elapsed ? `Elapsed ${elapsed}` : '';
+        return elapsed ? `${line} · ${elapsed}` : line;
+    })();
     const canDeleteBackup = (backup) => {
         const status = backupStatusOf(backup);
         return status === 'Completed' || status === 'Failed';
@@ -329,8 +347,8 @@ const BackupRestorePage = () => {
                     <p className={styles.description}>
                         Create a complete ZIP archive containing the database collections and all uploaded attachments.
                     </p>
-                    {backupStatusMessage ? (
-                        <p className={styles.statusMessage}>{backupStatusMessage}</p>
+                    {liveProgressMessage ? (
+                        <p className={styles.statusMessage}>{liveProgressMessage}</p>
                     ) : null}
                     <div className={styles.formGroup}>
                         <label>Reason for backup</label>
@@ -456,6 +474,12 @@ const BackupRestorePage = () => {
                                         </span>
                                         {status === 'Failed' && b.error ? (
                                             <div className={styles.statusError}>{b.error}</div>
+                                        ) : null}
+                                        {(status === 'Queued' || status === 'Running') && b.progressMessage ? (
+                                            <div className={styles.statusError} style={{ color: '#1d4ed8' }}>
+                                                {b.progressMessage}
+                                                {b.elapsedMs ? ` · ${formatElapsed(b.elapsedMs)}` : ''}
+                                            </div>
                                         ) : null}
                                     </td>
                                     <td>
