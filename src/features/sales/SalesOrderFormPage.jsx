@@ -29,6 +29,13 @@ const normalizeSeriesId = (seriesId) => {
     return String(seriesId);
 };
 
+/** Sales Order / Estimate only — never Credit Note or Debit Note (those have their own forms). */
+const SO_EXCLUDED_SERIES_TYPES = new Set(['Credit Note', 'Debit Note']);
+function isSalesOrderFormSeries(s) {
+    if (!s) return false;
+    return !SO_EXCLUDED_SERIES_TYPES.has(String(s.documentType || '').trim());
+}
+
 const mergeSeriesList = (list, extra) => {
     const base = list || [];
     if (!extra) return base;
@@ -364,7 +371,7 @@ export default function SalesOrderFormPage() {
                         return;
                     }
                     const { seriesId, seriesDoc } = await resolveOrderSeries(so, list || []);
-                    const mergedList = mergeSeriesList(list || [], seriesDoc);
+                    const mergedList = mergeSeriesList((list || []).filter(isSalesOrderFormSeries), seriesDoc);
                     setSeriesList(mergedList);
                     setOriginalSeriesId(seriesId);
                     setPreviewSONo('');
@@ -380,7 +387,7 @@ export default function SalesOrderFormPage() {
                         items: so.items?.length ? so.items : [BLANK_ITEM()],
                     });
                 } else if (!isEdit) {
-                    const list = (await getInvoiceSeries({ active: true })) || [];
+                    const list = ((await getInvoiceSeries({ active: true })) || []).filter(isSalesOrderFormSeries);
                     if (cancelled) return;
                     setSeriesList(list);
                     const def = list.find(x => x.isDefaultForSalesOrder);

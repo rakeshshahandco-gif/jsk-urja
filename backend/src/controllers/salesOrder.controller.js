@@ -12,6 +12,16 @@ import { getNextNumberFromSeries } from '../utils/numberingUtils.js';
 import { assertSalesOrderCanBeUpdated, getSalesOrderBillingSnapshot, prepareSalesOrderForInvoiceCreation } from '../utils/salesOrderBilling.utils.js';
 import { checkUserPermission } from '../utils/permissionUtils.js';
 
+function assertSeriesAllowedOnSalesOrder(series) {
+    const documentType = String(series?.documentType || '').trim();
+    if (documentType === 'Credit Note' || documentType === 'Debit Note') {
+        throw new ApiError(
+            httpStatus.BAD_REQUEST,
+            'Credit Note / Debit Note series cannot be used on a Sales Order. Use Voucher Entry → Credit Notes.'
+        );
+    }
+}
+
 // --- helpers ---
 const numWords = (n) => {
     const a = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
@@ -133,6 +143,7 @@ export const createSO = asyncHandler(async (req, res) => {
     let soNumber = numbering.displayInvoiceNumber;
     const sequenceNumber = numbering.sequenceNumber;
     const series = await InvoiceSeries.findById(body.seriesId);
+    assertSeriesAllowedOnSalesOrder(series);
     const gstApplicable = series.gstApplicable === false ? false : true;
     const seriesName = series?.seriesName || body.seriesName || '';
 
@@ -446,6 +457,7 @@ export const updateSO = asyncHandler(async (req, res) => {
             const numbering = await getNextNumberFromSeries(SalesOrder, body.seriesId, fy, session, 'soNumber');
             if (!numbering) throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid or inactive series');
             const series = await InvoiceSeries.findById(body.seriesId).session(session);
+            assertSeriesAllowedOnSalesOrder(series);
             const gstApplicable = series?.gstApplicable === false ? false : true;
             changes.seriesId = { old: so.seriesId, new: body.seriesId };
             changes.soNumber = { old: so.soNumber, new: numbering.displayInvoiceNumber };
