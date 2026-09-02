@@ -19,6 +19,16 @@ import { useAuth } from '@/hooks/useAuth';
 import { lookupCustomerPrice } from '@/features/sales/customerPriceList/lookupCustomerPrice';
 import CustomerPriceSuggestionPanel from '@/features/sales/customerPriceList/CustomerPriceSuggestionPanel';
 
+function customerIdStr(id) {
+    if (!id) return '';
+    if (typeof id === 'object') return String(id._id || id.id || '');
+    return String(id);
+}
+
+function customerDisplayName(c) {
+    if (!c) return '';
+    return String(c.company || c.customerName || c.name || '').trim();
+}
 
 const inp = { padding: '7px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, width: '100%', boxSizing: 'border-box', outline: 'none', background: '#fff', color: '#374151' };
 const tableInp = { padding: '7px 10px', border: '1px solid #e5e7eb', borderRadius: 6, fontSize: 13, width: '100%', boxSizing: 'border-box', outline: 'none', background: '#fff', color: '#111827', fontWeight: 600, textAlign: 'center' };
@@ -340,8 +350,8 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                 soId,
                 soNumber: so.soNumber,
                 seriesId: soSeriesId || p.seriesId,
-                customerName: so.customerName,
-                customerId: so.customerId || '',
+                customerName: so.customerName || customerDisplayName(so.customerId) || '',
+                customerId: customerIdStr(so.customerId),
                 customerGstin: so.customerGstin || '',
                 customerPhone: so.customerPhone || '',
                 billingAddress: so.billingAddress || '',
@@ -555,7 +565,7 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
     };
 
     const handleCustomerSelect = async (customerId) => {
-        const selected = allCustomers.find(c => c._id === customerId);
+        const selected = allCustomers.find(c => customerIdStr(c._id || c.id) === customerIdStr(customerId));
         if (!selected) return;
 
         try {
@@ -563,8 +573,8 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
             const fullCustomer = await getCustomer(customerId);
             setForm(p => ({
                 ...p,
-                customerName: fullCustomer.name,
-                customerId: customerId,
+                customerName: customerDisplayName(fullCustomer),
+                customerId: customerIdStr(customerId),
                 customerGstin: fullCustomer.gstin || fullCustomer.gstNumber || '',
                 customerPhone: fullCustomer.mobile || '',
                 billingAddress: fullCustomer.billingAddress || '',
@@ -879,15 +889,15 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                         <SearchableSelect
                             options={(() => {
                                 const base = allCustomers.map(c => ({
-                                    value: c._id,
-                                    label: `${c.name} ${c.gstin ? `(${c.gstin})` : ''}`,
-                                    meta: `${c.name} ${c.gstin || ''} ${c.mobile || ''}`
+                                    value: customerIdStr(c._id || c.id),
+                                    label: `${customerDisplayName(c)}${(c.gstin || c.gstNumber) ? ` (${c.gstin || c.gstNumber})` : ''}`,
+                                    meta: `${customerDisplayName(c)} ${c.gstin || c.gstNumber || ''} ${c.mobile || c.phone || ''}`
                                 }));
                                 // If current selection is not in list (e.g. pagination), add it
-                                if (form.customerId && !base.find(b => b.value === form.customerId)) {
+                                if (form.customerId && !base.find(b => b.value === String(form.customerId))) {
                                     base.unshift({
-                                        value: form.customerId,
-                                        label: `${form.customerName} ${form.customerGstin ? `(${form.customerGstin})` : ''}`,
+                                        value: String(form.customerId),
+                                        label: `${form.customerName || 'Customer'} ${form.customerGstin ? `(${form.customerGstin})` : ''}`,
                                         meta: ''
                                     });
                                 }

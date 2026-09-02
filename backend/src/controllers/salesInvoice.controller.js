@@ -17,7 +17,6 @@ import { InvoiceSeries } from '../models/invoiceSeries.model.js';
 import { AuditLog } from '../models/auditLog.model.js';
 import { Voucher } from '../models/voucher.model.js';
 import { LedgerEntry } from '../models/ledgerEntry.model.js';
-import { autoLinkEntityLedger } from '../utils/ledgerLinking.utils.js';
 import { enrichSalesItemsWithGp } from '../services/productCostEngine.service.js';
 import { logCostingAudit } from '../services/costingAudit.service.js';
 import { ensureInvoicePublicToken } from '../services/invoiceBarcode.service.js';
@@ -467,10 +466,6 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
         // Financial Ledger Posting
         const postLedger = !featureSettings || shouldPostSalesLedger(featureSettings);
         if (postLedger) {
-            const customer = await Customer.findById(invoice.customerId).session(session);
-            if (customer) {
-                await autoLinkEntityLedger(customer, 'Customer', session);
-            }
             await postSalesInvoiceToLedger(invoice, req.user.id, session);
         }
 

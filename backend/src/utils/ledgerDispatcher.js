@@ -3,10 +3,138 @@ import { VoucherType } from '../models/voucherType.model.js';
 import { AccountLedger } from '../models/accountLedger.model.js';
 import { LedgerEntry } from '../models/ledgerEntry.model.js';
 import { Supplier } from '../models/supplier.model.js';
+import Customer from '../models/customer.model.js';
 import { ApiError } from '../utils/ApiError.js';
 import { postAccountingEntry } from '../services/accounting/accountingPostingEngine.service.js';
 
 const escLedgerName = (s) => String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const GSTIN_EXACT = /^[0-9A-Z]{15}$/;
+
+export function entityIdOf(ref) {
+    if (!ref) return null;
+    if (typeof ref === 'object') return ref._id || ref.id || null;
+    return ref;
+}
+
+/** Collapse whitespace so "HOUSE  NX" matches ledger "HOUSE NX". Case-insensitive. */
+export function ledgerNameExactOrLooseRegex(name) {
+    const trimmed = String(name || '').trim();
+    if (!trimmed) return null;
+    return new RegExp(`^\\s*${escLedgerName(trimmed).replace(/\s+/g, '\\s+')}\\s*$`, 'i');
+}
+
+export function normalizeLedgerLookupName(name) {
+    return String(name || '').replace(/\s+/g, ' ').trim();
+}
+
+/** GSTIN match is allowed only for a valid 15-char GSTIN. Returns uppercase or ''. */
+export function isValidGstinForLedgerMatch(gstin) {
+    const g = String(gstin || '').trim().toUpperCase();
+    return GSTIN_EXACT.test(g) ? g : '';
+}
+
+export function isUsableCustomerLedger(ledger) {
+    if (!ledger) return false;
+    return String(ledger.status || 'Active') !== 'Inactive';
+}
+
+/** Read-only: 0 → null, 1 → that ledger, 2+ → stop (never auto-pick). */
+export function pickUniqueCustomerLedger(ledgers, label) {
+    const usable = (ledgers || []).filter(isUsableCustomerLedger);
+    if (usable.length === 0) return null;
+    if (usable.length > 1) {
+        throw new ApiError(
+            400,
+            `Ambiguous ledger match for ${label}. ${usable.length} active Customer ledgers found. Admin review is required — invoice posting will not pick one automatically.`
+        );
+    }
+    return usable[0];
+}
+
+function companyScope(companyId) {
+    if (!companyId) return {};
+    return { companyId };
+}
+
+async function findActiveCustomerLedgers(query, session) {
+    return AccountLedger.find({
+        ...query,
+        type: 'Customer',
+        status: { $ne: 'Inactive' },
+    }).session(session);
+}
+
+/**
+ * Resolve an existing Customer ledger for Sales Invoice posting.
+ * READ-ONLY: never creates a ledger and never writes referenceId / customer.ledgerId.
+ */
+export async function resolveCustomerLedgerForSales(invoice, session) {
+    const customerId = entityIdOf(invoice.customerId);
+    let customer = null;
+    if (customerId) {
+        customer = await Customer.findById(customerId)
+            .select('ledgerId company customerName gstNumber companyId')
+            .session(session);
+    }
+    const companyId = invoice.companyId || customer?.companyId || null;
+
+    // 1. customer.ledgerId when the ledger still exists and is active
+    if (customer?.ledgerId) {
+        const byLink = await AccountLedger.findById(customer.ledgerId).session(session);
+        if (isUsableCustomerLedger(byLink)) return byLink;
+    }
+
+    // 2. Ledger already pointing at this customer
+    if (customerId) {
+        let byRef = await findActiveCustomerLedgers({
+            referenceId: customerId,
+            referenceModel: 'Customer',
+            ...companyScope(companyId),
+        }, session);
+        if (companyId && byRef.length === 0) {
+            byRef = await findActiveCustomerLedgers({
+                referenceId: customerId,
+                referenceModel: 'Customer',
+                companyId: null,
+            }, session);
+        }
+        const uniqueRef = pickUniqueCustomerLedger(byRef, `customer ${customerId}`);
+        if (uniqueRef) return uniqueRef;
+    }
+
+    // 3. GSTIN — valid, company-scoped, exactly one active ledger
+    const gstin = isValidGstinForLedgerMatch(customer?.gstNumber || invoice.customerGstin);
+    if (gstin) {
+        const gstinRx = new RegExp(`^${escLedgerName(gstin)}$`, 'i');
+        let byGstin = await findActiveCustomerLedgers({
+            gstin: gstinRx,
+            ...companyScope(companyId),
+        }, session);
+        if (companyId && byGstin.length === 0) {
+            byGstin = await findActiveCustomerLedgers({ gstin: gstinRx, companyId: null }, session);
+        }
+        const uniqueGstin = pickUniqueCustomerLedger(byGstin, `GSTIN ${gstin}`);
+        if (uniqueGstin) return uniqueGstin;
+    }
+
+    // 4. Name — case/space-normalized, company-scoped; refuse ambiguous matches
+    const name = normalizeLedgerLookupName(
+        invoice.customerName || customer?.company || customer?.customerName
+    );
+    if (!name) return null;
+
+    const loose = ledgerNameExactOrLooseRegex(name);
+    if (!loose) return null;
+
+    let byName = await findActiveCustomerLedgers({
+        name: loose,
+        ...companyScope(companyId),
+    }, session);
+    if (companyId && byName.length === 0) {
+        byName = await findActiveCustomerLedgers({ name: loose, companyId: null }, session);
+    }
+    return pickUniqueCustomerLedger(byName, `customer name "${name}"`);
+}
 
 async function resolveSupplierLedgerForPurchase(invoice, session) {
     if (invoice.supplierId) {
@@ -71,10 +199,8 @@ export const postSalesInvoiceToLedger = async (invoice, userId, session) => {
         await reverseInvoiceLedgerImpact(voucherNo, session, { forceRemove: true });
     }
 
-    // 2. Identify Ledgers
-    let customerLedger;
-    if (invoice.customerId) customerLedger = await AccountLedger.findOne({ referenceId: invoice.customerId }).session(session);
-    if (!customerLedger && invoice.customerName) customerLedger = await AccountLedger.findOne({ name: invoice.customerName }).session(session);
+    // 2. Identify existing ledger only. Never create. Never rewrite Customer/Ledger master links.
+    const customerLedger = await resolveCustomerLedgerForSales(invoice, session);
 
     const salesLedger = await AccountLedger.findOne({ name: 'Sales Account' }).session(session);
     const cgstLedger = await AccountLedger.findOne({ name: 'CGST Output' }).session(session);
