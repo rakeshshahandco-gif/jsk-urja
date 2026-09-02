@@ -86,6 +86,9 @@ export const resequenceSeries = (data) =>
 export const changeInvoiceSeries = (id, data) =>
     apiClient.post(`/sales-invoices/change-series/${id}`, data).then(r => r.data);
 
+export const changeInvoiceDate = (id, data) =>
+    apiClient.post(`/sales-invoices/${id}/change-date`, data).then(r => r.data);
+
 export const bulkRenumberInvoices = (data) =>
     apiClient.post('/sales-invoices/bulk-renumber', data).then(r => r.data);
 

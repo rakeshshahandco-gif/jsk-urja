@@ -39,6 +39,7 @@ router.route('/:id')
 router.post('/:id/cancel', siCtrl.cancelSalesInvoice);
 router.post('/:id/restore', authorize('admin', 'superadmin'), siCtrl.restoreSalesInvoice);
 router.post('/:id/gst-correction', authorize('admin', 'superadmin'), siCtrl.updateGstDetails);
+router.post('/:id/change-date', authorize('admin', 'superadmin'), siCtrl.changeInvoiceDate);
 router.post('/:id/record-payment', siCtrl.recordPayment);
 router.post('/:id/incentive-status', siCtrl.updateIncentiveStatus);
 

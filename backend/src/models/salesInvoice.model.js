@@ -195,6 +195,16 @@ const salesInvoiceSchema = new mongoose.Schema({
         changedAt: { type: Date, default: Date.now },
         changedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
     }],
+    invoiceDateChangeHistory: [{
+        oldInvoiceDate: { type: Date, default: null },
+        newInvoiceDate: { type: Date, default: null },
+        reason: { type: String, default: '' },
+        changedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+        changedByName: { type: String, default: '' },
+        changedAt: { type: Date, default: Date.now },
+        companyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Company', default: null },
+        financialYear: { type: String, default: '' },
+    }],
 
     // Soft Delete Fields
     isDeleted: { type: Boolean, default: false },

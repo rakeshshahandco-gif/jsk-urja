@@ -6,6 +6,7 @@ import {
     restoreSalesInvoice, recordSalesPayment, renumberInvoice, 
     changeInvoiceSeries, getInvoiceSeries, getInvoiceBarcodeData
 } from '@/services/salesApi';
+import ChangeInvoiceDateModal from './components/ChangeInvoiceDateModal';
 import { getCompanyProfile } from '@/services/settingsApi';
 import { useAuth } from '@/hooks/useAuth';
 import { PATHS } from '@/routes/paths';
@@ -51,6 +52,7 @@ export default function SalesInvoiceDetailPage() {
     const [seriesList, setSeriesList] = useState([]);
     const [showSeriesModal, setShowSeriesModal] = useState(false);
     const [showGstModal, setShowGstModal] = useState(false);
+    const [showChangeDateModal, setShowChangeDateModal] = useState(false);
     const [isCommModalOpen, setIsCommModalOpen] = useState(false);
     const [billWiseRows, setBillWiseRows] = useState([]);
     const [printBarcodePayload, setPrintBarcodePayload] = useState(null);
@@ -350,6 +352,15 @@ export default function SalesInvoiceDetailPage() {
                                              style={{ padding: '9px 18px', borderRadius: 8, background: '#d97706', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
                                          >
                                              ✏️ Edit GST Return Details
+                                         </button>
+                                     )}
+                                     {notCancelled && (
+                                         <button
+                                             onClick={() => setShowChangeDateModal(true)}
+                                             style={{ padding: '9px 18px', borderRadius: 8, background: '#0f766e', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
+                                             title="Change invoice date only. Number and values stay the same."
+                                         >
+                                             📅 Change Invoice Date
                                          </button>
                                      )}
                                  </>
@@ -673,6 +684,33 @@ export default function SalesInvoiceDetailPage() {
                             </div>
                         )}
 
+                        {isAdmin && Array.isArray(inv.invoiceDateChangeHistory) && inv.invoiceDateChangeHistory.length > 0 && (
+                            <div style={{ marginBottom: 24, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 16 }}>
+                                <div style={{ fontSize: 12, fontWeight: 800, textTransform: 'uppercase', color: '#64748b', marginBottom: 10 }}>Invoice Date Change History</div>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                                    <thead>
+                                        <tr>
+                                            <th style={{ ...th, padding: '6px 8px' }}>Changed At</th>
+                                            <th style={{ ...th, padding: '6px 8px' }}>Old Date</th>
+                                            <th style={{ ...th, padding: '6px 8px' }}>New Date</th>
+                                            <th style={{ ...th, padding: '6px 8px' }}>Changed By</th>
+                                            <th style={{ ...th, padding: '6px 8px' }}>Reason</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {[...inv.invoiceDateChangeHistory].reverse().map((row, idx) => (
+                                            <tr key={row._id || idx}>
+                                                <td style={{ ...td, padding: '6px 8px' }}>{row.changedAt ? new Date(row.changedAt).toLocaleString('en-GB') : '—'}</td>
+                                                <td style={{ ...td, padding: '6px 8px' }}>{row.oldInvoiceDate ? new Date(row.oldInvoiceDate).toLocaleDateString('en-GB') : '—'}</td>
+                                                <td style={{ ...td, padding: '6px 8px' }}>{row.newInvoiceDate ? new Date(row.newInvoiceDate).toLocaleDateString('en-GB') : '—'}</td>
+                                                <td style={{ ...td, padding: '6px 8px' }}>{row.changedByName || '—'}</td>
+                                                <td style={{ ...td, padding: '6px 8px' }}>{row.reason || '—'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
 
                         {/* Items Table */}
                         <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '30px' }}>
@@ -843,6 +881,14 @@ export default function SalesInvoiceDetailPage() {
                     inv={inv} 
                     onClose={() => setShowGstModal(false)} 
                     onSuccess={() => { setShowGstModal(false); load(); }} 
+                />
+            )}
+
+            {showChangeDateModal && (
+                <ChangeInvoiceDateModal
+                    inv={inv}
+                    onClose={() => setShowChangeDateModal(false)}
+                    onSuccess={() => { setShowChangeDateModal(false); load(); }}
                 />
             )}
 

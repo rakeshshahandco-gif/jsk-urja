@@ -35,6 +35,9 @@ import {
     evaluateInvoiceItemsAgainstRemaining,
 } from '../utils/salesOrderBilling.utils.js';
 import logger from '../utils/logger.js';
+import { isGstr1PeriodFiled } from '../services/gstVerification/gstVerification.service.js';
+import { Gstr3bAdjustment } from '../models/gstr3bAdjustment.model.js';
+import { assertDateNotLocked } from '../services/accounting/periodLock.service.js';
 
 /** True only when linked Invoice Series is verified as Estimate (never trust UI/listMode). */
 export function isVerifiedEstimateSeries(seriesDoc) {
@@ -1769,4 +1772,230 @@ export const updateIncentiveStatus = asyncHandler(async (req, res) => {
     await inv.save();
 
     res.json({ success: true, data: inv, message: 'Incentive status updated' });
+});
+
+function parseInvoiceDateOnly(value) {
+    const str = String(value || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(str)) return null;
+    const [y, m, d] = str.split('-').map(Number);
+    const dt = new Date(y, m - 1, d, 12, 0, 0, 0);
+    return Number.isNaN(dt.getTime()) ? null : dt;
+}
+
+function expandFinancialYear(fy) {
+    const s = String(fy || '').trim();
+    const match = s.match(/^(\d{2,4})\s*[-/]\s*(\d{2,4})$/);
+    if (!match) return s;
+    let start = match[1];
+    let end = match[2];
+    if (start.length === 2) start = `20${start}`;
+    if (end.length === 2) end = String(Number(start) + 1);
+    return `${start}-${end}`;
+}
+
+function sameCalendarDay(a, b) {
+    if (!a || !b) return false;
+    const x = new Date(a);
+    const y = new Date(b);
+    return x.getFullYear() === y.getFullYear()
+        && x.getMonth() === y.getMonth()
+        && x.getDate() === y.getDate();
+}
+
+async function isGstr3bPeriodLocked(date) {
+    const d = new Date(date);
+    if (Number.isNaN(d.getTime())) return false;
+    const fy = getFYFromDate(d);
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const doc = await Gstr3bAdjustment.findOne({
+        financialYear: fy,
+        month,
+        status: { $in: ['Filed', 'Locked'] },
+    }).lean();
+    return Boolean(doc);
+}
+
+/**
+ * Admin/Super Admin only — change Sales Invoice date. Number, amounts, stock qty unchanged.
+ * POST /api/v1/sales-invoices/:id/change-date
+ */
+export const changeInvoiceDate = asyncHandler(async (req, res) => {
+    const roleName = String(req.user?.roleName || req.user?.role?.name || '').trim().toLowerCase();
+    if (roleName !== 'admin' && roleName !== 'superadmin') {
+        throw new ApiError(httpStatus.FORBIDDEN, 'Forbidden');
+    }
+
+    const reason = String(req.body?.reason || '').trim();
+    if (!reason) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Reason for date change is required');
+    }
+
+    const newDate = parseInvoiceDateOnly(req.body?.invoiceDate);
+    if (!newDate) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'A valid new invoice date is required');
+    }
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+        const inv = await SalesInvoice.findById(req.params.id).session(session);
+        if (!inv || inv.isDeleted === true) {
+            throw new ApiError(httpStatus.NOT_FOUND, 'Invoice not found');
+        }
+        if (String(inv.status || '') === 'Cancelled') {
+            throw new ApiError(httpStatus.BAD_REQUEST, 'Cancelled invoices cannot have their date changed');
+        }
+        if (sameCalendarDay(inv.invoiceDate, newDate)) {
+            throw new ApiError(httpStatus.BAD_REQUEST, 'New invoice date is the same as the current date');
+        }
+
+        const invoiceFy = expandFinancialYear(inv.financialYear || getFYFromDate(inv.invoiceDate));
+        if (expandFinancialYear(getFYFromDate(newDate)) !== invoiceFy) {
+            throw new ApiError(
+                httpStatus.BAD_REQUEST,
+                `New date must remain in financial year ${invoiceFy}. The invoice will not be moved to another year or series.`
+            );
+        }
+
+        const companyId = inv.companyId || req.companyId || null;
+        if (await isGstr1PeriodFiled(companyId, inv.invoiceDate)) {
+            throw new ApiError(httpStatus.BAD_REQUEST, 'GSTR-1 is already filed for the current invoice period. Date change is blocked.');
+        }
+        if (await isGstr1PeriodFiled(companyId, newDate)) {
+            throw new ApiError(httpStatus.BAD_REQUEST, 'GSTR-1 is already filed for the new invoice period. Date change is blocked.');
+        }
+        if (await isGstr3bPeriodLocked(inv.invoiceDate)) {
+            throw new ApiError(httpStatus.BAD_REQUEST, 'GSTR-3B is filed or locked for the current invoice period. Date change is blocked.');
+        }
+        if (await isGstr3bPeriodLocked(newDate)) {
+            throw new ApiError(httpStatus.BAD_REQUEST, 'GSTR-3B is filed or locked for the new invoice period. Date change is blocked.');
+        }
+
+        await assertDateNotLocked({ date: inv.invoiceDate, financialYear: invoiceFy, lockType: 'gst' });
+        await assertDateNotLocked({ date: newDate, financialYear: invoiceFy, lockType: 'gst' });
+        await assertDateNotLocked({ date: inv.invoiceDate, financialYear: invoiceFy, lockType: 'books' });
+        await assertDateNotLocked({ date: newDate, financialYear: invoiceFy, lockType: 'books' });
+
+        if (String(inv.irn || '').trim() || String(inv.eInvoiceStatus || '') === 'Generated') {
+            throw new ApiError(httpStatus.BAD_REQUEST, 'This invoice has a generated IRN / e-Invoice. Date change is blocked.');
+        }
+
+        const eway = await EwayBill.findOne({ salesInvoiceId: inv._id }).session(session).lean();
+        if (eway && eway.status !== 'Cancelled') {
+            throw new ApiError(httpStatus.BAD_REQUEST, 'This invoice has a linked e-Way Bill. Date change is blocked.');
+        }
+
+        const oldDate = inv.invoiceDate;
+        const invoiceNumber = inv.invoiceNumber;
+        inv.invoiceDate = newDate;
+        inv.invoiceDateChangeHistory = inv.invoiceDateChangeHistory || [];
+        inv.invoiceDateChangeHistory.push({
+            oldInvoiceDate: oldDate,
+            newInvoiceDate: newDate,
+            reason,
+            changedBy: req.user.id,
+            changedByName: req.user.name || req.user.username || req.user.email || '',
+            changedAt: new Date(),
+            companyId,
+            financialYear: inv.financialYear || invoiceFy,
+        });
+        inv.updatedBy = req.user.id;
+        await inv.save({ session });
+
+        const voucherNos = [...new Set([invoiceNumber, inv.displayInvoiceNumber].filter(Boolean))];
+        const voucherFilter = {
+            voucherNo: { $in: voucherNos },
+            financialYear: inv.financialYear,
+            nature: 'Sales',
+            isSystemGenerated: true,
+        };
+        if (companyId) {
+            voucherFilter.$or = [
+                { companyId },
+                { companyId: null },
+                { companyId: { $exists: false } },
+            ];
+        }
+
+        const voucherMatches = await Voucher.find(voucherFilter).session(session);
+        if (voucherMatches.length > 1) {
+            throw new ApiError(
+                httpStatus.CONFLICT,
+                'More than one Sales voucher matched this invoice. Date change was blocked to avoid updating the wrong voucher.'
+            );
+        }
+        const voucher = voucherMatches[0] || null;
+        if (voucher) {
+            const voucherUpdate = await Voucher.updateOne(
+                { _id: voucher._id, ...voucherFilter },
+                { $set: { date: newDate } },
+                { session }
+            );
+            if (voucherUpdate.matchedCount !== 1) {
+                throw new ApiError(httpStatus.CONFLICT, 'Linked Sales voucher could not be updated safely. Date change was rolled back.');
+            }
+
+            const ledgerFilter = { voucherId: voucher._id };
+            if (inv.financialYear) ledgerFilter.financialYear = inv.financialYear;
+            await LedgerEntry.updateMany(
+                ledgerFilter,
+                { $set: { date: newDate } },
+                { session }
+            );
+        }
+
+        const stockFilter = {
+            referenceId: inv._id,
+            transactionType: 'SALES_INVOICE',
+        };
+        if (inv.financialYear) stockFilter.financialYear = inv.financialYear;
+        if (companyId) {
+            stockFilter.$or = [
+                { companyId },
+                { companyId: null },
+                { companyId: { $exists: false } },
+            ];
+        }
+        await StockLedger.updateMany(
+            stockFilter,
+            { $set: { date: newDate } },
+            { session }
+        );
+
+        await AuditLog.create([{
+            user: req.user.id,
+            action: 'UPDATE',
+            module: 'SalesInvoice',
+            resourceId: inv._id,
+            description: `Changed invoice date for ${invoiceNumber}`,
+            details: {
+                invoiceId: inv._id,
+                invoiceNumber,
+                oldInvoiceDate: oldDate,
+                newInvoiceDate: newDate,
+                reason,
+                changedBy: req.user.id,
+                changedByName: req.user.name || req.user.username || req.user.email || '',
+                changedAt: new Date(),
+                companyId,
+                financialYear: inv.financialYear || invoiceFy,
+                amountsUnchanged: true,
+                invoiceNumberUnchanged: true,
+            },
+        }], { session });
+
+        await session.commitTransaction();
+        res.json(new ApiResponse(httpStatus.OK, {
+            _id: inv._id,
+            invoiceNumber: inv.invoiceNumber,
+            displayInvoiceNumber: inv.displayInvoiceNumber,
+            invoiceDate: inv.invoiceDate,
+            invoiceDateChangeHistory: inv.invoiceDateChangeHistory,
+        }, 'Invoice date updated'));
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
+    }
 });
