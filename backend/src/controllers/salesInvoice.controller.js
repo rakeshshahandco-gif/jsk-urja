@@ -35,7 +35,7 @@ import {
     evaluateInvoiceItemsAgainstRemaining,
 } from '../utils/salesOrderBilling.utils.js';
 import logger from '../utils/logger.js';
-import { isGstr1PeriodFiled } from '../services/gstVerification/gstVerification.service.js';
+import { isGstr1PeriodFiled } from '../services/gstr1InvoiceCorrection.service.js';
 import { Gstr3bAdjustment } from '../models/gstr3bAdjustment.model.js';
 import { assertDateNotLocked } from '../services/accounting/periodLock.service.js';
 

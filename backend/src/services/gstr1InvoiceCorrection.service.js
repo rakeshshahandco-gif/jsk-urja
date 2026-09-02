@@ -484,6 +484,11 @@ export async function listAffectedInvoicesMissingGst(customerId, companyId) {
     return list;
 }
 
+export async function isGstr1PeriodFiled(companyId, invoiceDate) {
+    const period = returnPeriodFromDate(invoiceDate);
+    return isPeriodFiled(companyId, period);
+}
+
 export async function markGstr1PeriodFiled({ companyId, returnPeriod, financialYear, userId, remarks }) {
     if (!companyId || !returnPeriod) {
         throw new ApiError(httpStatus.BAD_REQUEST, 'companyId and returnPeriod required');
