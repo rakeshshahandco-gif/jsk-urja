@@ -22,6 +22,12 @@ import {
     isDeferredMaterial,
     getUnresolvedRequiredMaterials,
     buildUnresolvedRequiredBlockMessage,
+    buildPendingProceedWarning,
+    getMaterialDisplayStatus,
+    attachSectionToMaterialLines,
+    filterSectionWorkOrderMaterials,
+    collectPendingFgMaterials,
+    splitActiveAndDeferredMaterials,
 } from '../src/services/workOrderSection.service.js';
 
 describe('section WO display numbers do not consume main series', () => {
@@ -256,8 +262,96 @@ describe('WO-specific mandatory deferral vs original BOM requirement', () => {
     it('final completion message lists pending required components', () => {
         const msg = buildUnresolvedRequiredBlockMessage([
             { itemName: 'SMD-B' },
+            { itemName: 'Conn D' },
         ]);
-        assert.match(msg, /Cannot complete finished production: 1 required component is still pending/);
-        assert.match(msg, /SMD-B/);
+        assert.equal(msg, 'Cannot complete Finished Goods. 2 original BOM components are still pending. SMD-B, Conn D.');
+    });
+
+    it('proceed warning names pending count without blocking', () => {
+        assert.equal(
+            buildPendingProceedWarning(2),
+            '2 components are pending. Production may proceed temporarily.'
+        );
+    });
+
+    it('material display status covers available / short / pending / deferred', () => {
+        assert.equal(getMaterialDisplayStatus({ isMandatory: true, bomIsMandatory: true, shortQty: 0 }), 'Available');
+        assert.equal(getMaterialDisplayStatus({ isMandatory: true, bomIsMandatory: true, shortQty: 4 }), 'Short');
+        assert.equal(getMaterialDisplayStatus({ isMandatory: false, bomIsMandatory: true, shortQty: 4 }), 'Pending Material');
+        assert.equal(getMaterialDisplayStatus({ isMandatory: false, bomIsMandatory: true, shortQty: 0 }), 'Deferred for Current Stage');
+    });
+});
+
+describe('section-wise BOM display uses sectionNo mapping', () => {
+    const components = [
+        { itemId: 'i1', itemName: 'Cap A', sectionNo: 1, sectionName: 'POWER SIDE' },
+        { itemId: 'i2', itemName: 'IC B', sectionNo: 2, sectionName: 'DAUGHTER BOARD' },
+        { itemId: 'i3', itemName: 'Res C', sectionNo: 2, sectionName: 'DAUGHTER BOARD' },
+        { itemId: 'i4', itemName: 'Conn D', sectionNo: 2, sectionName: 'DAUGHTER BOARD' },
+        { itemId: 'i5', itemName: 'Xtal E', sectionNo: 2, sectionName: 'DAUGHTER BOARD' },
+        { itemId: 'i6', itemName: 'LDO F', sectionNo: 2, sectionName: 'DAUGHTER BOARD' },
+        { itemId: 'i7', itemName: 'FET G', sectionNo: 1, sectionName: 'POWER SIDE' },
+    ];
+
+    it('filters DAUGHTER BOARD by sectionNo not by item name text', () => {
+        const woLines = components.map((c) => ({
+            itemId: c.itemId,
+            itemName: c.itemName,
+            isMandatory: true,
+            bomIsMandatory: true,
+            shortQty: 0,
+        }));
+        const daughter = filterSectionWorkOrderMaterials(woLines, 2, components);
+        assert.deepEqual(daughter.map((m) => m.itemName), ['IC B', 'Res C', 'Conn D', 'Xtal E', 'LDO F']);
+        assert.equal(daughter.every((m) => Number(m.sectionNo) === 2), true);
+        assert.equal(daughter.some((m) => /POWER/i.test(m.itemName)), false);
+    });
+
+    it('parent attach keeps all sections for display filter', () => {
+        const woLines = components.map((c) => ({ itemId: c.itemId, itemName: c.itemName }));
+        const attached = attachSectionToMaterialLines(woLines, components);
+        assert.equal(attached.filter((m) => Number(m.sectionNo) === 1).length, 2);
+        assert.equal(attached.filter((m) => Number(m.sectionNo) === 2).length, 5);
+    });
+
+    it('deferred short lines stay in WO data and still block parent FG', () => {
+        const parentLines = [
+            { itemId: 'i2', itemName: 'IC B', isMandatory: true, bomIsMandatory: true, shortQty: 0 },
+            { itemId: 'i3', itemName: 'Res C', isMandatory: false, bomIsMandatory: true, shortQty: 12 },
+            { itemId: 'i4', itemName: 'Conn D', isMandatory: false, bomIsMandatory: true, shortQty: 8 },
+        ];
+        const visible = filterSectionWorkOrderMaterials(parentLines, 2, components);
+        assert.equal(visible.length, 3);
+        const split = splitActiveAndDeferredMaterials(visible);
+        assert.deepEqual(split.active.map((m) => m.itemName), ['IC B']);
+        assert.deepEqual(split.deferred.map((m) => m.itemName), ['Res C', 'Conn D']);
+        const pending = collectPendingFgMaterials(parentLines, []);
+        assert.deepEqual(pending.map((m) => m.itemName), ['Res C', 'Conn D']);
+        assert.match(buildUnresolvedRequiredBlockMessage(pending), /Res C, Conn D/);
+        assert.match(buildUnresolvedRequiredBlockMessage(pending), /2 original BOM components are still pending/);
+    });
+
+    it('still-deferred line blocks FG even after shortQty is 0', () => {
+        const lines = [
+            { itemName: 'A', isMandatory: true, bomIsMandatory: true, shortQty: 0 },
+            { itemName: 'B', isMandatory: false, bomIsMandatory: true, shortQty: 0 },
+        ];
+        const unresolved = getUnresolvedRequiredMaterials(lines);
+        assert.equal(unresolved.length, 1);
+        assert.equal(unresolved[0].itemName, 'B');
+    });
+
+    it('section WO deferred shortage still blocks parent FG via child snapshot', () => {
+        const parentLines = [
+            { itemId: 'i2', itemName: 'IC B', isMandatory: true, bomIsMandatory: true, shortQty: 0 },
+        ];
+        const children = [{
+            materialStatus: [
+                { itemId: 'i3', itemName: 'Res C', isMandatory: false, bomIsMandatory: true, shortQty: 12 },
+            ],
+        }];
+        const pending = collectPendingFgMaterials(parentLines, children);
+        assert.equal(pending.length, 1);
+        assert.equal(pending[0].itemName, 'Res C');
     });
 });

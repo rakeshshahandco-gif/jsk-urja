@@ -63,6 +63,29 @@ function isDeferredLine(m) {
     return isBomRequiredLine(m) && m?.isMandatory === false;
 }
 
+function materialStatusLabel(m, currentMandatory = m?.isMandatory) {
+    const deferred = isBomRequiredLine(m) && currentMandatory === false;
+    if (deferred && Number(m?.shortQty) > 0) return 'Pending Material';
+    if (deferred) return 'Deferred for Current Stage';
+    if (Number(m?.shortQty) > 0) return 'Short';
+    return 'Available';
+}
+
+function pendingProceedWarning(count) {
+    const n = Number(count) || 0;
+    const noun = n === 1 ? 'component is' : 'components are';
+    return `${n} ${noun} pending. Production may proceed temporarily.`;
+}
+
+function deferredDateForMaterial(wo, materialId) {
+    const hits = (wo.mandatoryChangeHistory || []).filter((h) =>
+        String(h.materialId) === String(materialId) && h.newMandatory === false
+    );
+    if (!hits.length) return null;
+    hits.sort((a, b) => new Date(b.changedAt) - new Date(a.changedAt));
+    return hits[0].changedAt || null;
+}
+
 const AUTO_MATERIAL_REMARKS = [
     'Phase 1 read-only snapshot — Section WO does not reserve or consume stock',
 ];
@@ -135,8 +158,12 @@ export default function WorkOrderDetailPage() {
     const pct = wo.stages?.length ? Math.round((wo.stages.filter(s => s.status === 'Completed').length / wo.stages.length) * 100) : 0;
     const unresolvedRequired = (wo.materialStatus || []).filter(m => isBomRequiredLine(m) && m.shortQty > 0);
     const deferredPending = (wo.materialStatus || []).filter(m => isDeferredLine(m));
+    const currentMandatoryShortages = (wo.materialStatus || []).filter(m => m.isMandatory && m.shortQty > 0);
     const isSectionWo = isSectionWorkOrderForPrint(wo);
     const parentRef = wo.parentWorkOrderId && typeof wo.parentWorkOrderId === 'object' ? wo.parentWorkOrderId : null;
+    const pendingBannerCount = isSectionWo
+        ? Math.max(unresolvedRequired.length, deferredPending.length)
+        : deferredPending.length;
 
     return (
         <div style={{ fontFamily: "'Inter', sans-serif", background: '#f8f9fa', minHeight: '100vh', color: '#1e293b' }}>
@@ -211,22 +238,34 @@ export default function WorkOrderDetailPage() {
                 </div>
             )}
 
-            {/* Unresolved / deferred material banner */}
-            {unresolvedRequired.length > 0 && (
+            {/* Parent: hard-block only for currently-ticked Mandatory shortages */}
+            {!isSectionWo && currentMandatoryShortages.length > 0 && (
                 <div style={{ background: '#450a0a', borderBottom: '1px solid #dc2626', padding: '12px 28px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <span style={{ fontSize: '16px' }}>⚠️</span>
                     <div>
-                        <strong style={{ color: '#fca5a5', fontSize: '13px' }}>
-                            {deferredPending.length > 0 ? 'Pending / Deferred Material' : 'Mandatory Material Shortage'}
-                        </strong>
+                        <strong style={{ color: '#fca5a5', fontSize: '13px' }}>Mandatory Material Shortage</strong>
                         <div style={{ color: '#f87171', fontSize: '12px' }}>
-                            {unresolvedRequired.map(m => m.itemName).join(', ')}
-                            {isSectionWo
-                                ? ' — still pending for this section. Unticking Mandatory does not hide the shortage.'
-                                : ' — FG cannot be completed until resolved.'}
+                            {currentMandatoryShortages.map(m => m.itemName).join(', ')} — FG cannot be completed until resolved.
                         </div>
                     </div>
                     <button onClick={() => setTab(1)} style={{ marginLeft: 'auto', padding: '6px 14px', borderRadius: '6px', background: '#7f1d1d', color: '#fca5a5', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>
+                        View BOM →
+                    </button>
+                </div>
+            )}
+
+            {/* Deferred / pending: warning only — process may continue */}
+            {pendingBannerCount > 0 && (
+                <div style={{ background: '#fffbeb', borderBottom: '1px solid #fcd34d', padding: '12px 28px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ fontSize: '16px' }}>⏳</span>
+                    <div>
+                        <strong style={{ color: '#92400e', fontSize: '13px' }}>Pending Material</strong>
+                        <div style={{ color: '#b45309', fontSize: '12px' }}>
+                            {pendingProceedWarning(pendingBannerCount)}
+                            {!isSectionWo && deferredPending.length > 0 ? ` ${deferredPending.map(m => m.itemName).join(', ')}.` : ''}
+                        </div>
+                    </div>
+                    <button onClick={() => setTab(1)} style={{ marginLeft: 'auto', padding: '6px 14px', borderRadius: '6px', background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>
                         View BOM →
                     </button>
                 </div>
@@ -421,13 +460,28 @@ function BomMaterialTab({ wo, load }) {
     const [updates, setUpdates] = useState({});
     const [saving, setSaving] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
-    const isSection = wo.woKind === 'section';
+    const [sectionFilter, setSectionFilter] = useState('all');
+    const [pendingOpen, setPendingOpen] = useState(false);
+    const isSection = wo.woKind === 'section' || !!wo.parentWorkOrderId;
     const materialLocked = ['Closed', 'Cancelled', 'Completed'].includes(wo.status);
     const stockInputsDisabled = isSection || materialLocked;
     const mandatoryDisabled = materialLocked;
     const remarksDisabled = materialLocked;
     const canSaveMandatory = !materialLocked;
-    const sectionDeferredIds = new Set((wo.sectionDeferredMaterials || []).map(d => String(d.itemId)));
+    const bomSections = wo.bomSections || wo.bomId?.sections || [];
+    const showSectionFilter = !isSection && bomSections.length > 1;
+    const sectionMaterials = (wo.materialStatus || []).filter((m) => {
+        if (isSection) return true;
+        if (sectionFilter === 'all') return true;
+        return Number(m.sectionNo) === Number(sectionFilter);
+    });
+    const activeMaterials = isSection
+        ? sectionMaterials.filter((m) => !isDeferredLine(m))
+        : sectionMaterials;
+    const pendingMaterials = isSection
+        ? sectionMaterials.filter((m) => isDeferredLine(m))
+        : [];
+    const unsavedDeferredCount = Object.values(updates).filter((v) => v && v.isMandatory === false).length;
 
     const setUpd = (id, k, v) => setUpdates(u => ({ ...u, [id]: { ...(u[id] || {}), [k]: v } }));
 
@@ -443,8 +497,22 @@ function BomMaterialTab({ wo, load }) {
         setSaving(true);
         try {
             await updateMaterialStatus(wo._id, { materialUpdates });
-            toast.success('Material status updated');
+            const deferredThisSave = materialUpdates.some((u) => u.isMandatory === false);
+            toast.success(deferredThisSave && isSection
+                ? 'Saved. Deferred components moved to Pending Material.'
+                : 'Material status updated');
             setUpdates({});
+            load();
+        } catch (e) { toast.error(e.response?.data?.message || e.message); }
+        finally { setSaving(false); }
+    };
+
+    const handleRestore = async (m) => {
+        if (materialLocked) return;
+        setSaving(true);
+        try {
+            await updateMaterialStatus(wo._id, { materialUpdates: [{ materialId: m._id, isMandatory: true }] });
+            toast.success(`${m.itemName} restored to active list`);
             load();
         } catch (e) { toast.error(e.response?.data?.message || e.message); }
         finally { setSaving(false); }
@@ -461,14 +529,15 @@ function BomMaterialTab({ wo, load }) {
     };
 
     const handleExportExcel = () => {
-        const headers = ['Item', 'UOM', 'Required Qty', 'Available', 'Short Qty', 'Mandatory', 'Procurement Status', 'Remarks'];
-        const rows = (wo.materialStatus || []).map(m => [
+        const headers = ['Item', 'UOM', 'Required Qty', 'Available Qty', 'Short Qty', 'Mandatory', 'Material Status', 'Procurement Status', 'Remarks'];
+        const rows = (isSection ? [...activeMaterials, ...pendingMaterials] : sectionMaterials).map(m => [
             `"${m.itemName}"`,
             `"${m.uom || ''}"`,
             m.requiredQty,
             m.availableStock,
             m.shortQty,
             m.isMandatory ? 'Yes' : (isDeferredLine(m) ? 'Deferred' : 'No'),
+            `"${materialStatusLabel(m)}"`,
             `"${m.procurementStatus}"`,
             `"${displayMaterialRemark(m.remarks)}"`
         ]);
@@ -488,11 +557,11 @@ function BomMaterialTab({ wo, load }) {
         let tableHtml = `<table border="1" style="width:100%; border-collapse:collapse; font-family:sans-serif; font-size:12px;" cellpadding="5">
           <thead>
             <tr style="background:#f1f5f9; text-align:left;">
-              <th>Item</th><th>UOM</th><th>Required</th><th>Available</th><th>Short</th><th>Mandatory</th><th>Status</th><th>Remarks</th>
+              <th>Item</th><th>UOM</th><th>Required</th><th>Available</th><th>Short</th><th>Mandatory</th><th>Material Status</th><th>Procurement</th><th>Remarks</th>
             </tr>
           </thead>
           <tbody>`;
-        (wo.materialStatus || []).forEach(m => {
+        (isSection ? [...activeMaterials, ...pendingMaterials] : sectionMaterials).forEach(m => {
             tableHtml += `<tr>
               <td>${m.itemName}</td>
               <td>${m.uom || '-'}</td>
@@ -500,6 +569,7 @@ function BomMaterialTab({ wo, load }) {
               <td>${m.availableStock}</td>
               <td style="color:${m.shortQty > 0 ? 'red' : 'inherit'}"><strong>${m.shortQty}</strong></td>
               <td>${m.isMandatory ? 'Yes' : (isDeferredLine(m) ? 'Deferred' : 'No')}</td>
+              <td>${materialStatusLabel(m)}</td>
               <td>${m.procurementStatus}</td>
               <td>${displayMaterialRemark(m.remarks)}</td>
             </tr>`;
@@ -562,34 +632,70 @@ function BomMaterialTab({ wo, load }) {
                 </div>
             </div>
             {isSection && (
-                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: 12, color: '#475569' }}>
-                    Showing only {wo.bomSectionName || 'this section'} components. Phase 1 does not reserve or consume stock from Section WOs.
-                    Mandatory may be unticked on this Section WO to continue process tracking; shortage remains visible as Pending Material.
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+                    <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 8,
+                        background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8,
+                        padding: '8px 14px', fontSize: 13, fontWeight: 700, color: '#1e293b',
+                    }}>
+                        Section: {wo.bomSectionName || '—'} <span title="Locked to this Section Work Order">🔒</span>
+                    </span>
+                    <span style={{ fontSize: 11, color: '#94a3b8' }}>
+                        Locked to this Section Work Order. Phase 1 does not reserve or consume stock here.
+                    </span>
+                </div>
+            )}
+            {showSectionFilter && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>Section filter</label>
+                    <select
+                        value={sectionFilter}
+                        onChange={(e) => setSectionFilter(e.target.value)}
+                        style={{ ...inp, width: 220, cursor: 'pointer' }}
+                    >
+                        <option value="all">All Components</option>
+                        {bomSections.map((sec) => (
+                            <option key={sec.sectionNo} value={String(sec.sectionNo)}>
+                                {sec.sectionName || `Section ${sec.sectionNo}`}
+                            </option>
+                        ))}
+                    </select>
+                    <span style={{ fontSize: 11, color: '#94a3b8' }}>Display only — does not change BOM Master.</span>
+                </div>
+            )}
+            {isSection && (pendingMaterials.length > 0 || unsavedDeferredCount > 0) && (
+                <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: 12, color: '#92400e' }}>
+                    {pendingProceedWarning(pendingMaterials.length || unsavedDeferredCount)}
+                    {unsavedDeferredCount > 0 && pendingMaterials.length === 0 ? ' Save Changes to move them out of the active list.' : ''}
                 </div>
             )}
             <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                     <thead>
                         <tr style={{ background: '#f9fafb' }}>
-                            {['Item', 'UOM', 'Required Qty', 'Available', 'Short Qty', 'Mandatory', 'Procurement Status', 'Remarks'].map(h => (
+                            {['Item', 'UOM', 'Required Qty', 'Available Qty', 'Short Qty', 'Mandatory', 'Material Status', 'Procurement Status', 'Remarks'].map(h => (
                                 <th key={h} style={{ padding: '10px 12px', textAlign: 'left', color: '#6b7280', fontWeight: 600, borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap' }}>{h}</th>
                             ))}
                         </tr>
                     </thead>
                     <tbody>
-                        {(wo.materialStatus || []).map((m, i) => {
+                        {activeMaterials.map((m, i) => {
                             const upd = updates[m._id] || {};
                             const currentMandatory = upd.isMandatory !== undefined ? upd.isMandatory : m.isMandatory;
                             const isShort = m.shortQty > 0;
-                            const deferred = (isBomRequiredLine(m) && currentMandatory === false) || sectionDeferredIds.has(String(m.itemId));
+                            const deferredPreview = isBomRequiredLine(m) && currentMandatory === false;
                             const isMandShort = isShort && currentMandatory;
+                            const statusText = materialStatusLabel(m, currentMandatory);
+                            const statusColor = statusText === 'Available' ? '#15803d'
+                                : statusText === 'Short' ? '#dc2626'
+                                    : '#b45309';
                             return (
                                 <tr key={m._id}
-                                    style={{ background: isMandShort ? '#fff1f2' : deferred ? '#fffbeb' : i % 2 === 0 ? '#ffffff' : '#f9fafb' }}>
-                                    <td style={{ padding: '10px 12px', color: isMandShort ? '#dc2626' : '#374151', fontWeight: isMandShort || deferred ? 600 : 400, borderBottom: '1px solid #e5e7eb' }}>
+                                    style={{ background: isMandShort ? '#fff1f2' : deferredPreview ? '#fffbeb' : i % 2 === 0 ? '#ffffff' : '#f9fafb' }}>
+                                    <td style={{ padding: '10px 12px', color: isMandShort ? '#dc2626' : '#374151', fontWeight: isMandShort || deferredPreview ? 600 : 400, borderBottom: '1px solid #e5e7eb' }}>
                                         {m.itemName}
                                         {isMandShort && <span style={{ marginLeft: '6px', fontSize: '10px', background: '#dc2626', color: '#fff', padding: '1px 5px', borderRadius: '3px' }}>SHORT</span>}
-                                        {deferred && <span style={{ marginLeft: '6px', fontSize: '10px', background: '#f59e0b', color: '#fff', padding: '1px 5px', borderRadius: '3px' }}>Pending Material</span>}
+                                        {deferredPreview && <span style={{ marginLeft: '6px', fontSize: '10px', background: '#f59e0b', color: '#fff', padding: '1px 5px', borderRadius: '3px' }}>Will move to Pending</span>}
                                     </td>
                                     <td style={{ padding: '10px 12px', color: '#6b7280', borderBottom: '1px solid #e5e7eb' }}>{m.uom || '—'}</td>
                                     <td style={{ padding: '10px 12px', color: '#1e293b', borderBottom: '1px solid #e5e7eb' }}>{m.requiredQty}</td>
@@ -606,6 +712,14 @@ function BomMaterialTab({ wo, load }) {
                                     <td style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb' }}>
                                         <input type="checkbox" checked={!!currentMandatory} disabled={mandatoryDisabled}
                                             onChange={e => setUpd(m._id, 'isMandatory', e.target.checked)} />
+                                        {deferredPreview && (
+                                            <div style={{ fontSize: 10, color: '#b45309', marginTop: 4, maxWidth: 160, lineHeight: 1.3 }}>
+                                                Save to defer from active work
+                                            </div>
+                                        )}
+                                    </td>
+                                    <td style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb', color: statusColor, fontWeight: 700, fontSize: 12, whiteSpace: 'nowrap' }}>
+                                        {statusText}
                                     </td>
                                     <td style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb' }}>
                                         <select defaultValue={m.procurementStatus} disabled={stockInputsDisabled}
@@ -623,12 +737,73 @@ function BomMaterialTab({ wo, load }) {
                                 </tr>
                             );
                         })}
-                        {!(wo.materialStatus?.length) && (
-                            <tr><td colSpan={8} style={{ padding: '32px', textAlign: 'center', color: '#64748b' }}>No components in BOM</td></tr>
+                        {!activeMaterials.length && (
+                            <tr><td colSpan={9} style={{ padding: '32px', textAlign: 'center', color: '#64748b' }}>
+                                {pendingMaterials.length ? 'No active components — restore pending material to continue this stage.' : 'No components in BOM'}
+                            </td></tr>
                         )}
                     </tbody>
                 </table>
             </div>
+            {isSection && pendingMaterials.length > 0 && (
+                <div style={{ marginTop: 16, border: '1px solid #fcd34d', borderRadius: 10, background: '#fffbeb', overflow: 'hidden' }}>
+                    <button
+                        type="button"
+                        onClick={() => setPendingOpen((o) => !o)}
+                        style={{
+                            width: '100%', textAlign: 'left', padding: '12px 16px', background: 'none',
+                            border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+                            fontSize: 13, fontWeight: 800, color: '#92400e',
+                        }}
+                    >
+                        <span>{pendingOpen ? '▾' : '▸'}</span>
+                        Pending Material ({pendingMaterials.length})
+                        <span style={{ fontWeight: 500, color: '#b45309' }}>— hidden from active work, still required for final completion</span>
+                    </button>
+                    {pendingOpen && (
+                        <div style={{ overflowX: 'auto', background: '#fff', borderTop: '1px solid #fde68a' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                                <thead>
+                                    <tr style={{ background: '#fffbeb' }}>
+                                        {['Item', 'Required Qty', 'Available Qty', 'Short Qty', 'Deferred Date', 'Remarks', 'Restore / Add Back'].map((h) => (
+                                            <th key={h} style={{ padding: '10px 12px', textAlign: 'left', color: '#92400e', fontWeight: 700, borderBottom: '1px solid #fde68a', whiteSpace: 'nowrap' }}>{h}</th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {pendingMaterials.map((m) => {
+                                        const dt = deferredDateForMaterial(wo, m._id);
+                                        return (
+                                            <tr key={m._id}>
+                                                <td style={{ padding: '10px 12px', borderBottom: '1px solid #f1f5f9', fontWeight: 600, color: '#1e293b' }}>{m.itemName}</td>
+                                                <td style={{ padding: '10px 12px', borderBottom: '1px solid #f1f5f9' }}>{m.requiredQty}</td>
+                                                <td style={{ padding: '10px 12px', borderBottom: '1px solid #f1f5f9' }}>{m.availableStock}</td>
+                                                <td style={{ padding: '10px 12px', borderBottom: '1px solid #f1f5f9', color: m.shortQty > 0 ? '#dc2626' : '#1e293b', fontWeight: 700 }}>{m.shortQty}</td>
+                                                <td style={{ padding: '10px 12px', borderBottom: '1px solid #f1f5f9', color: '#64748b' }}>{dt ? new Date(dt).toLocaleString() : '—'}</td>
+                                                <td style={{ padding: '10px 12px', borderBottom: '1px solid #f1f5f9', color: '#475569' }}>{displayMaterialRemark(m.remarks) || '—'}</td>
+                                                <td style={{ padding: '10px 12px', borderBottom: '1px solid #f1f5f9' }}>
+                                                    <button
+                                                        type="button"
+                                                        disabled={materialLocked || saving}
+                                                        onClick={() => handleRestore(m)}
+                                                        style={{
+                                                            padding: '6px 12px', borderRadius: 6, border: '1px solid #2563eb',
+                                                            background: '#eff6ff', color: '#1d4ed8', fontWeight: 700, fontSize: 12,
+                                                            cursor: materialLocked ? 'not-allowed' : 'pointer',
+                                                        }}
+                                                    >
+                                                        Restore / Add Back
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 }
@@ -636,9 +811,15 @@ function BomMaterialTab({ wo, load }) {
 // ─── Process Execution Tab ────────────────────────────────────────────────────
 function ProcessExecutionTab({ wo, load }) {
     const canEdit = ['Released', 'In Process', 'WIP – Waiting Material'].includes(wo.status);
+    const deferredPending = (wo.materialStatus || []).filter((m) => isDeferredLine(m));
 
     return (
         <div>
+            {deferredPending.length > 0 && (
+                <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#92400e' }}>
+                    {pendingProceedWarning(deferredPending.length)}
+                </div>
+            )}
             {/* Stage Summary Grid */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px', marginBottom: '24px' }}>
                 {(wo.stages || []).map(s => {
@@ -1176,9 +1357,33 @@ function MaterialHistoryTab({ wo }) {
             remarks: l.remarks
         }))
     ).sort((a, b) => new Date(b.date) - new Date(a.date));
+    const mandatoryHistory = [...(wo.mandatoryChangeHistory || [])].sort((a, b) => new Date(b.changedAt) - new Date(a.changedAt));
 
     return (
         <div style={{ maxWidth: '900px' }}>
+            <h2 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 700, color: '#1e293b' }}>Mandatory change history</h2>
+            <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px', lineHeight: '1.5' }}>
+                Work Order Mandatory tick/untick only. Original BOM requirement is not overwritten.
+            </p>
+            {mandatoryHistory.length === 0 ? (
+                <div style={{ background: '#ffffff', border: '1px dashed #cbd5e1', borderRadius: '12px', padding: '24px', textAlign: 'center', marginBottom: 28 }}>
+                    <div style={{ fontSize: '13px', color: '#94a3b8' }}>No Mandatory checkbox changes recorded on this Work Order.</div>
+                </div>
+            ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: 28 }}>
+                    {mandatoryHistory.map((h, i) => (
+                        <div key={h._id || i} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '12px 16px' }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{h.itemName || '—'}</div>
+                            <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
+                                {h.previousMandatory ? 'Mandatory' : 'Deferred'} → {h.newMandatory ? 'Mandatory' : 'Deferred'}
+                                {' · '}{h.changedAt ? new Date(h.changedAt).toLocaleString() : '—'}
+                                {' · '}{h.changedBy?.name || '—'}
+                            </div>
+                            {h.remarks ? <div style={{ fontSize: 12, color: '#475569', marginTop: 6 }}>{h.remarks}</div> : null}
+                        </div>
+                    ))}
+                </div>
+            )}
             <h2 style={{ margin: '0 0 20px', fontSize: '16px', fontWeight: 700, color: '#1e293b' }}>Missing Component History</h2>
             <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '24px', lineHeight: '1.5' }}>
                 This is a permanent traceability log of components that were reported as missing during specific production stages.
