@@ -18,6 +18,7 @@ import {
     updateSectionConfigSchema,
     addMaterialLaterSchema,
     createSupplementaryWorkOrderSchema,
+    restoreSectionWorkOrderSchema,
 } from '../validations/workOrder.validation.js';
 import { syncWorkOrderToInventory } from '../services/inventory.service.js';
 import { checkUserPermission } from '../utils/permissionUtils.js';
@@ -64,6 +65,10 @@ import {
     buildMaterialEventEntry,
     enrichMaterialLateFields,
     DEFAULT_SUPPLEMENTARY_REASON,
+    canHardDeleteSectionWorkOrder,
+    buildDeletedSectionExistsMessage,
+    classifyParentDeleteSectionChildren,
+    buildParentDeleteBlockedMessage,
 } from '../services/workOrderSection.service.js';
 import {
     getSequenceBlocker,
@@ -1151,7 +1156,31 @@ export const createSectionWorkOrder = asyncHandler(async (req, res) => {
     const woNumber = buildSectionWoNumber(parent.woNumber, value.bomSectionNo);
     const numberClash = await WorkOrder.findOne({ woNumber });
     if (numberClash) {
-        throw new ApiError(400, `Work Order Number ${woNumber} already exists. Re-open the existing Section WO instead of creating a duplicate.`);
+        const supplementaryCount = await WorkOrder.countDocuments({
+            sourceSectionWorkOrderId: numberClash._id,
+            woKind: SUPPLEMENTARY_WO_KIND,
+        });
+        const sameSection = isSectionWorkOrder(numberClash)
+            && Number(numberClash.bomSectionNo) === Number(value.bomSectionNo);
+        if (sameSection && canHardDeleteSectionWorkOrder(numberClash, { supplementaryCount })) {
+            await WorkOrder.findByIdAndDelete(numberClash._id);
+        } else if (sameSection) {
+            const err = new ApiError(409, buildDeletedSectionExistsMessage(section.sectionName));
+            err.code = 'SECTION_WO_EXISTS_RESTORABLE';
+            err.data = {
+                existingId: numberClash._id,
+                woNumber: numberClash.woNumber,
+                status: numberClash.status,
+                bomSectionNo: numberClash.bomSectionNo,
+                bomSectionName: numberClash.bomSectionName || section.sectionName,
+                canRestore: true,
+                parentMissing: !numberClash.parentWorkOrderId
+                    || String(numberClash.parentWorkOrderId) !== String(parent._id),
+            };
+            throw err;
+        } else {
+            throw new ApiError(400, `Work Order Number ${woNumber} already exists. Re-open the existing Section WO instead of creating a duplicate.`);
+        }
     }
 
     const sectionComponents = filterBomComponentsBySection(normalized.components, value.bomSectionNo);
@@ -1233,6 +1262,81 @@ export const createSectionWorkOrder = asyncHandler(async (req, res) => {
     });
 
     res.status(201).json(new ApiResponse(201, wo, `Section Work Order ${wo.woNumber} created (process tracking only — no stock posting)`));
+});
+
+const ensureParentSectionConfig = (parent, section, requiredQty, isMandatory, userId) => {
+    if (!parent.sectionConfig) parent.sectionConfig = { enabled: false, sections: [] };
+    parent.sectionConfig.enabled = true;
+    const cfgList = Array.isArray(parent.sectionConfig.sections) ? [...parent.sectionConfig.sections] : [];
+    if (!cfgList.some((s) => Number(s.bomSectionNo) === Number(section.sectionNo || section.bomSectionNo))) {
+        cfgList.push({
+            bomSectionNo: Number(section.sectionNo || section.bomSectionNo),
+            bomSectionName: section.sectionName || section.bomSectionName || '',
+            requiredQtyPerFinishedUnit: requiredQty,
+            isMandatory: isMandatory !== false,
+        });
+        parent.sectionConfig.sections = cfgList;
+    }
+    parent.updatedBy = userId;
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+// PATCH /work-orders/:id/section-work-orders/restore
+// Re-link / reopen the original Section WO. Never creates S{n+1}.
+// ────────────────────────────────────────────────────────────────────────────
+export const restoreSectionWorkOrder = asyncHandler(async (req, res) => {
+    const { error, value } = restoreSectionWorkOrderSchema.validate(req.body);
+    if (error) throw new ApiError(400, error.details[0].message);
+
+    const parent = await WorkOrder.findById(req.params.id);
+    if (!parent) throw new ApiError(404, 'Work Order not found');
+    if (isSectionWorkOrder(parent) || isSupplementaryWorkOrder(parent)) {
+        throw new ApiError(400, 'Restore must be called from the parent Work Order');
+    }
+    if (['Closed', 'Cancelled'].includes(parent.status)) {
+        throw new ApiError(400, `Cannot restore a Section WO under a ${parent.status} parent`);
+    }
+
+    const sectionWo = await WorkOrder.findById(value.sectionWorkOrderId);
+    if (!sectionWo) throw new ApiError(404, 'Section Work Order not found');
+    if (!isSectionWorkOrder(sectionWo)) {
+        throw new ApiError(400, 'Only a Section Work Order can be restored');
+    }
+    if (value.bomSectionNo != null && Number(sectionWo.bomSectionNo) !== Number(value.bomSectionNo)) {
+        throw new ApiError(400, 'Section Work Order does not match the requested BOM section');
+    }
+    if (sectionWo.inventorySynced) {
+        throw new ApiError(400, 'Cannot restore a Work Order that has posted inventory');
+    }
+
+    const expectedNumber = buildSectionWoNumber(parent.woNumber, sectionWo.bomSectionNo);
+    if (sectionWo.woNumber !== expectedNumber) {
+        throw new ApiError(400, `Section Work Order number ${sectionWo.woNumber} does not belong to ${expectedNumber}`);
+    }
+
+    const existingActive = await WorkOrder.findOne({
+        parentWorkOrderId: parent._id,
+        woKind: SECTION_WO_KIND,
+        bomSectionNo: Number(sectionWo.bomSectionNo),
+        status: { $ne: 'Cancelled' },
+        _id: { $ne: sectionWo._id },
+    });
+    if (existingActive) {
+        throw new ApiError(400, `An active Section Work Order already exists for ${sectionWo.bomSectionName} (${existingActive.woNumber}).`);
+    }
+
+    sectionWo.parentWorkOrderId = parent._id;
+    if (sectionWo.status === 'Cancelled') {
+        sectionWo.status = deriveWoStatus(sectionWo.stages || [], 'Released');
+    }
+    sectionWo.updatedBy = req.user._id;
+    await sectionWo.save();
+
+    const requiredQty = Number(sectionWo.requiredQtyPerFinishedUnit) > 0 ? Number(sectionWo.requiredQtyPerFinishedUnit) : 1;
+    ensureParentSectionConfig(parent, sectionWo, requiredQty, sectionWo.isMandatorySection !== false, req.user._id);
+    await parent.save();
+
+    res.json(new ApiResponse(200, sectionWo, `Section Work Order ${sectionWo.woNumber} restored. History is unchanged.`));
 });
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -1429,6 +1533,15 @@ export const cancelSectionWorkOrder = asyncHandler(async (req, res) => {
         throw new ApiError(400, 'Cannot cancel a Work Order that has posted inventory');
     }
 
+    const supplementaryCount = await WorkOrder.countDocuments({
+        sourceSectionWorkOrderId: wo._id,
+        woKind: SUPPLEMENTARY_WO_KIND,
+    });
+    if (canHardDeleteSectionWorkOrder(wo, { supplementaryCount })) {
+        await WorkOrder.findByIdAndDelete(wo._id);
+        return res.json(new ApiResponse(200, null, 'Draft Section Work Order deleted. The same section number can be created again.'));
+    }
+
     wo.status = 'Cancelled';
     wo.updatedBy = req.user._id;
     await wo.save();
@@ -1443,6 +1556,38 @@ export const deleteWorkOrder = asyncHandler(async (req, res) => {
     const wo = await WorkOrder.findById(req.params.id);
     if (!wo) throw new ApiError(404, 'Work Order not found');
     // if (wo.status !== 'Draft') throw new ApiError(400, 'Only Draft WOs can be deleted');
+
+    if (isSectionWorkOrder(wo)) {
+        const supplementaryCount = await WorkOrder.countDocuments({
+            sourceSectionWorkOrderId: wo._id,
+            woKind: SUPPLEMENTARY_WO_KIND,
+        });
+        if (!canHardDeleteSectionWorkOrder(wo, { supplementaryCount })) {
+            throw new ApiError(400, 'This Section Work Order has production history. Cancel or Restore it instead of deleting.');
+        }
+        await WorkOrder.findByIdAndDelete(wo._id);
+        return res.json(new ApiResponse(200, null, 'Draft Section Work Order deleted'));
+    }
+
+    if (!isSupplementaryWorkOrder(wo)) {
+        const children = await WorkOrder.find({ parentWorkOrderId: wo._id, woKind: SECTION_WO_KIND });
+        const extrasById = {};
+        for (const child of children) {
+            extrasById[String(child._id)] = {
+                supplementaryCount: await WorkOrder.countDocuments({
+                    sourceSectionWorkOrderId: child._id,
+                    woKind: SUPPLEMENTARY_WO_KIND,
+                }),
+            };
+        }
+        const { cascade, blocking } = classifyParentDeleteSectionChildren(children, extrasById);
+        if (blocking.length) {
+            throw new ApiError(400, buildParentDeleteBlockedMessage(blocking[0]));
+        }
+        for (const child of cascade) {
+            await WorkOrder.findByIdAndDelete(child._id);
+        }
+    }
 
     await WorkOrder.findByIdAndDelete(req.params.id);
     res.json(new ApiResponse(200, null, 'Work Order deleted'));

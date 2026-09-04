@@ -28,6 +28,11 @@ import {
     filterSectionWorkOrderMaterials,
     collectPendingFgMaterials,
     splitActiveAndDeferredMaterials,
+    hasSectionProductionActivity,
+    canHardDeleteSectionWorkOrder,
+    buildDeletedSectionExistsMessage,
+    classifyParentDeleteSectionChildren,
+    buildParentDeleteBlockedMessage,
 } from '../src/services/workOrderSection.service.js';
 
 describe('section WO display numbers do not consume main series', () => {
@@ -353,5 +358,90 @@ describe('section-wise BOM display uses sectionNo mapping', () => {
         const pending = collectPendingFgMaterials(parentLines, children);
         assert.equal(pending.length, 1);
         assert.equal(pending[0].itemName, 'Res C');
+    });
+});
+
+describe('Section WO delete vs restore safety', () => {
+    const idleDraft = {
+        woKind: 'section',
+        status: 'Draft',
+        inventorySynced: false,
+        stages: [{ seq: 1, status: 'Not Started', outputQty: 0, productionLogs: [] }],
+        materialStatus: [{ itemName: 'MB10F', requiredQty: 10, addedLaterQty: 0 }],
+        materialEventHistory: [],
+        mandatoryChangeHistory: [],
+    };
+
+    it('idle Draft Section WO can be hard-deleted so S2 is reusable', () => {
+        assert.equal(hasSectionProductionActivity(idleDraft), false);
+        assert.equal(canHardDeleteSectionWorkOrder(idleDraft), true);
+        assert.equal(buildSectionWoNumber('WO-2026-2027-00001', 2), 'WO-2026-2027-00001-S2');
+    });
+
+    it('In Process Section WO with late material cannot be hard-deleted', () => {
+        const wo = {
+            ...idleDraft,
+            status: 'In Process',
+            stages: [{ seq: 1, status: 'Completed', outputQty: 0, productionLogs: [] }],
+            materialStatus: [{ itemName: 'MB10F', requiredQty: 10, addedLaterQty: 10 }],
+            materialEventHistory: [{ eventType: 'added_later' }],
+        };
+        assert.equal(hasSectionProductionActivity(wo), true);
+        assert.equal(canHardDeleteSectionWorkOrder(wo), false);
+    });
+
+    it('Cancelled Section WO with history must be restored, not deleted', () => {
+        const wo = {
+            ...idleDraft,
+            status: 'Cancelled',
+            materialEventHistory: [{ eventType: 'added_later' }],
+        };
+        assert.equal(canHardDeleteSectionWorkOrder(wo), false);
+        assert.match(buildDeletedSectionExistsMessage('DAUGHTER BOARD'), /DAUGHTER BOARD/);
+    });
+
+    it('Cancelled idle Draft leftover can be purged and S2 reused', () => {
+        const wo = { ...idleDraft, status: 'Cancelled' };
+        assert.equal(canHardDeleteSectionWorkOrder(wo), true);
+    });
+
+    it('linked Supplementary WO blocks hard delete', () => {
+        assert.equal(canHardDeleteSectionWorkOrder(idleDraft, { supplementaryCount: 1 }), false);
+    });
+
+    it('parent delete is blocked when a child has production history', () => {
+        const historyChild = {
+            _id: 's2',
+            woKind: 'section',
+            woNumber: 'WO-2026-2027-00001-S2',
+            status: 'In Process',
+            inventorySynced: false,
+            stages: [{ seq: 1, status: 'Completed' }],
+            materialEventHistory: [{ eventType: 'added_later' }],
+        };
+        const { cascade, blocking } = classifyParentDeleteSectionChildren([historyChild]);
+        assert.equal(cascade.length, 0);
+        assert.equal(blocking.length, 1);
+        assert.match(buildParentDeleteBlockedMessage(blocking[0]), /WO-2026-2027-00001-S2/);
+    });
+
+    it('parent delete cascades only idle Draft children', () => {
+        const idle = { ...idleDraft, _id: 's1', woNumber: 'WO-2026-2027-00001-S1' };
+        const history = {
+            ...idleDraft,
+            _id: 's2',
+            woNumber: 'WO-2026-2027-00001-S2',
+            status: 'In Process',
+            stages: [{ seq: 1, status: 'Completed' }],
+        };
+        const { cascade, blocking } = classifyParentDeleteSectionChildren([idle, history]);
+        assert.equal(cascade.map((c) => c.woNumber).join(','), 'WO-2026-2027-00001-S1');
+        assert.equal(blocking.map((c) => c.woNumber).join(','), 'WO-2026-2027-00001-S2');
+    });
+
+    it('orphaned historical S2 restore keeps the same number, never S3', () => {
+        const parent = 'WO-2026-2027-00001';
+        assert.equal(buildSectionWoNumber(parent, 2), 'WO-2026-2027-00001-S2');
+        assert.notEqual(buildSectionWoNumber(parent, 2), 'WO-2026-2027-00001-S3');
     });
 });

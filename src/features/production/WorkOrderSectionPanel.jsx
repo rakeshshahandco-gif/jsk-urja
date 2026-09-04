@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { PATHS } from '@/routes/paths';
-import { createSectionWorkOrder, updateSectionConfig, getWorkOrderById } from '@/services/workOrderApi';
+import { createSectionWorkOrder, updateSectionConfig, getWorkOrderById, restoreSectionWorkOrder } from '@/services/workOrderApi';
 import { useCompany } from '@/contexts/CompanyContext';
 import { buildProductionSheetPrintHtml, openProductionSheetPrintWindow } from '@/features/production/buildProductionSheetPrintHtml';
 
@@ -29,6 +29,8 @@ export default function WorkOrderSectionPanel({ wo, load }) {
     const [creating, setCreating] = useState(false);
     const [showCreate, setShowCreate] = useState(false);
     const [createSectionNo, setCreateSectionNo] = useState('');
+    const [restorePrompt, setRestorePrompt] = useState(null);
+    const [restoring, setRestoring] = useState(false);
 
     const bomSections = wo.bomSections || wo.bomId?.sections || [];
     const sectionWos = wo.sectionWorkOrders || [];
@@ -124,9 +126,42 @@ export default function WorkOrderSectionPanel({ wo, load }) {
             setCreateSectionNo('');
             load();
         } catch (e) {
-            toast.error(e.response?.data?.message || e.message);
+            const payload = e.response?.data || {};
+            if (payload.errorCode === 'SECTION_WO_EXISTS_RESTORABLE' && payload.data?.existingId) {
+                setShowCreate(false);
+                setRestorePrompt({
+                    sectionName: payload.data.bomSectionName
+                        || unusedSections.find((s) => Number(s.sectionNo) === Number(createSectionNo))?.sectionName
+                        || 'this section',
+                    existingId: payload.data.existingId,
+                    woNumber: payload.data.woNumber,
+                    bomSectionNo: payload.data.bomSectionNo || Number(createSectionNo),
+                    message: payload.message,
+                });
+            } else {
+                toast.error(payload.message || e.message);
+            }
         } finally {
             setCreating(false);
+        }
+    };
+
+    const handleRestore = async () => {
+        if (!restorePrompt?.existingId) return;
+        setRestoring(true);
+        try {
+            const restored = await restoreSectionWorkOrder(wo._id, {
+                sectionWorkOrderId: restorePrompt.existingId,
+                bomSectionNo: Number(restorePrompt.bomSectionNo),
+            });
+            toast.success(`Section WO ${restored.woNumber} restored`);
+            setRestorePrompt(null);
+            setCreateSectionNo('');
+            load();
+        } catch (e) {
+            toast.error(e.response?.data?.message || e.message);
+        } finally {
+            setRestoring(false);
         }
     };
 
@@ -271,6 +306,29 @@ export default function WorkOrderSectionPanel({ wo, load }) {
                             <button type="button" onClick={() => setShowCreate(false)} style={{ padding: '7px 12px', background: '#fff', border: '1px solid #d1d5db', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
                             <button type="button" onClick={handleCreate} disabled={creating} style={{ padding: '7px 14px', background: '#0d9488', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 700, cursor: 'pointer' }}>
                                 {creating ? 'Creating…' : 'Create'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {restorePrompt && (
+                <div style={{
+                    position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', zIndex: 80,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+                }}>
+                    <div style={{ background: '#fff', borderRadius: 12, padding: 22, width: 440, maxWidth: '100%' }}>
+                        <h3 style={{ margin: '0 0 8px', fontSize: 16 }}>Restore Section Work Order</h3>
+                        <p style={{ margin: '0 0 10px', fontSize: 13, color: '#334155', fontWeight: 600 }}>
+                            {restorePrompt.message || `A deleted Section Work Order already exists for ${restorePrompt.sectionName}.`}
+                        </p>
+                        <p style={{ margin: '0 0 16px', fontSize: 12, color: '#64748b' }}>
+                            {restorePrompt.woNumber} will be reopened with its original history. A duplicate will not be created.
+                        </p>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                            <button type="button" onClick={() => setRestorePrompt(null)} style={{ padding: '7px 12px', background: '#fff', border: '1px solid #d1d5db', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
+                            <button type="button" onClick={handleRestore} disabled={restoring} style={{ padding: '7px 14px', background: '#0d9488', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 700, cursor: 'pointer' }}>
+                                {restoring ? 'Restoring…' : 'Restore / Reopen'}
                             </button>
                         </div>
                     </div>

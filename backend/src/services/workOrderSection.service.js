@@ -564,3 +564,62 @@ export function buildMandatoryChangeEntry({ material, previousMandatory, newMand
         changedAt: new Date(),
     };
 }
+
+const ACTIVE_SECTION_STATUSES = new Set([
+    'Released',
+    'In Process',
+    'WIP – Waiting Material',
+    'On Hold',
+    'Completed',
+    'Closed',
+]);
+
+/** True when a Section WO has any production / audit activity that must be preserved. */
+export function hasSectionProductionActivity(wo, { supplementaryCount = 0 } = {}) {
+    if (!wo) return false;
+    if (wo.inventorySynced) return true;
+    if (Number(supplementaryCount) > 0) return true;
+    if (ACTIVE_SECTION_STATUSES.has(wo.status)) return true;
+    const stages = Array.isArray(wo.stages) ? wo.stages : [];
+    if (stages.some((s) => s?.status && s.status !== 'Not Started')) return true;
+    if (stages.some((s) => (s.productionLogs || []).length > 0)) return true;
+    if (stages.some((s) => (Number(s.outputQty) || 0) > 0)) return true;
+    const materials = Array.isArray(wo.materialStatus) ? wo.materialStatus : [];
+    if (materials.some((m) =>
+        (Number(m.addedLaterQty) || 0) > 0
+        || (Number(m.supplementaryAllocatedQty) || 0) > 0
+        || (Number(m.supplementaryCompletedQty) || 0) > 0
+    )) return true;
+    if ((wo.materialEventHistory || []).length > 0) return true;
+    if ((wo.mandatoryChangeHistory || []).length > 0) return true;
+    return false;
+}
+
+/** Draft / leftover Cancelled Section WO with no production activity may be hard-deleted so S{n} can be reused. */
+export function canHardDeleteSectionWorkOrder(wo, extras = {}) {
+    if (!isSectionWorkOrder(wo)) return false;
+    if (wo.inventorySynced) return false;
+    if (!['Draft', 'Cancelled'].includes(wo.status)) return false;
+    return !hasSectionProductionActivity(wo, extras);
+}
+
+export function buildDeletedSectionExistsMessage(sectionName) {
+    const name = String(sectionName || 'this section').trim() || 'this section';
+    return `A deleted Section Work Order already exists for ${name}.`;
+}
+
+export function classifyParentDeleteSectionChildren(children = [], extrasById = {}) {
+    const cascade = [];
+    const blocking = [];
+    for (const child of children) {
+        const extras = extrasById[String(child?._id || '')] || {};
+        if (canHardDeleteSectionWorkOrder(child, extras)) cascade.push(child);
+        else blocking.push(child);
+    }
+    return { cascade, blocking };
+}
+
+export function buildParentDeleteBlockedMessage(child) {
+    const number = child?.woNumber || 'unknown';
+    return `Cannot delete parent while Section WO ${number} has production history. Restore or keep that Section WO.`;
+}

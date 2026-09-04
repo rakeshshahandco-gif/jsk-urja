@@ -83,6 +83,11 @@ export const cancelSectionWorkOrder = async (id) => {
     return response.data.data;
 };
 
+export const restoreSectionWorkOrder = async (parentId, data) => {
+    const response = await api.patch(`${BASE}/${parentId}/section-work-orders/restore`, data);
+    return response.data.data;
+};
+
 export const addMaterialLater = async (id, materialId, data) => {
     const response = await api.post(`${BASE}/${id}/materials/${materialId}/add-later`, data);
     return response.data.data;

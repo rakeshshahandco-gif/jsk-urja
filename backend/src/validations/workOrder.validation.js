@@ -156,6 +156,11 @@ const createSupplementaryWorkOrderSchema = Joi.object({
     reason: Joi.string().optional().allow(''),
 });
 
+const restoreSectionWorkOrderSchema = Joi.object({
+    sectionWorkOrderId: Joi.string().required(),
+    bomSectionNo: Joi.number().integer().min(1).optional(),
+});
+
 export {
     createWorkOrderSchema,
     updateWorkOrderSchema,
@@ -166,4 +171,5 @@ export {
     updateSectionConfigSchema,
     addMaterialLaterSchema,
     createSupplementaryWorkOrderSchema,
+    restoreSectionWorkOrderSchema,
 };

@@ -23,6 +23,7 @@ router.route('/:id')
 // Section / Subassembly WOs (Phase 1 — process tracking only)
 router.get('/:id/section-work-orders', woController.getSectionWorkOrders);
 router.post('/:id/section-work-orders', woController.createSectionWorkOrder);
+router.patch('/:id/section-work-orders/restore', woController.restoreSectionWorkOrder);
 router.patch('/:id/section-config', woController.updateSectionConfig);
 router.patch('/:id/cancel', woController.cancelSectionWorkOrder);
 router.post('/:id/materials/:materialId/add-later', woController.addMaterialLater);

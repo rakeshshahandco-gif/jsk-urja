@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
     getWorkOrderById, releaseWorkOrder, updateWorkOrder, updateStage, updateMaterialStatus, refreshMaterialStock,
-    addProductionLog, deleteProductionLog, cancelSectionWorkOrder, addMaterialLater, createSupplementaryWorkOrder
+    addProductionLog, deleteProductionLog, cancelSectionWorkOrder, restoreSectionWorkOrder, deleteWorkOrder, addMaterialLater, createSupplementaryWorkOrder
 } from '@/services/workOrderApi';
 import { PATHS } from '@/routes/paths';
 import { useCompany } from '@/contexts/CompanyContext';
@@ -305,6 +305,40 @@ export default function WorkOrderDetailPage() {
         finally { setSaving(false); }
     };
 
+    const isIdleDraftSection = wo?.woKind === 'section'
+        && wo.status === 'Draft'
+        && !wo.inventorySynced
+        && !(wo.supplementaryWorkOrders || []).length
+        && !(wo.materialEventHistory || []).length
+        && !(wo.mandatoryChangeHistory || []).length
+        && !(wo.stages || []).some((s) => (s.status && s.status !== 'Not Started') || (s.productionLogs || []).length || (Number(s.outputQty) || 0) > 0)
+        && !(wo.materialStatus || []).some((m) => (Number(m.addedLaterQty) || 0) > 0 || (Number(m.supplementaryAllocatedQty) || 0) > 0);
+
+    const handleDeleteDraftSection = async () => {
+        if (!window.confirm('Delete this Draft Section Work Order? The same section number can be created again.')) return;
+        setSaving(true);
+        try {
+            await deleteWorkOrder(id);
+            toast.success('Draft Section WO deleted');
+            const parentId = wo?.parentWorkOrderId?._id || wo?.parentWorkOrderId;
+            navigate(parentId ? PATHS.PRODUCTION.WO_DETAIL(parentId) : PATHS.PRODUCTION.WORK_ORDERS);
+        } catch (e) { toast.error(e.response?.data?.message || e.message); }
+        finally { setSaving(false); }
+    };
+
+    const handleRestoreSection = async () => {
+        const parentId = wo?.parentWorkOrderId?._id || wo?.parentWorkOrderId;
+        if (!parentId) return toast.error('Parent Work Order is missing. Restore from the parent Section panel.');
+        if (!window.confirm(`Restore / Reopen ${wo.woNumber}? History will be preserved.`)) return;
+        setSaving(true);
+        try {
+            await restoreSectionWorkOrder(parentId, { sectionWorkOrderId: wo._id, bomSectionNo: wo.bomSectionNo });
+            toast.success('Section WO restored');
+            load();
+        } catch (e) { toast.error(e.response?.data?.message || e.message); }
+        finally { setSaving(false); }
+    };
+
     if (loading) return <BrandedLoader size={120} />;
     if (!wo) return <div style={{ padding: '60px', textAlign: 'center', color: '#ef4444', background: '#f8f9fa', minHeight: '100vh' }}>Work Order not found</div>;
 
@@ -399,11 +433,23 @@ export default function WorkOrderDetailPage() {
                                 style={{ padding: '9px 18px', borderRadius: '8px', background: '#1d4ed8', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '13px' }}
                             >{saving ? '...' : '▶ Release WO'}</button>
                         )}
-                        {isSectionWo && wo.status !== 'Cancelled' && wo.status !== 'Closed' && (
+                        {isSectionWo && isIdleDraftSection && (
+                            <button
+                                onClick={handleDeleteDraftSection} disabled={saving}
+                                style={{ padding: '9px 18px', borderRadius: '8px', background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca', cursor: 'pointer', fontWeight: 600, fontSize: '13px' }}
+                            >Delete Draft Section WO</button>
+                        )}
+                        {isSectionWo && !isIdleDraftSection && wo.status !== 'Cancelled' && wo.status !== 'Closed' && (
                             <button
                                 onClick={handleCancelSection} disabled={saving}
                                 style={{ padding: '9px 18px', borderRadius: '8px', background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca', cursor: 'pointer', fontWeight: 600, fontSize: '13px' }}
                             >Cancel Section WO</button>
+                        )}
+                        {isSectionWo && wo.status === 'Cancelled' && (
+                            <button
+                                onClick={handleRestoreSection} disabled={saving}
+                                style={{ padding: '9px 18px', borderRadius: '8px', background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0', cursor: 'pointer', fontWeight: 600, fontSize: '13px' }}
+                            >Restore / Reopen</button>
                         )}
                     </div>
                 </div>
