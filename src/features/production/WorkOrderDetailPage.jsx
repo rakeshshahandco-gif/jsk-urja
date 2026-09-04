@@ -79,6 +79,50 @@ function pendingProceedWarning(count) {
     return `${n} ${noun} pending. Production may proceed temporarily.`;
 }
 
+function remainingToResolveOf(m) {
+    if (m?.remainingToResolveQty != null) return Math.max(0, Number(m.remainingToResolveQty) || 0);
+    const req = Math.max(0, Number(m?.requiredQty) || 0);
+    const added = Math.max(0, Number(m?.addedLaterQty) || 0);
+    const completed = Math.max(0, Number(m?.supplementaryCompletedQty) || 0);
+    const deferred = isBomRequiredLine(m) && m?.isMandatory === false;
+    if (!deferred && added <= 0 && completed <= 0 && !(Number(m?.supplementaryAllocatedQty) > 0)) return 0;
+    return Math.max(0, req - added - completed);
+}
+
+function isUnresolvedPendingLine(m) {
+    return isDeferredLine(m) && remainingToResolveOf(m) > 0;
+}
+
+function PendingMaterialBannerActions({ count, onManage, onViewBom }) {
+    const btn = {
+        padding: '6px 14px',
+        borderRadius: '6px',
+        fontSize: '12px',
+        fontWeight: 700,
+        cursor: 'pointer',
+    };
+    return (
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button
+                type="button"
+                onClick={onManage}
+                style={{ ...btn, background: '#fff', color: '#92400e', border: '1px solid #f59e0b' }}
+            >
+                Manage Pending Material ({count})
+            </button>
+            {onViewBom && (
+                <button
+                    type="button"
+                    onClick={onViewBom}
+                    style={{ ...btn, background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d' }}
+                >
+                    View BOM
+                </button>
+            )}
+        </div>
+    );
+}
+
 function deferredByForMaterial(wo, materialId) {
     const hits = (wo.mandatoryChangeHistory || []).filter((h) =>
         String(h.materialId) === String(materialId) && h.newMandatory === false
@@ -158,6 +202,7 @@ export default function WorkOrderDetailPage() {
     })();
     const [tab, setTab] = useState(initialTab);
     const [saving, setSaving] = useState(false);
+    const [pendingDrawerOpen, setPendingDrawerOpen] = useState(false);
 
     const load = useCallback(() => {
         getWorkOrderById(id)
@@ -167,6 +212,14 @@ export default function WorkOrderDetailPage() {
     }, [id]);
 
     useEffect(() => { load(); }, [load]);
+
+    useEffect(() => {
+        if (!pendingDrawerOpen || !wo) return;
+        const items = wo.woKind === 'section' || (wo.bomSectionName && wo.parentWorkOrderId)
+            ? (wo.materialStatus || []).filter((m) => isUnresolvedPendingLine(m))
+            : (wo.materialStatus || []).filter((m) => isDeferredLine(m));
+        if (items.length === 0) setPendingDrawerOpen(false);
+    }, [wo, pendingDrawerOpen]);
 
     const handleRelease = async () => {
         setSaving(true);
@@ -192,7 +245,6 @@ export default function WorkOrderDetailPage() {
 
     const sc = WO_STATUS_COLORS[wo.status] || WO_STATUS_COLORS['Draft'];
     const pct = wo.stages?.length ? Math.round((wo.stages.filter(s => s.status === 'Completed').length / wo.stages.length) * 100) : 0;
-    const unresolvedRequired = (wo.materialStatus || []).filter(m => isBomRequiredLine(m) && m.shortQty > 0);
     const deferredPending = (wo.materialStatus || []).filter(m => isDeferredLine(m));
     const currentMandatoryShortages = (wo.materialStatus || []).filter(m => m.isMandatory && m.shortQty > 0);
     const isSupplementaryWo = wo.woKind === 'supplementary';
@@ -215,9 +267,10 @@ export default function WorkOrderDetailPage() {
             });
         openProductionSheetPrintWindow(html);
     };
-    const pendingBannerCount = isSectionWo
-        ? Math.max(unresolvedRequired.length, deferredPending.length)
-        : deferredPending.length;
+    const unresolvedPending = (wo.materialStatus || []).filter((m) => isUnresolvedPendingLine(m));
+    const pendingManageItems = isSectionWo ? unresolvedPending : deferredPending;
+    const pendingBannerCount = isSectionWo ? unresolvedPending.length : deferredPending.length;
+    const sectionDeferredResolved = isSectionWo && deferredPending.length > 0 && unresolvedPending.length === 0;
 
     return (
         <div style={{ fontFamily: "'Inter', sans-serif", background: '#f8f9fa', minHeight: '100vh', color: '#1e293b' }}>
@@ -319,9 +372,23 @@ export default function WorkOrderDetailPage() {
                             {!isSectionWo && deferredPending.length > 0 ? ` ${deferredPending.map(m => m.itemName).join(', ')}.` : ''}
                         </div>
                     </div>
-                    <button onClick={() => setTab(1)} style={{ marginLeft: 'auto', padding: '6px 14px', borderRadius: '6px', background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>
-                        View BOM →
-                    </button>
+                    {isSectionWo ? (
+                        <PendingMaterialBannerActions
+                            count={pendingBannerCount}
+                            onManage={() => setPendingDrawerOpen(true)}
+                            onViewBom={() => setTab(1)}
+                        />
+                    ) : (
+                        <button onClick={() => setTab(1)} style={{ marginLeft: 'auto', padding: '6px 14px', borderRadius: '6px', background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>
+                            View BOM →
+                        </button>
+                    )}
+                </div>
+            )}
+            {sectionDeferredResolved && (
+                <div style={{ background: '#f0fdf4', borderBottom: '1px solid #86efac', padding: '12px 28px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ fontSize: '16px' }}>✓</span>
+                    <strong style={{ color: '#166534', fontSize: '13px' }}>All deferred BOM material resolved.</strong>
                 </div>
             )}
 
@@ -344,11 +411,32 @@ export default function WorkOrderDetailPage() {
             <div style={{ padding: '28px' }}>
                 {tab === 0 && <OverviewTab wo={wo} load={load} isTextile={isTextile} labels={labels} />}
                 {tab === 1 && <BomMaterialTab wo={wo} load={load} />}
-                {tab === 2 && <ProcessExecutionTab wo={wo} load={load} setTab={setTab} setWo={setWo} />}
+                {tab === 2 && (
+                    <ProcessExecutionTab
+                        wo={wo}
+                        load={load}
+                        setTab={setTab}
+                        setWo={setWo}
+                        isSectionWo={isSectionWo}
+                        pendingCount={pendingManageItems.length}
+                        deferredResolved={sectionDeferredResolved}
+                        onOpenPending={() => setPendingDrawerOpen(true)}
+                        onViewBom={() => setTab(1)}
+                    />
+                )}
                 {tab === 3 && <QcTestingTab wo={wo} load={load} />}
                 {tab === 4 && <WipTab wo={wo} />}
                 {tab === 5 && <MaterialHistoryTab wo={wo} />}
             </div>
+
+            <PendingComponentsDrawer
+                wo={wo}
+                items={pendingManageItems}
+                open={pendingDrawerOpen}
+                onClose={() => setPendingDrawerOpen(false)}
+                load={load}
+                setTab={setTab}
+            />
 
             <NavigationGuides />
         </div>
@@ -1072,33 +1160,40 @@ function PendingComponentsDrawer({ wo, items, open, onClose, load, setTab }) {
 }
 
 // ─── Process Execution Tab ────────────────────────────────────────────────────
-function ProcessExecutionTab({ wo, load, setTab = () => {}, setWo }) {
+function ProcessExecutionTab({
+    wo, load, setTab = () => {}, setWo,
+    isSectionWo = false, pendingCount = 0, deferredResolved = false,
+    onOpenPending = () => {}, onViewBom = () => {},
+}) {
     const canEdit = ['Released', 'In Process', 'WIP – Waiting Material'].includes(wo.status);
-    const deferredPending = (wo.materialStatus || []).filter((m) => isDeferredLine(m));
-    const [pendingOpen, setPendingOpen] = useState(false);
 
     return (
         <div>
-            {deferredPending.length > 0 && (
+            {pendingCount > 0 && (
                 <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#92400e', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                    <span style={{ flex: 1, cursor: 'pointer' }} onClick={() => setPendingOpen(true)}>{pendingProceedWarning(deferredPending.length)}</span>
-                    <button
-                        type="button"
-                        onClick={() => setPendingOpen(true)}
-                        style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid #f59e0b', background: '#fff', color: '#92400e', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}
-                    >
-                        View Pending Components ({deferredPending.length})
-                    </button>
+                    <span style={{ flex: 1, cursor: 'pointer' }} onClick={onOpenPending}>{pendingProceedWarning(pendingCount)}</span>
+                    {isSectionWo ? (
+                        <PendingMaterialBannerActions
+                            count={pendingCount}
+                            onManage={onOpenPending}
+                            onViewBom={onViewBom}
+                        />
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={onOpenPending}
+                            style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid #f59e0b', background: '#fff', color: '#92400e', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}
+                        >
+                            View Pending Components ({pendingCount})
+                        </button>
+                    )}
                 </div>
             )}
-            <PendingComponentsDrawer
-                wo={wo}
-                items={deferredPending}
-                open={pendingOpen}
-                onClose={() => setPendingOpen(false)}
-                load={load}
-                setTab={setTab}
-            />
+            {deferredResolved && (
+                <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#166534', fontWeight: 700 }}>
+                    All deferred BOM material resolved.
+                </div>
+            )}
             {/* Stage Summary Grid — same wo.stages as Stage Execution */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px', marginBottom: '24px' }}>
                 {(wo.stages || []).map(s => {
