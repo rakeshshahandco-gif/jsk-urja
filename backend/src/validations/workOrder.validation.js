@@ -142,6 +142,20 @@ const addProductionLogSchema = Joi.object({
     remarks: Joi.string().optional().allow(''),
 });
 
+const addMaterialLaterSchema = Joi.object({
+    qty: Joi.number().positive().required(),
+    remarks: Joi.string().optional().allow(''),
+});
+
+const createSupplementaryWorkOrderSchema = Joi.object({
+    materialId: Joi.string().required(),
+    qty: Joi.number().positive().required(),
+    startFromSeq: Joi.number().integer().min(1).required(),
+    supervisor: Joi.string().optional().allow(''),
+    remarks: Joi.string().optional().allow(''),
+    reason: Joi.string().optional().allow(''),
+});
+
 export {
     createWorkOrderSchema,
     updateWorkOrderSchema,
@@ -150,4 +164,6 @@ export {
     addProductionLogSchema,
     createSectionWorkOrderSchema,
     updateSectionConfigSchema,
+    addMaterialLaterSchema,
+    createSupplementaryWorkOrderSchema,
 };

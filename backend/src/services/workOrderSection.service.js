@@ -5,11 +5,22 @@
 
 export const MAIN_WO_KIND = 'main';
 export const SECTION_WO_KIND = 'section';
+export const SUPPLEMENTARY_WO_KIND = 'supplementary';
+export const NA_STAGE_REMARK = 'Not Applicable — completed in original WO';
+export const DEFAULT_SUPPLEMENTARY_REASON = 'Pending material received later';
 
-export const EXCLUDE_SECTION_WO = { woKind: { $ne: SECTION_WO_KIND } };
+export const EXCLUDE_SECTION_WO = { woKind: { $nin: [SECTION_WO_KIND, SUPPLEMENTARY_WO_KIND] } };
 
 export function isSectionWorkOrder(wo) {
     return wo?.woKind === SECTION_WO_KIND;
+}
+
+export function isSupplementaryWorkOrder(wo) {
+    return wo?.woKind === SUPPLEMENTARY_WO_KIND;
+}
+
+export function isProcessOnlyWorkOrder(wo) {
+    return isSectionWorkOrder(wo) || isSupplementaryWorkOrder(wo);
 }
 
 export function isSectionTrackingEnabled(wo) {
@@ -27,21 +38,35 @@ export function mainWoNumberSeriesRegex(prefix) {
     return new RegExp(`^${prefix}\\d+$`);
 }
 
+export function isApplicableStage(stage) {
+    if (!stage) return false;
+    if (stage.notApplicable === true) return false;
+    if (stage.isApplicable === false) return false;
+    return true;
+}
+
+/** N/A supplementary prefix stages must not count as fresh production output. */
+export function getReportableStageOutput(stage) {
+    if (!isApplicableStage(stage)) return 0;
+    return Math.max(0, Number(stage?.outputQty) || 0);
+}
+
 export function getAuthoritativeCompletedQty(wo) {
     if (!wo || wo.status === 'Cancelled') return 0;
     const stages = Array.isArray(wo.stages) ? wo.stages : [];
     if (!stages.length) return 0;
+    const applicable = stages.filter(isApplicableStage);
+    const source = applicable.length ? applicable : stages;
 
-    const finalQc = stages.find((s) => Number(s.seq) === 9)
+    const finalQc = source.find((s) => Number(s.seq) === 9)
         || (() => {
-            const qc = stages.filter((s) => s.isQcGate);
+            const qc = source.filter((s) => s.isQcGate);
             if (!qc.length) return null;
             return qc.reduce((a, b) => (Number(b.seq) > Number(a.seq) ? b : a));
         })();
-    const last = stages.reduce((a, b) => (Number(b.seq) > Number(a.seq) ? b : a), stages[0]);
+    const last = source.reduce((a, b) => (Number(b.seq) > Number(a.seq) ? b : a), source[0]);
     const stage = finalQc || last;
-    const qty = Number(stage?.outputQty) || 0;
-    return qty > 0 ? qty : 0;
+    return getReportableStageOutput(stage);
 }
 
 export function getCurrentStageName(wo) {
@@ -184,8 +209,232 @@ export function cloneStagesForSectionWo(parentStages, fallbackStages = []) {
 
 export function shouldSyncWorkOrderInventory(wo) {
     if (!wo) return false;
-    if (isSectionWorkOrder(wo)) return false;
+    if (isProcessOnlyWorkOrder(wo)) return false;
     return wo.status === 'Completed' && !wo.inventorySynced;
+}
+
+export function buildSupplementaryWoNumber(sectionWoNumber, index) {
+    return `${String(sectionWoNumber || '').trim().toUpperCase()}-SUP${Number(index)}`;
+}
+
+export function parseSupplementaryIndex(woNumber) {
+    const m = String(woNumber || '').match(/-SUP(\d+)$/i);
+    return m ? parseInt(m[1], 10) : 0;
+}
+
+export function nextSupplementaryIndex(existingWoNumbers = []) {
+    let max = 0;
+    for (const n of existingWoNumbers) {
+        max = Math.max(max, parseSupplementaryIndex(n));
+    }
+    return max + 1;
+}
+
+export function cloneStagesForSupplementary(sourceStages, fallbackStages, startFromSeq, targetQty) {
+    const cloned = cloneStagesForSectionWo(sourceStages, fallbackStages);
+    const start = Number(startFromSeq);
+    const qty = Math.max(0, Number(targetQty) || 0);
+    return cloned.map((s) => {
+        if (Number.isFinite(start) && Number(s.seq) < start) {
+            return {
+                ...s,
+                status: 'Completed',
+                inputQty: qty,
+                outputQty: qty,
+                remarks: NA_STAGE_REMARK,
+                notApplicable: true,
+                isApplicable: false,
+            };
+        }
+        return { ...s, notApplicable: false, isApplicable: true };
+    });
+}
+
+export function getAddedLaterQty(m) {
+    return Math.max(0, Number(m?.addedLaterQty) || 0);
+}
+
+export function getSupplementaryAllocatedQty(m) {
+    return Math.max(0, Number(m?.supplementaryAllocatedQty) || 0);
+}
+
+export function getSupplementaryCompletedQty(m) {
+    return Math.max(0, Number(m?.supplementaryCompletedQty) || 0);
+}
+
+export function isLateMaterialLine(m) {
+    return isDeferredMaterial(m)
+        || getAddedLaterQty(m) > 0
+        || getSupplementaryAllocatedQty(m) > 0
+        || getSupplementaryCompletedQty(m) > 0;
+}
+
+/** Remaining qty still open for Record Late Material or a new Supplementary WO. */
+export function getRemainingToAllocateQty(m) {
+    if (!isLateMaterialLine(m)) return 0;
+    const req = Math.max(0, Number(m?.requiredQty) || 0);
+    return Math.max(0, req - getAddedLaterQty(m) - getSupplementaryAllocatedQty(m));
+}
+
+/** Remaining qty not yet covered by added-later + completed supplementary. */
+export function getRemainingToResolveQty(m) {
+    if (!isLateMaterialLine(m)) return 0;
+    const req = Math.max(0, Number(m?.requiredQty) || 0);
+    return Math.max(0, req - getAddedLaterQty(m) - getSupplementaryCompletedQty(m));
+}
+
+/** @deprecated Use getRemainingToAllocateQty. Kept so Add/SUP APIs stay quantity-safe. */
+export function getRemainingPendingQty(m) {
+    return getRemainingToAllocateQty(m);
+}
+
+export function getResolvedMaterialQty(m) {
+    if (!isLateMaterialLine(m)) return Math.max(0, Number(m?.requiredQty) || 0);
+    return Math.min(
+        Math.max(0, Number(m?.requiredQty) || 0),
+        getAddedLaterQty(m) + getSupplementaryCompletedQty(m)
+    );
+}
+
+export function shouldMarkFullyResolved(m) {
+    const req = Math.max(0, Number(m?.requiredQty) || 0);
+    if (req <= 0) return false;
+    return getRemainingToResolveQty(m) === 0
+        && getSupplementaryAllocatedQty(m) <= getSupplementaryCompletedQty(m);
+}
+
+/**
+ * Parent FG cap from original BOM requirement vs qty resolved on current WO / completed SUPs.
+ * Non-late required shorts still cap FG at 0.
+ */
+export function getMaxMaterialCompleteFgQty({
+    parentTargetQty = 0,
+    parentMaterials = [],
+    sectionWorkOrders = [],
+} = {}) {
+    let maxFg = Math.max(0, Number(parentTargetQty) || 0);
+    const lines = [...(parentMaterials || [])];
+    for (const child of sectionWorkOrders || []) {
+        for (const m of child.materialStatus || []) lines.push(m);
+    }
+    for (const m of lines) {
+        if (!isBomRequiredMaterial(m)) continue;
+        if (isLateMaterialLine(m)) {
+            maxFg = Math.min(maxFg, getResolvedMaterialQty(m));
+            continue;
+        }
+        if (Number(m.shortQty) > 0) maxFg = 0;
+    }
+    return Math.max(0, maxFg);
+}
+
+export function buildMaterialCompleteFgBlockMessage(requestedQty, maxFg) {
+    const req = Number(requestedQty) || 0;
+    const avail = Number(maxFg) || 0;
+    return `Cannot complete ${req} units. Only ${avail} units are material-complete.`;
+}
+
+export function collectLateMaterialLines(parentMaterials = [], sectionWorkOrders = []) {
+    const lines = [...(parentMaterials || [])];
+    for (const child of sectionWorkOrders || []) {
+        for (const m of child.materialStatus || []) lines.push(m);
+    }
+    return lines.filter((m) => isBomRequiredMaterial(m) && isLateMaterialLine(m));
+}
+
+/** True when any required late-material line still has Remaining to Resolve > 0. */
+export function hasUnresolvedLateMaterialToResolve(parentMaterials = [], sectionWorkOrders = []) {
+    return collectLateMaterialLines(parentMaterials, sectionWorkOrders)
+        .some((m) => getRemainingToResolveQty(m) > 0);
+}
+
+/**
+ * Phase 1 parent inventory sync consumes full BOM requiredQty on Completed.
+ * Partial FG (e.g. 60 of 100) is therefore unsafe — block until fully resolved.
+ */
+export function buildLateMaterialFullResolveBlockMessage(lines = []) {
+    const unresolved = (lines || []).filter((m) => getRemainingToResolveQty(m) > 0);
+    const remaining = unresolved.reduce((sum, m) => sum + getRemainingToResolveQty(m), 0);
+    const names = unresolved.map((m) => m.itemName).filter(Boolean).join(', ');
+    const base = 'Cannot complete Finished Goods. Late material is not fully resolved. Parent inventory posting consumes the full BOM required quantity, so partial FG completion is not allowed until Remaining to Resolve is 0.';
+    if (remaining > 0) {
+        return names
+            ? `${base} Remaining to Resolve: ${remaining} (${names}).`
+            : `${base} Remaining to Resolve: ${remaining}.`;
+    }
+    return base;
+}
+
+export function getLateMaterialStatusLabel(m, supplementaryWos = []) {
+    const req = Math.max(0, Number(m?.requiredQty) || 0);
+    const remainingResolve = getRemainingToResolveQty(m);
+    const resolved = getAddedLaterQty(m) + getSupplementaryCompletedQty(m);
+    const allocated = getSupplementaryAllocatedQty(m);
+    const completedSup = getSupplementaryCompletedQty(m);
+    const related = (supplementaryWos || []).filter((w) => {
+        if (w.status === 'Cancelled') return false;
+        return (w.supplementaryMaterials || []).some((sm) =>
+            String(sm.materialId) === String(m?._id)
+            || (m?.itemId && String(sm.itemId) === String(m.itemId))
+        );
+    });
+    if (shouldMarkFullyResolved(m)) return 'Fully Resolved';
+    const anyInProgress = related.some((w) => ['In Process', 'WIP – Waiting Material'].includes(w.status));
+    if (anyInProgress) {
+        return resolved > 0
+            ? `Partially Resolved — ${resolved}/${req} · Supplementary In Progress`
+            : 'Supplementary In Progress';
+    }
+    if (related.length && allocated > completedSup) {
+        return resolved > 0
+            ? `Partially Resolved — ${resolved}/${req} · Supplementary WO Created`
+            : 'Supplementary WO Created';
+    }
+    if (resolved > 0 && remainingResolve > 0) return `Partially Resolved — ${resolved}/${req}`;
+    return 'Pending Material';
+}
+
+export function buildMaterialEventEntry({
+    eventType,
+    material,
+    qty = 0,
+    remainingPendingQty = 0,
+    remainingToAllocateQty = remainingPendingQty,
+    remainingToResolveQty = 0,
+    userId = null,
+    remarks = '',
+    supplementaryWorkOrderId = null,
+    supplementaryWoNumber = '',
+}) {
+    return {
+        eventType,
+        materialId: material?._id,
+        itemId: material?.itemId,
+        itemCode: material?.itemCode || '',
+        itemName: material?.itemName || '',
+        qty: Number(qty) || 0,
+        remainingPendingQty: Number(remainingPendingQty) || 0,
+        remainingToAllocateQty: Number(remainingToAllocateQty) || 0,
+        remainingToResolveQty: Number(remainingToResolveQty) || 0,
+        remarks: remarks || '',
+        supplementaryWorkOrderId: supplementaryWorkOrderId || null,
+        supplementaryWoNumber: supplementaryWoNumber || '',
+        createdBy: userId || null,
+        createdAt: new Date(),
+    };
+}
+
+export function enrichMaterialLateFields(materials = [], supplementaryWos = []) {
+    return (materials || []).map((m) => ({
+        ...m,
+        addedLaterQty: getAddedLaterQty(m),
+        supplementaryAllocatedQty: getSupplementaryAllocatedQty(m),
+        supplementaryCompletedQty: getSupplementaryCompletedQty(m),
+        remainingToAllocateQty: getRemainingToAllocateQty(m),
+        remainingToResolveQty: getRemainingToResolveQty(m),
+        remainingPendingQty: getRemainingToAllocateQty(m),
+        lateMaterialStatus: getLateMaterialStatusLabel(m, supplementaryWos),
+    }));
 }
 
 /** Original BOM-required flag on a WO material line (legacy docs without the field are required). */
@@ -198,11 +447,13 @@ export function isDeferredMaterial(m) {
     return isBomRequiredMaterial(m) && m?.isMandatory === false;
 }
 
-/** BOM-required lines still short or still deferred — used for FG completion, not Release. */
+/** BOM-required lines still short or still quantity-pending — used for FG completion, not Release. */
 export function getUnresolvedRequiredMaterials(materialStatus = []) {
-    return (materialStatus || []).filter((m) =>
-        isBomRequiredMaterial(m) && (Number(m.shortQty) > 0 || isDeferredMaterial(m))
-    );
+    return (materialStatus || []).filter((m) => {
+        if (!isBomRequiredMaterial(m)) return false;
+        if (isLateMaterialLine(m)) return getRemainingToResolveQty(m) > 0 || !shouldMarkFullyResolved(m);
+        return Number(m.shortQty) > 0;
+    });
 }
 
 export function buildUnresolvedRequiredBlockMessage(items = []) {

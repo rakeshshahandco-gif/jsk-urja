@@ -82,3 +82,13 @@ export const cancelSectionWorkOrder = async (id) => {
     const response = await api.patch(`${BASE}/${id}/cancel`);
     return response.data.data;
 };
+
+export const addMaterialLater = async (id, materialId, data) => {
+    const response = await api.post(`${BASE}/${id}/materials/${materialId}/add-later`, data);
+    return response.data.data;
+};
+
+export const createSupplementaryWorkOrder = async (sectionId, data) => {
+    const response = await api.post(`${BASE}/${sectionId}/supplementary-work-orders`, data);
+    return response.data.data;
+};

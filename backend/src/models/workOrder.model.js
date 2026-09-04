@@ -94,6 +94,10 @@ const stageSchema = new mongoose.Schema({
     testData: testDataSchema,
     remarks: { type: String, default: '' },
     attachments: [{ type: String }],
+    /** Supplementary WO: earlier stages completed on the original Section WO. */
+    notApplicable: { type: Boolean, default: false },
+    /** False = not real production on this WO (N/A prefix on Supplementary). Default true for normal stages. */
+    isApplicable: { type: Boolean, default: true },
 }, { _id: true });
 
 // ─────────────────────────────────────────────
@@ -112,6 +116,9 @@ const materialStatusSchema = new mongoose.Schema({
     isMandatory: { type: Boolean, default: true },
     /** Snapshot of BOM-required flag at WO create. Unticking isMandatory must not clear this. */
     bomIsMandatory: { type: Boolean, default: true },
+    /** Snapshot of BOM section mapping at WO create. Display-only; not written back to BOM Master. */
+    sectionNo: { type: Number, default: null, min: 1 },
+    sectionName: { type: String, default: '', trim: true },
     isCritical: { type: Boolean, default: false },
     alternateAvailable: { type: Boolean, default: false },
     consumptionStage: { type: String, default: '' },
@@ -121,6 +128,12 @@ const materialStatusSchema = new mongoose.Schema({
         default: 'Not Ordered',
     },
     remarks: { type: String, default: '' },
+    /** Qty restored onto the current WO after a deferral. Does not change original requiredQty. */
+    addedLaterQty: { type: Number, default: 0, min: 0 },
+    /** Qty reserved by Supplementary WOs (created, including in-progress). */
+    supplementaryAllocatedQty: { type: Number, default: 0, min: 0 },
+    /** Qty completed through Supplementary WOs. */
+    supplementaryCompletedQty: { type: Number, default: 0, min: 0 },
 }, { _id: true });
 
 // ─────────────────────────────────────────────
@@ -155,7 +168,7 @@ const workOrderSchema = new mongoose.Schema({
      */
     woKind: {
         type: String,
-        enum: ['main', 'section'],
+        enum: ['main', 'section', 'supplementary'],
         default: 'main',
     },
     parentWorkOrderId: {
@@ -163,6 +176,23 @@ const workOrderSchema = new mongoose.Schema({
         ref: 'WorkOrder',
         default: null,
     },
+    /** Supplementary WO only — the Section WO this late-material job belongs to. */
+    sourceSectionWorkOrderId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'WorkOrder',
+        default: null,
+    },
+    startFromSeq: { type: Number, default: null },
+    startFromStageName: { type: String, default: '', trim: true },
+    supplementaryReason: { type: String, default: '', trim: true },
+    supplementaryMaterials: [{
+        materialId: { type: mongoose.Schema.Types.ObjectId },
+        itemId: { type: mongoose.Schema.Types.ObjectId, ref: 'Item' },
+        itemCode: { type: String, default: '' },
+        itemName: { type: String, default: '' },
+        qty: { type: Number, default: 0, min: 0 },
+    }],
+    supplementaryPostedToParent: { type: Boolean, default: false },
     requiredQtyPerFinishedUnit: { type: Number, default: 1, min: 0 },
     isMandatorySection: { type: Boolean, default: false },
     /** Parent-only. Missing/false = legacy WO (no complete-set gate). */
@@ -216,6 +246,36 @@ const workOrderSchema = new mongoose.Schema({
 
     remarks: { type: String, default: '' },
 
+    /** Per-WO Mandatory tick/untick audit. Does not overwrite the BOM snapshot. */
+    mandatoryChangeHistory: [{
+        materialId: { type: mongoose.Schema.Types.ObjectId },
+        itemId: { type: mongoose.Schema.Types.ObjectId, ref: 'Item' },
+        itemName: { type: String, default: '' },
+        previousMandatory: { type: Boolean },
+        newMandatory: { type: Boolean },
+        remarks: { type: String, default: '' },
+        changedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        changedAt: { type: Date, default: Date.now },
+    }],
+
+    /** Append-only late-material / supplementary events. Never overwrite prior rows. */
+    materialEventHistory: [{
+        eventType: { type: String, default: '' },
+        materialId: { type: mongoose.Schema.Types.ObjectId },
+        itemId: { type: mongoose.Schema.Types.ObjectId, ref: 'Item' },
+        itemCode: { type: String, default: '' },
+        itemName: { type: String, default: '' },
+        qty: { type: Number, default: 0 },
+        remainingPendingQty: { type: Number, default: 0 },
+        remainingToAllocateQty: { type: Number, default: 0 },
+        remainingToResolveQty: { type: Number, default: 0 },
+        remarks: { type: String, default: '' },
+        supplementaryWorkOrderId: { type: mongoose.Schema.Types.ObjectId, ref: 'WorkOrder' },
+        supplementaryWoNumber: { type: String, default: '' },
+        createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        createdAt: { type: Date, default: Date.now },
+    }],
+
     /** electronics (JSK default) | textile (Handloom / TEXTILE template) */
     productionModule: {
         type: String,
@@ -248,6 +308,7 @@ workOrderSchema.index({ createdAt: -1 });
 workOrderSchema.index({ financialYear: 1 });
 workOrderSchema.index({ woKind: 1 });
 workOrderSchema.index({ parentWorkOrderId: 1, bomSectionNo: 1 });
+workOrderSchema.index({ sourceSectionWorkOrderId: 1 });
 
 const WorkOrder = mongoose.model('WorkOrder', workOrderSchema);
 export { WorkOrder, PRODUCTION_STAGES };

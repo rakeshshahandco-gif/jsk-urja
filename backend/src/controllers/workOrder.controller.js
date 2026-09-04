@@ -16,14 +16,23 @@ import {
     addProductionLogSchema,
     createSectionWorkOrderSchema,
     updateSectionConfigSchema,
+    addMaterialLaterSchema,
+    createSupplementaryWorkOrderSchema,
 } from '../validations/workOrder.validation.js';
 import { syncWorkOrderToInventory } from '../services/inventory.service.js';
+import { checkUserPermission } from '../utils/permissionUtils.js';
 import {
     SECTION_WO_KIND,
+    SUPPLEMENTARY_WO_KIND,
     EXCLUDE_SECTION_WO,
     isSectionWorkOrder,
+    isSupplementaryWorkOrder,
+    isProcessOnlyWorkOrder,
     isSectionTrackingEnabled,
     buildSectionWoNumber,
+    buildSupplementaryWoNumber,
+    nextSupplementaryIndex,
+    cloneStagesForSupplementary,
     mainWoNumberSeriesRegex,
     computeCompleteSetsAvailable,
     assertFinalQtyAllowed,
@@ -37,7 +46,29 @@ import {
     getUnresolvedRequiredMaterials,
     isDeferredMaterial,
     buildUnresolvedRequiredBlockMessage,
+    attachSectionToMaterialLines,
+    filterSectionWorkOrderMaterials,
+    collectPendingFgMaterials,
+    buildMandatoryChangeEntry,
+    getAddedLaterQty,
+    getSupplementaryAllocatedQty,
+    getSupplementaryCompletedQty,
+    getRemainingPendingQty,
+    getRemainingToResolveQty,
+    shouldMarkFullyResolved,
+    getMaxMaterialCompleteFgQty,
+    buildMaterialCompleteFgBlockMessage,
+    hasUnresolvedLateMaterialToResolve,
+    collectLateMaterialLines,
+    buildLateMaterialFullResolveBlockMessage,
+    buildMaterialEventEntry,
+    enrichMaterialLateFields,
+    DEFAULT_SUPPLEMENTARY_REASON,
 } from '../services/workOrderSection.service.js';
+import {
+    getSequenceBlocker,
+    buildCannotStartMessage,
+} from '../services/workOrderStageSequence.service.js';
 import mongoose from 'mongoose';
 
 // ── Auto-generate WO Number ──────────────────────────────────────────────────
@@ -94,7 +125,7 @@ const loadCompleteSetsForParent = async (parentWo, session = null) => {
 };
 
 const assertParentFinalCompletionGate = async (wo, seq, requestedQty, session = null) => {
-    if (isSectionWorkOrder(wo) || !isSectionTrackingEnabled(wo)) return;
+    if (isProcessOnlyWorkOrder(wo) || !isSectionTrackingEnabled(wo)) return;
     if (!isFinalCompletionStage(wo, seq) && wo.status !== 'Completed') return;
     const sets = await loadCompleteSetsForParent(wo, session);
     if (!sets.gated) return;
@@ -103,6 +134,92 @@ const assertParentFinalCompletionGate = async (wo, seq, requestedQty, session = 
     } catch (err) {
         throw new ApiError(400, err.message);
     }
+};
+
+const assertParentFgMaterialComplete = async (wo, session = null, requestedQty = null) => {
+    if (isProcessOnlyWorkOrder(wo)) return;
+    const q = WorkOrder.find({ parentWorkOrderId: wo._id, woKind: SECTION_WO_KIND })
+        .select('materialStatus woNumber bomSectionName');
+    if (session) q.session(session);
+    const children = await q.lean();
+    const req = requestedQty != null ? Number(requestedQty) : getInventorySyncQty(wo);
+    if (hasUnresolvedLateMaterialToResolve(wo.materialStatus, children)) {
+        throw new ApiError(400, buildLateMaterialFullResolveBlockMessage(
+            collectLateMaterialLines(wo.materialStatus, children)
+        ));
+    }
+    const maxFg = getMaxMaterialCompleteFgQty({
+        parentTargetQty: wo.targetQty,
+        parentMaterials: wo.materialStatus,
+        sectionWorkOrders: children,
+    });
+    if (req > maxFg) {
+        const pending = collectPendingFgMaterials(wo.materialStatus, children);
+        if (maxFg <= 0 && pending.length > 0) {
+            throw new ApiError(400, buildUnresolvedRequiredBlockMessage(pending));
+        }
+        throw new ApiError(400, buildMaterialCompleteFgBlockMessage(req, maxFg));
+    }
+};
+
+const assertLateMaterialWritePermission = (req) => {
+    const user = req.user;
+    if (checkUserPermission(user, 'production.work_orders.edit')) return;
+    if (checkUserPermission(user, 'production.work_orders.add')) return;
+    const role = String(user?.roleName || user?.role?.name || '').toLowerCase();
+    if (role === 'admin' || role === 'superadmin') return;
+    throw new ApiError(403, 'Not authorized to add late material or create a Supplementary Work Order');
+};
+
+const mapSupplementaryListRow = (c) => ({
+    ...c,
+    completedQty: getAuthoritativeCompletedQty(c),
+    currentStageName: getCurrentStageName(c),
+});
+
+const applySupplementaryCompletionToSource = async (supWo, userId, session = null) => {
+    if (!isSupplementaryWorkOrder(supWo) || supWo.status !== 'Completed' || supWo.supplementaryPostedToParent) {
+        return;
+    }
+    if (!supWo.sourceSectionWorkOrderId) {
+        supWo.supplementaryPostedToParent = true;
+        return;
+    }
+    const q = WorkOrder.findById(supWo.sourceSectionWorkOrderId);
+    if (session) q.session(session);
+    const source = await q;
+    if (!source) {
+        supWo.supplementaryPostedToParent = true;
+        return;
+    }
+    if (!Array.isArray(source.materialEventHistory)) source.materialEventHistory = [];
+    for (const sm of supWo.supplementaryMaterials || []) {
+        const mat = source.materialStatus.id(sm.materialId)
+            || source.materialStatus.find((m) => String(m.itemId) === String(sm.itemId));
+        if (!mat) continue;
+        const qty = Math.max(0, Number(sm.qty) || 0);
+        const nextCompleted = Math.min(
+            getSupplementaryAllocatedQty(mat),
+            getSupplementaryCompletedQty(mat) + qty
+        );
+        mat.supplementaryCompletedQty = nextCompleted;
+        if (shouldMarkFullyResolved(mat)) mat.isMandatory = true;
+        source.materialEventHistory.push(buildMaterialEventEntry({
+            eventType: 'supplementary_completed',
+            material: mat,
+            qty,
+            remainingPendingQty: getRemainingPendingQty(mat),
+            remainingToAllocateQty: getRemainingPendingQty(mat),
+            remainingToResolveQty: getRemainingToResolveQty(mat),
+            userId,
+            remarks: `Supplementary ${supWo.woNumber} completed`,
+            supplementaryWorkOrderId: supWo._id,
+            supplementaryWoNumber: supWo.woNumber,
+        }));
+    }
+    source.updatedBy = userId;
+    await source.save(session ? { session } : undefined);
+    supWo.supplementaryPostedToParent = true;
 };
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -151,8 +268,9 @@ export const createWorkOrder = asyncHandler(async (req, res) => {
         return acc;
     }, {});
 
-    // Build material status from BOM components
-    const materialStatus = (bom.components || []).map(c => {
+    // Build material status from BOM components (WO snapshot — does not write BOM Master)
+    const normalizedBom = normalizeBomSectionsForRead(bom);
+    const materialStatus = (normalizedBom.components || []).map(c => {
         const requiredQty = c.quantity * value.targetQty;
         const itemInfo = itemMap[c.itemId.toString()] || { currentStock: 0, itemType: 'OTHER' };
         const availableStock = itemInfo.currentStock;
@@ -170,6 +288,8 @@ export const createWorkOrder = asyncHandler(async (req, res) => {
             shortQty,
             isMandatory: c.isMandatory !== undefined ? c.isMandatory : true,
             bomIsMandatory: c.isMandatory !== undefined ? c.isMandatory : true,
+            sectionNo: Number(c.sectionNo) >= 1 ? Number(c.sectionNo) : 1,
+            sectionName: c.sectionName || '',
             isCritical: c.isCritical || false,
             alternateAvailable: !!c.alternateItem,
             consumptionStage: c.consumptionStage || '',
@@ -280,25 +400,45 @@ export const getWorkOrders = asyncHandler(async (req, res) => {
 // GET /work-orders/:id  – Get single WO
 // ────────────────────────────────────────────────────────────────────────────
 export const getWorkOrderById = asyncHandler(async (req, res) => {
-    let query = WorkOrder.findById(req.params.id)
-        .populate('bomId', 'bomNumber version sectionCount sections')
+    const wo = await WorkOrder.findById(req.params.id)
+        .populate('bomId', 'bomNumber version sectionCount sections components')
         .populate('finishedProductId', 'itemName itemCode')
         .populate('createdBy', 'name')
-        .populate('parentWorkOrderId', 'woNumber status targetQty finishedProductName');
-    // Read-only print support. Skip when the path is not on this schema (Mongoose 8 strictPopulate).
-    if (WorkOrder.schema.path('sourceSectionWorkOrderId')) {
-        query = query.populate('sourceSectionWorkOrderId', 'woNumber bomSectionName bomSectionNo status materialStatus');
-    }
-    const wo = await query;
+        .populate('parentWorkOrderId', 'woNumber status targetQty finishedProductName')
+        .populate('sourceSectionWorkOrderId', 'woNumber bomSectionName bomSectionNo status materialStatus')
+        .populate('mandatoryChangeHistory.changedBy', 'name')
+        .populate('materialEventHistory.createdBy', 'name');
 
     if (!wo) throw new ApiError(404, 'Work Order not found');
 
     const json = wo.toObject();
-    if (isSectionWorkOrder(wo)) {
+    const normalizedBom = wo.bomId ? normalizeBomSectionsForRead(wo.bomId) : { components: [], sections: [] };
+    if (isSupplementaryWorkOrder(wo)) {
         json.completedQty = getAuthoritativeCompletedQty(wo);
         json.currentStageName = getCurrentStageName(wo);
         json.phase1ProcessTrackingOnly = true;
+        json.bomSections = normalizedBom.sections || [];
+        json.materialStatus = enrichMaterialLateFields(json.materialStatus, []);
+    } else if (isSectionWorkOrder(wo)) {
+        const sups = await WorkOrder.find({
+            sourceSectionWorkOrderId: wo._id,
+            woKind: SUPPLEMENTARY_WO_KIND,
+        }).sort({ createdAt: 1 }).lean();
+        json.supplementaryWorkOrders = sups.map(mapSupplementaryListRow);
+        json.materialStatus = enrichMaterialLateFields(
+            filterSectionWorkOrderMaterials(
+                json.materialStatus,
+                wo.bomSectionNo,
+                normalizedBom.components
+            ),
+            sups
+        );
+        json.completedQty = getAuthoritativeCompletedQty(wo);
+        json.currentStageName = getCurrentStageName(wo);
+        json.phase1ProcessTrackingOnly = true;
+        json.bomSections = normalizedBom.sections || [];
     } else {
+        json.materialStatus = attachSectionToMaterialLines(json.materialStatus, normalizedBom.components);
         const children = await WorkOrder.find({ parentWorkOrderId: wo._id, woKind: SECTION_WO_KIND })
             .select('woNumber bomSectionNo bomSectionName targetQty status stages supervisor createdAt isMandatorySection requiredQtyPerFinishedUnit materialStatus')
             .lean();
@@ -327,7 +467,7 @@ export const getWorkOrderById = asyncHandler(async (req, res) => {
             mandatorySections: mandatory,
             sectionWorkOrders: children,
         });
-        json.bomSections = wo.bomId?.sections || [];
+        json.bomSections = normalizedBom.sections || wo.bomId?.sections || [];
     }
 
     res.json(new ApiResponse(200, json, 'Work Order fetched'));
@@ -404,6 +544,12 @@ export const updateStage = asyncHandler(async (req, res) => {
         const seq = Number(req.params.seq);
         const stage = wo.stages.find(s => s.seq === seq);
         if (!stage) throw new ApiError(404, `Stage ${seq} not found`);
+        if (stage.notApplicable || stage.isApplicable === false) {
+            throw new ApiError(400, 'Cannot update a stage marked Not Applicable — completed in original WO');
+        }
+
+        assertStageSequence(wo, seq);
+        assertStageOutputWithinLimit(wo, stage, value.outputQty);
 
         // Assign values
         Object.assign(stage, value);
@@ -429,11 +575,8 @@ export const updateStage = asyncHandler(async (req, res) => {
         // ── Shortage gate: prevent Completed on Final QC (seq 9) if BOM-required material is still unresolved ──
         // Uses original BOM requirement (bomIsMandatory), not the temporary WO Mandatory tick.
         // Section WOs skip this — they never post finished goods.
-        if (seq === 9 && value.status === 'Completed' && !isSectionWorkOrder(wo)) {
-            const pendingRequired = getUnresolvedRequiredMaterials(wo.materialStatus);
-            if (pendingRequired.length > 0) {
-                throw new ApiError(400, buildUnresolvedRequiredBlockMessage(pendingRequired));
-            }
+        if (seq === 9 && value.status === 'Completed' && !isProcessOnlyWorkOrder(wo)) {
+            await assertParentFgMaterialComplete(wo, session, getInventorySyncQty({ ...wo.toObject(), stages: wo.stages }));
         }
 
         // Derive overall WO status
@@ -445,7 +588,12 @@ export const updateStage = asyncHandler(async (req, res) => {
 
         if (isFinalCompletionStage(wo, seq) || wo.status === 'Completed') {
             await assertParentFinalCompletionGate(wo, seq, getInventorySyncQty(wo), session);
+            if (wo.status === 'Completed') {
+                await assertParentFgMaterialComplete(wo, session, getInventorySyncQty(wo));
+            }
         }
+
+        await applySupplementaryCompletionToSource(wo, req.user._id, session);
 
         // ── INVENTORY SYNC ──
         if (shouldSyncWorkOrderInventory(wo)) {
@@ -471,6 +619,24 @@ const getMaxAllowedOutput = (wo, currentStage) => {
     if (currentStage.seq === 1) return wo.targetQty;
     const prevStage = wo.stages.find(s => s.seq === currentStage.seq - 1);
     return prevStage ? prevStage.outputQty : wo.targetQty;
+};
+
+const assertStageSequence = (wo, seq) => {
+    const blocker = getSequenceBlocker(wo.stages, seq);
+    if (!blocker) return;
+    const current = wo.stages.find((s) => s.seq === seq);
+    throw new ApiError(400, buildCannotStartMessage(current, blocker));
+};
+
+const assertStageOutputWithinLimit = (wo, stage, outputQty) => {
+    if (outputQty === undefined || outputQty === null) return;
+    const maxAllowed = getMaxAllowedOutput(wo, stage);
+    if (outputQty > maxAllowed) {
+        if (stage.seq === 1) {
+            throw new ApiError(400, `Cannot exceed Target Qty (${wo.targetQty}). Total is ${outputQty}.`);
+        }
+        throw new ApiError(400, `Cannot exceed Previous Stage Output (${maxAllowed}). Total is ${outputQty}.`);
+    }
 };
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -517,13 +683,30 @@ const recalculateStageAndWo = (wo, stage) => {
     }
 
     // ── Shortage gate: prevent Completed on Final QC (seq 9) if BOM-required material is still unresolved ──
-    if (stage.seq === 9 && stage.status === 'Completed' && !isSectionWorkOrder(wo)) {
-        const pendingRequired = getUnresolvedRequiredMaterials(wo.materialStatus);
-        if (pendingRequired.length > 0) {
+    if (stage.seq === 9 && stage.status === 'Completed' && !isProcessOnlyWorkOrder(wo)) {
+        if (hasUnresolvedLateMaterialToResolve(wo.materialStatus, [])) {
+            const lateLines = collectLateMaterialLines(wo.materialStatus, []);
             stage.status = 'QC Hold';
             wo.status = 'WIP – Waiting Material';
             wo.wip.isOnHold = true;
-            wo.wip.holdReason = buildUnresolvedRequiredBlockMessage(pendingRequired);
+            wo.wip.holdReason = buildLateMaterialFullResolveBlockMessage(lateLines);
+            wo.wip.missingMandatoryItems = lateLines.map((m) => m.itemName);
+            return { blocked: true };
+        }
+        const maxFg = getMaxMaterialCompleteFgQty({
+            parentTargetQty: wo.targetQty,
+            parentMaterials: wo.materialStatus,
+            sectionWorkOrders: [],
+        });
+        const requested = getInventorySyncQty(wo);
+        if (requested > maxFg) {
+            const pendingRequired = getUnresolvedRequiredMaterials(wo.materialStatus);
+            stage.status = 'QC Hold';
+            wo.status = 'WIP – Waiting Material';
+            wo.wip.isOnHold = true;
+            wo.wip.holdReason = maxFg <= 0 && pendingRequired.length
+                ? buildUnresolvedRequiredBlockMessage(pendingRequired)
+                : buildMaterialCompleteFgBlockMessage(requested, maxFg);
             wo.wip.missingMandatoryItems = pendingRequired.map(m => m.itemName);
             return { blocked: true };
         }
@@ -560,8 +743,13 @@ export const addProductionLog = asyncHandler(async (req, res) => {
         const seq = Number(req.params.seq);
         const stage = wo.stages.find(s => s.seq === seq);
         if (!stage) throw new ApiError(404, `Stage ${seq} not found`);
+        if (stage.notApplicable || stage.isApplicable === false) {
+            throw new ApiError(400, 'Cannot log production on a stage marked Not Applicable — completed in original WO');
+        }
 
-        const skipSectionStockGates = isSectionWorkOrder(wo);
+        assertStageSequence(wo, seq);
+
+        const skipSectionStockGates = isProcessOnlyWorkOrder(wo);
 
         // ── 1. STAGE-SPECIFIC MATERIAL DEPENDENCY ────────────────────────────────
         if (!skipSectionStockGates && seq === 1) { // PCB Stage
@@ -629,7 +817,10 @@ export const addProductionLog = asyncHandler(async (req, res) => {
 
         if (wo.status === 'Completed') {
             await assertParentFinalCompletionGate(wo, seq, getInventorySyncQty(wo), session);
+            await assertParentFgMaterialComplete(wo, session, getInventorySyncQty(wo));
         }
+
+        await applySupplementaryCompletionToSource(wo, req.user._id, session);
 
         // ── 4. FG COMPLETION LOGIC ──
         if (shouldSyncWorkOrderInventory(wo)) {
@@ -667,6 +858,8 @@ export const deleteProductionLog = asyncHandler(async (req, res) => {
     const stage = wo.stages.find(s => s.seq === seq);
     if (!stage) throw new ApiError(404, `Stage ${seq} not found`);
 
+    assertStageSequence(wo, seq);
+
     const logIndex = stage.productionLogs.findIndex(l => l._id.toString() === req.params.logId);
     if (logIndex === -1) throw new ApiError(404, 'Production Log not found');
 
@@ -694,11 +887,34 @@ export const updateMaterialStatus = asyncHandler(async (req, res) => {
         throw new ApiError(400, `WO in status "${wo.status}" cannot have material status changed`);
     }
 
+    if (!Array.isArray(wo.mandatoryChangeHistory)) wo.mandatoryChangeHistory = [];
+    if (!Array.isArray(wo.materialEventHistory)) wo.materialEventHistory = [];
+
     for (const upd of value.materialUpdates) {
         const mat = wo.materialStatus.id(upd.materialId);
         if (!mat) continue;
+        if (upd.isMandatory !== undefined && upd.isMandatory !== mat.isMandatory) {
+            wo.mandatoryChangeHistory.push(buildMandatoryChangeEntry({
+                material: mat,
+                previousMandatory: mat.isMandatory,
+                newMandatory: upd.isMandatory,
+                userId: req.user?._id,
+                remarks: upd.remarks !== undefined ? upd.remarks : mat.remarks,
+            }));
+            wo.materialEventHistory.push(buildMaterialEventEntry({
+                eventType: upd.isMandatory ? 'restored' : 'deferred',
+                material: mat,
+                qty: Number(mat.requiredQty) || 0,
+                remainingPendingQty: upd.isMandatory ? getRemainingPendingQty({ ...mat.toObject?.() || mat, isMandatory: true }) : (Number(mat.requiredQty) || 0),
+                remainingToAllocateQty: upd.isMandatory ? getRemainingPendingQty({ ...mat.toObject?.() || mat, isMandatory: true }) : (Number(mat.requiredQty) || 0),
+                remainingToResolveQty: getRemainingToResolveQty(mat),
+                userId: req.user?._id,
+                remarks: upd.remarks !== undefined ? upd.remarks : mat.remarks,
+            }));
+        }
         if (isSectionWorkOrder(wo)) {
             // Phase 1: no stock reserve/consume. WO-specific Mandatory and remarks only.
+            // Never clear bomIsMandatory — original BOM requirement stays on this WO snapshot.
             if (upd.isMandatory !== undefined) mat.isMandatory = upd.isMandatory;
             if (upd.remarks !== undefined) mat.remarks = upd.remarks;
             continue;
@@ -964,6 +1180,8 @@ export const createSectionWorkOrder = asyncHandler(async (req, res) => {
             shortQty: Math.max(0, requiredQtyMat - itemInfo.currentStock),
             isMandatory: true,
             bomIsMandatory: true,
+            sectionNo: Number(c.sectionNo) >= 1 ? Number(c.sectionNo) : Number(value.bomSectionNo),
+            sectionName: c.sectionName || section.sectionName || '',
             isCritical: false,
             alternateAvailable: false,
             consumptionStage: '',
@@ -1015,6 +1233,184 @@ export const createSectionWorkOrder = asyncHandler(async (req, res) => {
     });
 
     res.status(201).json(new ApiResponse(201, wo, `Section Work Order ${wo.woNumber} created (process tracking only — no stock posting)`));
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// POST /work-orders/:id/materials/:materialId/add-later
+// Phase 1: qty-aware restore onto the current WO. Does not consume stock or post FG.
+// ────────────────────────────────────────────────────────────────────────────
+export const addMaterialLater = asyncHandler(async (req, res) => {
+    assertLateMaterialWritePermission(req);
+    const { error, value } = addMaterialLaterSchema.validate(req.body);
+    if (error) throw new ApiError(400, error.details[0].message);
+
+    const wo = await WorkOrder.findById(req.params.id);
+    if (!wo) throw new ApiError(404, 'Work Order not found');
+    if (isSupplementaryWorkOrder(wo)) {
+        throw new ApiError(400, 'Cannot add late material on a Supplementary Work Order');
+    }
+    if (['Closed', 'Cancelled', 'Completed'].includes(wo.status)) {
+        throw new ApiError(400, `WO in status "${wo.status}" cannot have late material added`);
+    }
+
+    const mat = wo.materialStatus.id(req.params.materialId);
+    if (!mat) throw new ApiError(404, 'Component not found on this Work Order');
+
+    const qty = Number(value.qty);
+    if (!(qty > 0)) throw new ApiError(400, 'Qty to Add must be greater than 0');
+
+    const remaining = getRemainingPendingQty(mat);
+    if (qty > remaining) {
+        throw new ApiError(400, `Qty to Add (${qty}) cannot exceed Remaining Pending Qty (${remaining}).`);
+    }
+
+    let available = Number(mat.availableStock) || 0;
+    if (mat.itemId) {
+        const item = await Item.findById(mat.itemId).select('currentStock');
+        if (item) {
+            available = Number(item.currentStock) || 0;
+            mat.availableStock = available;
+            mat.shortQty = Math.max(0, (Number(mat.requiredQty) || 0) - available);
+        }
+    }
+    if (qty > available) {
+        throw new ApiError(400, `Qty to Add (${qty}) exceeds current available stock (${available}).`);
+    }
+
+    mat.addedLaterQty = getAddedLaterQty(mat) + qty;
+    if (shouldMarkFullyResolved(mat)) mat.isMandatory = true;
+
+    if (!Array.isArray(wo.materialEventHistory)) wo.materialEventHistory = [];
+    wo.materialEventHistory.push(buildMaterialEventEntry({
+        eventType: 'added_later',
+        material: mat,
+        qty,
+        remainingPendingQty: getRemainingPendingQty(mat),
+        remainingToAllocateQty: getRemainingPendingQty(mat),
+        remainingToResolveQty: getRemainingToResolveQty(mat),
+        userId: req.user?._id,
+        remarks: value.remarks || '',
+    }));
+
+    wo.updatedBy = req.user._id;
+    await wo.save();
+    res.json(new ApiResponse(200, wo, 'Late material recorded against this Work Order. Inventory remains controlled by the existing Parent Work Order posting process.'));
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// POST /work-orders/:id/supplementary-work-orders
+// Phase 1: process / progress + late-material traceability. No stock or FG posting.
+// ────────────────────────────────────────────────────────────────────────────
+export const createSupplementaryWorkOrder = asyncHandler(async (req, res) => {
+    assertLateMaterialWritePermission(req);
+    const { error, value } = createSupplementaryWorkOrderSchema.validate(req.body);
+    if (error) throw new ApiError(400, error.details[0].message);
+
+    const section = await WorkOrder.findById(req.params.id);
+    if (!section) throw new ApiError(404, 'Work Order not found');
+    if (!isSectionWorkOrder(section)) {
+        throw new ApiError(400, 'Supplementary Work Orders can only be created from a Section Work Order');
+    }
+    if (['Closed', 'Cancelled'].includes(section.status)) {
+        throw new ApiError(400, `Cannot create a Supplementary WO under a ${section.status} Section WO`);
+    }
+
+    const mat = section.materialStatus.id(value.materialId);
+    if (!mat) throw new ApiError(404, 'Component not found on this Section Work Order');
+
+    const qty = Number(value.qty);
+    const remaining = getRemainingPendingQty(mat);
+    if (!(qty > 0)) throw new ApiError(400, 'Supplementary Qty must be greater than 0');
+    if (qty > remaining) {
+        throw new ApiError(400, `Supplementary Qty (${qty}) cannot exceed Remaining Pending Qty (${remaining}).`);
+    }
+
+    const startFromSeq = Number(value.startFromSeq);
+    const startStage = (section.stages || []).find((s) => Number(s.seq) === startFromSeq);
+    if (!startStage) throw new ApiError(400, `Start From Stage ${startFromSeq} is not on this Section Work Order`);
+
+    const existing = await WorkOrder.find({
+        sourceSectionWorkOrderId: section._id,
+        woKind: SUPPLEMENTARY_WO_KIND,
+    }).select('woNumber').lean();
+    const woNumber = buildSupplementaryWoNumber(section.woNumber, nextSupplementaryIndex(existing.map((w) => w.woNumber)));
+    const clash = await WorkOrder.findOne({ woNumber });
+    if (clash) throw new ApiError(400, `Work Order Number ${woNumber} already exists`);
+
+    const stages = cloneStagesForSupplementary(section.stages, PRODUCTION_STAGES, startFromSeq, qty);
+
+    mat.supplementaryAllocatedQty = getSupplementaryAllocatedQty(mat) + qty;
+
+    if (!Array.isArray(section.materialEventHistory)) section.materialEventHistory = [];
+    const created = await WorkOrder.create({
+        woNumber,
+        woKind: SUPPLEMENTARY_WO_KIND,
+        parentWorkOrderId: section.parentWorkOrderId,
+        sourceSectionWorkOrderId: section._id,
+        startFromSeq,
+        startFromStageName: startStage.stageName,
+        supplementaryReason: value.reason || DEFAULT_SUPPLEMENTARY_REASON,
+        supplementaryMaterials: [{
+            materialId: mat._id,
+            itemId: mat.itemId,
+            itemCode: mat.itemCode || '',
+            itemName: mat.itemName || '',
+            qty,
+        }],
+        bomId: section.bomId,
+        finishedProductId: section.finishedProductId,
+        finishedProductName: section.finishedProductName,
+        bomVersion: section.bomVersion,
+        bomSectionNo: section.bomSectionNo,
+        bomSectionName: section.bomSectionName,
+        requiredQtyPerFinishedUnit: section.requiredQtyPerFinishedUnit,
+        isMandatorySection: false,
+        targetQty: qty,
+        priority: section.priority,
+        supervisor: value.supervisor || section.supervisor || '',
+        remarks: value.remarks || '',
+        productionModule: section.productionModule || 'electronics',
+        stages,
+        materialStatus: [{
+            itemId: mat.itemId,
+            itemCode: mat.itemCode || '',
+            itemName: mat.itemName || '',
+            itemType: mat.itemType,
+            uom: mat.uom || '',
+            requiredQty: qty,
+            availableStock: mat.availableStock,
+            reservedQty: 0,
+            shortQty: 0,
+            isMandatory: true,
+            bomIsMandatory: true,
+            sectionNo: mat.sectionNo,
+            sectionName: mat.sectionName || section.bomSectionName || '',
+            consumptionStage: mat.consumptionStage || '',
+            procurementStatus: mat.procurementStatus || 'Not Ordered',
+            remarks: value.remarks || '',
+        }],
+        financialYear: section.financialYear,
+        inventorySynced: false,
+        status: 'Released',
+        createdBy: req.user._id,
+    });
+
+    section.materialEventHistory.push(buildMaterialEventEntry({
+        eventType: 'supplementary_created',
+        material: mat,
+        qty,
+        remainingPendingQty: getRemainingPendingQty(mat),
+        remainingToAllocateQty: getRemainingPendingQty(mat),
+        remainingToResolveQty: getRemainingToResolveQty(mat),
+        userId: req.user?._id,
+        remarks: value.remarks || value.reason || DEFAULT_SUPPLEMENTARY_REASON,
+        supplementaryWorkOrderId: created._id,
+        supplementaryWoNumber: created.woNumber,
+    }));
+    section.updatedBy = req.user._id;
+    await section.save();
+
+    res.status(201).json(new ApiResponse(201, created, `Supplementary Work Order ${created.woNumber} created (process tracking only — no stock posting)`));
 });
 
 // ────────────────────────────────────────────────────────────────────────────

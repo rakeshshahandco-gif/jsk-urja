@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
     getWorkOrderById, releaseWorkOrder, updateWorkOrder, updateStage, updateMaterialStatus, refreshMaterialStock,
-    addProductionLog, deleteProductionLog, cancelSectionWorkOrder
+    addProductionLog, deleteProductionLog, cancelSectionWorkOrder, addMaterialLater, createSupplementaryWorkOrder
 } from '@/services/workOrderApi';
 import { PATHS } from '@/routes/paths';
 import { useCompany } from '@/contexts/CompanyContext';
@@ -14,7 +14,6 @@ import {
     buildProductionSheetPrintHtml,
     buildSupplementaryWorkOrderPrintHtml,
     openProductionSheetPrintWindow,
-    isSectionWorkOrderForPrint,
 } from '@/features/production/buildProductionSheetPrintHtml';
 
 // ─── Status Colors ───────────────────────────────────────────────────────────
@@ -79,16 +78,6 @@ function pendingProceedWarning(count) {
     return `${n} ${noun} pending. Production may proceed temporarily.`;
 }
 
-function remainingToResolveOf(m) {
-    if (m?.remainingToResolveQty != null) return Math.max(0, Number(m.remainingToResolveQty) || 0);
-    const req = Math.max(0, Number(m?.requiredQty) || 0);
-    const added = Math.max(0, Number(m?.addedLaterQty) || 0);
-    const completed = Math.max(0, Number(m?.supplementaryCompletedQty) || 0);
-    const deferred = isBomRequiredLine(m) && m?.isMandatory === false;
-    if (!deferred && added <= 0 && completed <= 0 && !(Number(m?.supplementaryAllocatedQty) > 0)) return 0;
-    return Math.max(0, req - added - completed);
-}
-
 function isUnresolvedPendingLine(m) {
     return isDeferredLine(m) && remainingToResolveOf(m) > 0;
 }
@@ -141,16 +130,45 @@ function stageQtyCompleted(stage) {
     return Number(stage?.outputQty) || 0;
 }
 
-/** Display-only. Stored values remain Not Started / Running / Completed / QC Hold / Failed / Rework. */
+/** Display-only label. Stored values remain Not Started / Running / Completed / QC Hold / Failed / Rework. */
 function displayStageStatus(stage) {
     const raw = String(stage?.status || 'Not Started');
-    if (raw === 'Completed') return 'Completed';
     if (raw === 'Running') return 'In Progress';
-    if (raw === 'Not Started') {
-        if (stageQtyStarted(stage) > 0 || stageQtyCompleted(stage) > 0) return 'In Progress';
-        return 'Not Started';
-    }
     return raw;
+}
+
+function getSequenceBlocker(stages, seq) {
+    const n = Number(seq);
+    if (!Number.isFinite(n) || n <= 1) return null;
+    return [...(stages || [])]
+        .filter((s) => Number(s.seq) < n)
+        .sort((a, b) => Number(a.seq) - Number(b.seq))
+        .find((s) => String(s.status || 'Not Started') !== 'Completed') || null;
+}
+
+function stageHasProgress(stage) {
+    const status = String(stage?.status || 'Not Started');
+    if (status !== 'Not Started') return true;
+    return (Number(stage?.inputQty) || 0) > 0 || (Number(stage?.outputQty) || 0) > 0;
+}
+
+function getSequenceInconsistencies(stages) {
+    return [...(stages || [])]
+        .filter((s) => Number(s.seq) > 1 && stageHasProgress(s))
+        .map((s) => {
+            const previous = getSequenceBlocker(stages, s.seq);
+            if (!previous) return null;
+            return { stage: s, previous };
+        })
+        .filter(Boolean);
+}
+
+function completeBeforeHint(current, blocker) {
+    return `Complete ${blocker.stageName} before starting ${current.stageName}.`;
+}
+
+function cannotStartMessage(current, blocker) {
+    return `Cannot start ${current.stageName}. ${blocker.stageName} must be completed first.`;
 }
 
 function sectionLabelForMaterial(wo, m) {
@@ -178,6 +196,57 @@ function deferredDateForMaterial(wo, materialId) {
 const AUTO_MATERIAL_REMARKS = [
     'Phase 1 read-only snapshot — Section WO does not reserve or consume stock',
 ];
+
+function addedLaterQtyOf(m) {
+    return Math.max(0, Number(m?.addedLaterQty) || 0);
+}
+
+function remainingToAllocateOf(m) {
+    if (m?.remainingToAllocateQty != null) return Math.max(0, Number(m.remainingToAllocateQty) || 0);
+    if (m?.remainingPendingQty != null) return Math.max(0, Number(m.remainingPendingQty) || 0);
+    const req = Math.max(0, Number(m?.requiredQty) || 0);
+    const allocated = Math.max(0, Number(m?.supplementaryAllocatedQty) || 0);
+    const deferred = isBomRequiredLine(m) && m?.isMandatory === false;
+    if (!deferred && addedLaterQtyOf(m) <= 0 && allocated <= 0) return 0;
+    return Math.max(0, req - addedLaterQtyOf(m) - allocated);
+}
+
+function remainingToResolveOf(m) {
+    if (m?.remainingToResolveQty != null) return Math.max(0, Number(m.remainingToResolveQty) || 0);
+    const req = Math.max(0, Number(m?.requiredQty) || 0);
+    const completed = Math.max(0, Number(m?.supplementaryCompletedQty) || 0);
+    const deferred = isBomRequiredLine(m) && m?.isMandatory === false;
+    if (!deferred && addedLaterQtyOf(m) <= 0 && completed <= 0 && !(Number(m?.supplementaryAllocatedQty) > 0)) return 0;
+    return Math.max(0, req - addedLaterQtyOf(m) - completed);
+}
+
+function remainingPendingQtyOf(m) {
+    return remainingToAllocateOf(m);
+}
+
+function lateMaterialStatusOf(m) {
+    if (m?.lateMaterialStatus) return m.lateMaterialStatus;
+    const req = Math.max(0, Number(m?.requiredQty) || 0);
+    const remainingResolve = remainingToResolveOf(m);
+    const resolved = addedLaterQtyOf(m) + Math.max(0, Number(m?.supplementaryCompletedQty) || 0);
+    if (remainingResolve === 0 && resolved >= req && req > 0) return 'Fully Resolved';
+    if (resolved > 0 && remainingResolve > 0) return `Partially Resolved — ${resolved}/${req}`;
+    return 'Pending Material';
+}
+
+function isNaStage(stage) {
+    return stage?.notApplicable === true || stage?.isApplicable === false;
+}
+
+const LATE_MATERIAL_PROCESS_WARNING = 'This records late material against the Work Order. Inventory will remain controlled by the existing Parent Work Order posting process.';
+
+function supplementaryRowsForMaterial(wo, m) {
+    return (wo.supplementaryWorkOrders || []).filter((w) =>
+        (w.supplementaryMaterials || []).some((sm) =>
+            String(sm.materialId) === String(m?._id) || (m?.itemId && String(sm.itemId) === String(m.itemId))
+        )
+    );
+}
 
 function displayMaterialRemark(raw) {
     const s = String(raw || '').trim();
@@ -215,7 +284,7 @@ export default function WorkOrderDetailPage() {
 
     useEffect(() => {
         if (!pendingDrawerOpen || !wo) return;
-        const items = wo.woKind === 'section' || (wo.bomSectionName && wo.parentWorkOrderId)
+        const items = wo.woKind === 'section'
             ? (wo.materialStatus || []).filter((m) => isUnresolvedPendingLine(m))
             : (wo.materialStatus || []).filter((m) => isDeferredLine(m));
         if (items.length === 0) setPendingDrawerOpen(false);
@@ -244,13 +313,18 @@ export default function WorkOrderDetailPage() {
     const TABS = isTextile ? TEXTILE_TABS : ELECTRONICS_TABS;
 
     const sc = WO_STATUS_COLORS[wo.status] || WO_STATUS_COLORS['Draft'];
-    const pct = wo.stages?.length ? Math.round((wo.stages.filter(s => s.status === 'Completed').length / wo.stages.length) * 100) : 0;
     const deferredPending = (wo.materialStatus || []).filter(m => isDeferredLine(m));
+    const unresolvedPending = (wo.materialStatus || []).filter(m => isUnresolvedPendingLine(m));
     const currentMandatoryShortages = (wo.materialStatus || []).filter(m => m.isMandatory && m.shortQty > 0);
+    const isSectionWo = wo.woKind === 'section';
     const isSupplementaryWo = wo.woKind === 'supplementary';
-    const isSectionWo = !isSupplementaryWo && isSectionWorkOrderForPrint(wo);
     const parentRef = wo.parentWorkOrderId && typeof wo.parentWorkOrderId === 'object' ? wo.parentWorkOrderId : null;
     const sourceSectionRef = wo.sourceSectionWorkOrderId && typeof wo.sourceSectionWorkOrderId === 'object' ? wo.sourceSectionWorkOrderId : null;
+    const progressStages = isSupplementaryWo ? (wo.stages || []).filter((s) => !isNaStage(s)) : (wo.stages || []);
+    const pct = progressStages.length ? Math.round((progressStages.filter(s => s.status === 'Completed').length / progressStages.length) * 100) : 0;
+    const pendingManageItems = isSectionWo ? unresolvedPending : deferredPending;
+    const pendingBannerCount = isSectionWo ? unresolvedPending.length : deferredPending.length;
+    const sectionDeferredResolved = isSectionWo && deferredPending.length > 0 && unresolvedPending.length === 0;
 
     const handlePrintProductionSheet = () => {
         const html = isSupplementaryWo
@@ -267,10 +341,6 @@ export default function WorkOrderDetailPage() {
             });
         openProductionSheetPrintWindow(html);
     };
-    const unresolvedPending = (wo.materialStatus || []).filter((m) => isUnresolvedPendingLine(m));
-    const pendingManageItems = isSectionWo ? unresolvedPending : deferredPending;
-    const pendingBannerCount = isSectionWo ? unresolvedPending.length : deferredPending.length;
-    const sectionDeferredResolved = isSectionWo && deferredPending.length > 0 && unresolvedPending.length === 0;
 
     return (
         <div style={{ fontFamily: "'Inter', sans-serif", background: '#f8f9fa', minHeight: '100vh', color: '#1e293b' }}>
@@ -287,24 +357,34 @@ export default function WorkOrderDetailPage() {
                             {isSectionWo && (
                                 <span style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 800, background: '#fef3c7', color: '#92400e', letterSpacing: 0.3 }}>SECTION WORK ORDER</span>
                             )}
+                            {isSupplementaryWo && (
+                                <span style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 800, background: '#e0e7ff', color: '#3730a3', letterSpacing: 0.3 }}>SUPPLEMENTARY WORK ORDER</span>
+                            )}
                             <span style={{ padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 600, background: sc.bg, color: sc.color }}>{wo.status}</span>
                             <span style={{ fontSize: '13px', color: '#94a3b8' }}>Priority: <strong style={{ color: '#f59e0b' }}>{wo.priority}</strong></span>
                         </div>
                         <div style={{ color: '#64748b', fontSize: '13px', marginTop: '4px' }}>
-                            {isSectionWo && (
+                            {(isSectionWo || isSupplementaryWo) && (
                                 <span>
                                     Parent:{' '}
                                     {parentRef?._id ? (
                                         <button type="button" onClick={() => navigate(PATHS.PRODUCTION.WO_DETAIL(parentRef._id))} style={{ background: 'none', border: 'none', color: '#2563eb', padding: 0, cursor: 'pointer', fontWeight: 700 }}>{parentRef.woNumber}</button>
                                     ) : '—'}
+                                    {isSupplementaryWo && sourceSectionRef?._id && (
+                                        <>
+                                            {' · '}Section WO:{' '}
+                                            <button type="button" onClick={() => navigate(PATHS.PRODUCTION.WO_DETAIL(sourceSectionRef._id))} style={{ background: 'none', border: 'none', color: '#2563eb', padding: 0, cursor: 'pointer', fontWeight: 700 }}>{sourceSectionRef.woNumber}</button>
+                                        </>
+                                    )}
                                     {' · '}Section: <strong>{wo.bomSectionName || '—'}</strong>
+                                    {isSupplementaryWo && wo.startFromStageName ? ` · Start From: ${wo.startFromStageName}` : ''}
                                     {' · '}
                                 </span>
                             )}
                             {(() => { const p = woProductDisplay(wo); return `${p.productName} · Model No: ${p.modelNo} · Item Code: ${p.itemCode}`; })()}
                             {isTextile && wo.textile?.designNo ? ` · Design: ${wo.textile.designNo}` : ''}
                             {' · '}{isTextile ? 'Qty' : 'Target'}: {wo.targetQty}{isTextile ? ' PCS' : ' pcs'}
-                            {isSectionWo ? ` · Completed: ${wo.completedQty ?? 0} · Stage: ${wo.currentStageName || '—'}` : ''}
+                            {(isSectionWo || isSupplementaryWo) ? ` · Completed: ${wo.completedQty ?? 0} · Stage: ${wo.currentStageName || '—'}` : ''}
                             {' · '}{labels.detailSupervisor}: {wo.textile?.assignedVendorWorker || wo.supervisor || '—'}
                         </div>
                     </div>
@@ -339,9 +419,9 @@ export default function WorkOrderDetailPage() {
                 </div>
             </div>
 
-            {isSectionWo && (
+            {(isSectionWo || isSupplementaryWo) && (
                 <div style={{ background: '#fffbeb', borderBottom: '1px solid #fcd34d', padding: '12px 28px', fontSize: 13, color: '#92400e' }}>
-                    Process / progress tracking only. Completing this section does <strong>not</strong> create finished product {woProductDisplay(wo).productName} in stock. Stock and FG posting stay on the parent Work Order.
+                    Process / progress tracking only. Completing this {isSupplementaryWo ? 'Supplementary WO' : 'section'} does <strong>not</strong> create finished product {woProductDisplay(wo).productName} in stock. Stock and FG posting stay on the parent Work Order.
                 </div>
             )}
 
@@ -544,6 +624,16 @@ function OverviewTab({ wo, load, isTextile, labels }) {
             ['Completed Qty', wo.completedQty ?? 0],
             ['Current Stage', wo.currentStageName || '—'],
         ] : []),
+        ...(wo.woKind === 'supplementary' ? [
+            ['Type', 'SUPPLEMENTARY WORK ORDER'],
+            ['Linked Parent WO', wo.parentWorkOrderId?.woNumber || '—'],
+            ['Linked Section WO', wo.sourceSectionWorkOrderId?.woNumber || '—'],
+            ['Section', wo.bomSectionName || '—'],
+            ['Reason', wo.supplementaryReason || 'Pending material received later'],
+            ['Start From Stage', wo.startFromStageName || '—'],
+            ['Supplementary Qty', wo.targetQty],
+            ['Completed Qty', wo.completedQty ?? 0],
+        ] : []),
         ['BOM Version', wo.bomVersion || '—'],
         ['Finished Product', woProductDisplay(wo).productName],
         ['Model No.', woProductDisplay(wo).modelNo],
@@ -593,66 +683,7 @@ function OverviewTab({ wo, load, isTextile, labels }) {
                 ))}
             </div>
             {!isTextile && wo.woKind !== 'section' && wo.woKind !== 'supplementary' && <WorkOrderSectionPanel wo={wo} load={load} />}
-            {!isTextile && wo.woKind === 'section' && <SupplementaryWorkOrdersPrintPanel wo={wo} />}
-        </div>
-    );
-}
-
-function SupplementaryWorkOrdersPrintPanel({ wo }) {
-    const navigate = useNavigate();
-    const { selectedCompany } = useCompany();
-    const [printingId, setPrintingId] = useState('');
-    const rows = wo.supplementaryWorkOrders || [];
-    if (!rows.length) return null;
-
-    const handlePrintRow = async (row) => {
-        setPrintingId(row._id);
-        try {
-            const full = await getWorkOrderById(row._id);
-            const html = buildSupplementaryWorkOrderPrintHtml({
-                wo: full,
-                companyName: selectedCompany?.companyName,
-                company: selectedCompany,
-                sourceSectionWo: wo,
-            });
-            openProductionSheetPrintWindow(html);
-        } catch (e) {
-            toast.error(e.response?.data?.message || e.message || 'Print failed');
-        } finally {
-            setPrintingId('');
-        }
-    };
-
-    return (
-        <div style={{ marginTop: 28, maxWidth: 900 }}>
-            <h2 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 700 }}>Supplementary Work Orders</h2>
-            <div style={{ overflowX: 'auto', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10 }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                    <thead>
-                        <tr style={{ background: '#eef2ff', color: '#3730a3' }}>
-                            {['Supplementary WO No.', 'Qty', 'Start From Stage', 'Status', 'Open', 'Print'].map((h) => (
-                                <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700 }}>{h}</th>
-                            ))}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {rows.map((s) => (
-                            <tr key={s._id} style={{ borderTop: '1px solid #e5e7eb' }}>
-                                <td style={{ padding: '8px 10px', fontWeight: 700 }}>{s.woNumber}</td>
-                                <td style={{ padding: '8px 10px' }}>{s.targetQty}</td>
-                                <td style={{ padding: '8px 10px' }}>{s.startFromStageName || '—'}</td>
-                                <td style={{ padding: '8px 10px' }}>{s.status}</td>
-                                <td style={{ padding: '8px 10px' }}>
-                                    <button type="button" onClick={() => navigate(PATHS.PRODUCTION.WO_DETAIL(s._id))} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #4338ca', background: '#eef2ff', color: '#3730a3', fontWeight: 700, cursor: 'pointer' }}>Open</button>
-                                </td>
-                                <td style={{ padding: '8px 10px' }}>
-                                    <button type="button" disabled={printingId === s._id} onClick={() => handlePrintRow(s)} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #64748b', background: '#f8fafc', color: '#334155', fontWeight: 700, cursor: 'pointer' }}>{printingId === s._id ? '…' : 'Print'}</button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
+            {!isTextile && wo.woKind === 'section' && <SupplementaryWorkOrdersPanel wo={wo} />}
         </div>
     );
 }
@@ -664,7 +695,7 @@ function BomMaterialTab({ wo, load }) {
     const [refreshing, setRefreshing] = useState(false);
     const [sectionFilter, setSectionFilter] = useState('all');
     const [pendingOpen, setPendingOpen] = useState(false);
-    const isSection = wo.woKind === 'section' || !!wo.parentWorkOrderId;
+    const isSection = wo.woKind === 'section' || wo.woKind === 'supplementary';
     const materialLocked = ['Closed', 'Cancelled', 'Completed'].includes(wo.status);
     const stockInputsDisabled = isSection || materialLocked;
     const mandatoryDisabled = materialLocked;
@@ -1010,14 +1041,88 @@ function BomMaterialTab({ wo, load }) {
     );
 }
 
+function SupplementaryWorkOrdersPanel({ wo }) {
+    const navigate = useNavigate();
+    const { selectedCompany } = useCompany();
+    const [printingId, setPrintingId] = useState('');
+    const rows = wo.supplementaryWorkOrders || [];
+
+    const handlePrintRow = async (row) => {
+        setPrintingId(row._id);
+        try {
+            const full = await getWorkOrderById(row._id);
+            const html = buildSupplementaryWorkOrderPrintHtml({
+                wo: full,
+                companyName: selectedCompany?.companyName,
+                company: selectedCompany,
+                sourceSectionWo: wo,
+            });
+            openProductionSheetPrintWindow(html);
+        } catch (e) {
+            toast.error(e.response?.data?.message || e.message || 'Print failed');
+        } finally {
+            setPrintingId('');
+        }
+    };
+
+    return (
+        <div style={{ marginTop: 28, maxWidth: 900 }}>
+            <h2 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 700 }}>Supplementary Work Orders</h2>
+            <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 12px' }}>Late-material jobs linked to this Section WO. Not mixed with normal Section WO rows.</p>
+            {rows.length === 0 ? (
+                <div style={{ background: '#fff', border: '1px dashed #cbd5e1', borderRadius: 10, padding: 18, fontSize: 13, color: '#94a3b8' }}>No Supplementary Work Orders yet.</div>
+            ) : (
+                <div style={{ overflowX: 'auto', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10 }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                        <thead>
+                            <tr style={{ background: '#eef2ff', color: '#3730a3' }}>
+                                {['Supplementary WO No.', 'Component(s)', 'Qty', 'Start From Stage', 'Completed Qty', 'Status', 'Created Date', 'Open', 'Print'].map((h) => (
+                                    <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, whiteSpace: 'nowrap' }}>{h}</th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {rows.map((s) => (
+                                <tr key={s._id} style={{ borderTop: '1px solid #e5e7eb' }}>
+                                    <td style={{ padding: '8px 10px', fontWeight: 700 }}>{s.woNumber}</td>
+                                    <td style={{ padding: '8px 10px' }}>{(s.supplementaryMaterials || []).map((m) => m.itemName || m.itemCode).join(', ') || '—'}</td>
+                                    <td style={{ padding: '8px 10px' }}>{s.targetQty}</td>
+                                    <td style={{ padding: '8px 10px' }}>{s.startFromStageName || '—'}</td>
+                                    <td style={{ padding: '8px 10px' }}>{s.completedQty ?? 0}</td>
+                                    <td style={{ padding: '8px 10px' }}>{s.status}</td>
+                                    <td style={{ padding: '8px 10px' }}>{s.createdAt ? new Date(s.createdAt).toLocaleString() : '—'}</td>
+                                    <td style={{ padding: '8px 10px' }}>
+                                        <button type="button" onClick={() => navigate(PATHS.PRODUCTION.WO_DETAIL(s._id))} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #4338ca', background: '#eef2ff', color: '#3730a3', fontWeight: 700, cursor: 'pointer' }}>Open</button>
+                                    </td>
+                                    <td style={{ padding: '8px 10px' }}>
+                                        <button type="button" disabled={printingId === s._id} onClick={() => handlePrintRow(s)} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #64748b', background: '#f8fafc', color: '#334155', fontWeight: 700, cursor: 'pointer' }}>{printingId === s._id ? '…' : 'Print'}</button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+        </div>
+    );
+}
+
 function PendingComponentsDrawer({ wo, items, open, onClose, load, setTab }) {
     const [selectedId, setSelectedId] = useState(null);
     const [busy, setBusy] = useState('');
+    const [addOpen, setAddOpen] = useState(false);
+    const [supOpen, setSupOpen] = useState(false);
+    const [histOpen, setHistOpen] = useState(false);
     const materialLocked = ['Closed', 'Cancelled', 'Completed'].includes(wo.status);
     const selected = selectedId ? items.find((m) => String(m._id) === String(selectedId)) : null;
 
     useEffect(() => {
-        if (!open) setSelectedId(null);
+        if (!open) {
+            setSelectedId(null);
+            setAddOpen(false);
+            setSupOpen(false);
+            setHistOpen(false);
+        }
     }, [open]);
 
     useEffect(() => {
@@ -1124,15 +1229,26 @@ function PendingComponentsDrawer({ wo, items, open, onClose, load, setTab }) {
                     )}
                     {selected && (() => {
                         const meta = rowMeta(selected);
+                        const remainingAllocate = remainingToAllocateOf(selected);
+                        const remainingResolve = remainingToResolveOf(selected);
+                        const added = addedLaterQtyOf(selected);
+                        const lateStatus = lateMaterialStatusOf(selected);
+                        const sups = supplementaryRowsForMaterial(wo, selected);
                         const rows = [
-                            ['Item', selected.itemCode ? `${selected.itemCode} — ${selected.itemName || ''}` : (selected.itemName || '—')],
+                            ['Item Code', selected.itemCode || '—'],
+                            ['Item Name', selected.itemName || '—'],
                             ['Section', meta.section],
                             ['Required Qty', selected.requiredQty ?? 0],
-                            ['Available Qty', selected.availableStock ?? 0],
+                            ['Added Later Qty', added],
+                            ['Supplementary Allocated Qty', selected.supplementaryAllocatedQty ?? 0],
+                            ['Supplementary Completed Qty', selected.supplementaryCompletedQty ?? 0],
+                            ['Remaining To Allocate', remainingAllocate],
+                            ['Remaining To Resolve', remainingResolve],
+                            ['Available Stock', selected.availableStock ?? 0],
                             ['Short Qty', selected.shortQty ?? 0],
-                            ['Status', meta.statusText],
                             ['Procurement Status', selected.procurementStatus || '—'],
                             ['Remarks', meta.remark],
+                            ['Status', lateStatus],
                         ];
                         if (meta.deferredAt) rows.push(['Deferred date/time', meta.deferredAt]);
                         if (meta.deferredBy) rows.push(['Deferred by', meta.deferredBy]);
@@ -1140,23 +1256,223 @@ function PendingComponentsDrawer({ wo, items, open, onClose, load, setTab }) {
                             <div style={{ padding: 18 }}>
                                 {rows.map(([k, v]) => (
                                     <div key={k} style={{ display: 'flex', gap: 12, padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
-                                        <div style={{ width: 150, fontSize: 12, fontWeight: 700, color: '#64748b' }}>{k}</div>
+                                        <div style={{ width: 170, fontSize: 12, fontWeight: 700, color: '#64748b' }}>{k}</div>
                                         <div style={{ flex: 1, fontSize: 13, color: '#1e293b', fontWeight: 600 }}>{v}</div>
                                     </div>
                                 ))}
+                                {sups.length > 0 && (
+                                    <div style={{ marginTop: 14, padding: 12, background: '#eef2ff', borderRadius: 8 }}>
+                                        <div style={{ fontSize: 12, fontWeight: 800, color: '#3730a3', marginBottom: 8 }}>Supplementary</div>
+                                        {sups.map((s) => (
+                                            <div key={s._id} style={{ fontSize: 12, color: '#312e81', marginBottom: 4 }}>
+                                                {s.woNumber} · Qty: {(s.supplementaryMaterials || []).find((sm) => String(sm.materialId) === String(selected._id))?.qty ?? s.targetQty} · {s.status}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 18 }}>
-                                    {btn('Go to BOM', () => { onClose(); setTab(1); })}
                                     {btn(busy === 'stock' ? 'Refreshing…' : 'Refresh Stock', handleRefreshStock)}
-                                    {btn(busy === 'restore' ? 'Restoring…' : 'Restore / Add Back', () => handleRestore(selected), { primary: true, disabled: materialLocked })}
-                                    {btn('Material History', () => { onClose(); setTab(5); })}
+                                    {btn('Record Late Material', () => setAddOpen(true), { primary: true, disabled: materialLocked || remainingAllocate <= 0 })}
+                                    {btn('Create Supplementary WO', () => setSupOpen(true), { disabled: materialLocked || remainingAllocate <= 0 || wo.woKind !== 'section' })}
+                                    {btn(busy === 'restore' ? 'Restoring…' : 'Restore / Add Back', () => handleRestore(selected), { disabled: materialLocked })}
+                                    {btn('Material History', () => setHistOpen(true))}
                                 </div>
                             </div>
                         );
                     })()}
                 </div>
             </aside>
+            {addOpen && selected && (
+                <AddMaterialModal
+                    wo={wo}
+                    material={selected}
+                    busy={busy === 'add'}
+                    onClose={() => setAddOpen(false)}
+                    onConfirm={async ({ qty, remarks }) => {
+                        setBusy('add');
+                        try {
+                            await addMaterialLater(wo._id, selected._id, { qty, remarks });
+                            toast.success('Late material recorded (process only — stock not reserved)');
+                            setAddOpen(false);
+                            load();
+                        } catch (e) { toast.error(e.response?.data?.message || e.message); }
+                        finally { setBusy(''); }
+                    }}
+                />
+            )}
+            {supOpen && selected && (
+                <SupplementaryWoModal
+                    wo={wo}
+                    material={selected}
+                    busy={busy === 'sup'}
+                    onClose={() => setSupOpen(false)}
+                    onConfirm={async (payload) => {
+                        setBusy('sup');
+                        try {
+                            const created = await createSupplementaryWorkOrder(wo._id, payload);
+                            toast.success(`Supplementary WO ${created.woNumber} created`);
+                            setSupOpen(false);
+                            load();
+                        } catch (e) { toast.error(e.response?.data?.message || e.message); }
+                        finally { setBusy(''); }
+                    }}
+                />
+            )}
+            {histOpen && selected && (
+                <MaterialHistoryModal
+                    wo={wo}
+                    material={selected}
+                    onClose={() => setHistOpen(false)}
+                    onOpenTab={() => { setHistOpen(false); onClose(); setTab(5); }}
+                />
+            )}
         </div>
     );
+}
+
+function modalShell(title, onClose, children, footer) {
+    return (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000001, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(15,23,42,0.45)' }}>
+            <div style={{ width: 'min(520px, 96vw)', background: '#fff', borderRadius: 12, boxShadow: '0 16px 40px rgba(0,0,0,0.18)', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ padding: '14px 18px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ fontWeight: 800, color: '#1e293b' }}>{title}</div>
+                    <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#64748b' }}>✕</button>
+                </div>
+                <div style={{ padding: 18, overflow: 'auto' }}>{children}</div>
+                {footer && <div style={{ padding: '12px 18px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>{footer}</div>}
+            </div>
+        </div>
+    );
+}
+
+function AddMaterialModal({ wo, material, busy, onClose, onConfirm }) {
+    const remainingAllocate = remainingToAllocateOf(material);
+    const remainingResolve = remainingToResolveOf(material);
+    const stock = Number(material.availableStock) || 0;
+    const maxQty = Math.max(0, Math.min(remainingAllocate, stock));
+    const [qty, setQty] = useState(maxQty || '');
+    const [remarks, setRemarks] = useState('');
+    const rows = [
+        ['Work Order', wo.woNumber],
+        ['Section', sectionLabelForMaterial(wo, material)],
+        ['Component', material.itemCode ? `${material.itemCode} — ${material.itemName}` : material.itemName],
+        ['Required Qty', material.requiredQty ?? 0],
+        ['Already Added Qty', addedLaterQtyOf(material)],
+        ['Remaining To Allocate', remainingAllocate],
+        ['Remaining To Resolve', remainingResolve],
+        ['Current Stock Available (display only)', stock],
+    ];
+    return modalShell('Record Late Material', onClose, (
+        <>
+            <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 8, padding: '10px 12px', marginBottom: 12, fontSize: 12, color: '#92400e', fontWeight: 600, lineHeight: 1.45 }}>
+                {LATE_MATERIAL_PROCESS_WARNING}
+            </div>
+            {rows.map(([k, v]) => (
+                <div key={k} style={{ display: 'flex', gap: 12, padding: '6px 0', borderBottom: '1px solid #f1f5f9' }}>
+                    <div style={{ width: 180, fontSize: 12, color: '#64748b', fontWeight: 700 }}>{k}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{v}</div>
+                </div>
+            ))}
+            <label style={{ display: 'block', marginTop: 14, fontSize: 12, fontWeight: 700, color: '#334155' }}>Qty to Record</label>
+            <input type="number" min="0" step="any" value={qty} onChange={(e) => setQty(e.target.value)} style={inp} />
+            <label style={{ display: 'block', marginTop: 10, fontSize: 12, fontWeight: 700, color: '#334155' }}>Remarks</label>
+            <textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} style={{ ...inp, minHeight: 64 }} />
+        </>
+    ), (
+        <>
+            <button type="button" onClick={onClose} style={{ padding: '8px 12px', borderRadius: 7, border: '1px solid #cbd5e1', background: '#fff', fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+            <button
+                type="button"
+                disabled={busy}
+                onClick={() => onConfirm({ qty: Number(qty), remarks })}
+                style={{ padding: '8px 12px', borderRadius: 7, border: 'none', background: '#1d4ed8', color: '#fff', fontWeight: 700, cursor: 'pointer' }}
+            >
+                {busy ? 'Saving…' : 'Confirm Record Late Material'}
+            </button>
+        </>
+    ));
+}
+
+function SupplementaryWoModal({ wo, material, busy, onClose, onConfirm }) {
+    const remaining = remainingToAllocateOf(material);
+    const remainingResolve = remainingToResolveOf(material);
+    const stages = (wo.stages || []).filter((s) => !isNaStage(s));
+    const defaultSeq = stages[0]?.seq || 1;
+    const [qty, setQty] = useState(remaining || '');
+    const [startFromSeq, setStartFromSeq] = useState(defaultSeq);
+    const [supervisor, setSupervisor] = useState(wo.supervisor || '');
+    const [remarks, setRemarks] = useState('');
+    const [reason, setReason] = useState('Pending material received later');
+    const rows = [
+        ['Linked Parent WO', wo.parentWorkOrderId?.woNumber || '—'],
+        ['Linked Section WO', wo.woNumber],
+        ['Section', wo.bomSectionName || '—'],
+        ['Selected Component', material.itemCode ? `${material.itemCode} — ${material.itemName}` : material.itemName],
+        ['Original Required Qty', material.requiredQty ?? 0],
+        ['Already Resolved Qty', addedLaterQtyOf(material) + Math.max(0, Number(material.supplementaryCompletedQty) || 0)],
+        ['Remaining To Allocate', remaining],
+        ['Remaining To Resolve', remainingResolve],
+        ['Status', 'Released'],
+    ];
+    return modalShell('Create Supplementary Work Order', onClose, (
+        <>
+            {rows.map(([k, v]) => (
+                <div key={k} style={{ display: 'flex', gap: 12, padding: '6px 0', borderBottom: '1px solid #f1f5f9' }}>
+                    <div style={{ width: 190, fontSize: 12, color: '#64748b', fontWeight: 700 }}>{k}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{v}</div>
+                </div>
+            ))}
+            <label style={{ display: 'block', marginTop: 14, fontSize: 12, fontWeight: 700, color: '#334155' }}>Supplementary Qty</label>
+            <input type="number" min="0" step="any" value={qty} onChange={(e) => setQty(e.target.value)} style={inp} />
+            <label style={{ display: 'block', marginTop: 10, fontSize: 12, fontWeight: 700, color: '#334155' }}>Start From Stage</label>
+            <select value={startFromSeq} onChange={(e) => setStartFromSeq(Number(e.target.value))} style={inp}>
+                {stages.map((s) => <option key={s.seq} value={s.seq}>#{s.seq} {s.stageName}</option>)}
+            </select>
+            <label style={{ display: 'block', marginTop: 10, fontSize: 12, fontWeight: 700, color: '#334155' }}>Reason</label>
+            <input value={reason} onChange={(e) => setReason(e.target.value)} style={inp} />
+            <label style={{ display: 'block', marginTop: 10, fontSize: 12, fontWeight: 700, color: '#334155' }}>Supervisor</label>
+            <input value={supervisor} onChange={(e) => setSupervisor(e.target.value)} style={inp} />
+            <label style={{ display: 'block', marginTop: 10, fontSize: 12, fontWeight: 700, color: '#334155' }}>Remarks</label>
+            <textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} style={{ ...inp, minHeight: 64 }} />
+        </>
+    ), (
+        <>
+            <button type="button" onClick={onClose} style={{ padding: '8px 12px', borderRadius: 7, border: '1px solid #cbd5e1', background: '#fff', fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+            <button
+                type="button"
+                disabled={busy}
+                onClick={() => onConfirm({ materialId: material._id, qty: Number(qty), startFromSeq: Number(startFromSeq), supervisor, remarks, reason })}
+                style={{ padding: '8px 12px', borderRadius: 7, border: 'none', background: '#4338ca', color: '#fff', fontWeight: 700, cursor: 'pointer' }}
+            >
+                {busy ? 'Creating…' : 'Create Supplementary WO'}
+            </button>
+        </>
+    ));
+}
+
+function MaterialHistoryModal({ wo, material, onClose, onOpenTab }) {
+    const events = [...(wo.materialEventHistory || [])]
+        .filter((e) => String(e.materialId) === String(material._id) || (material.itemId && String(e.itemId) === String(material.itemId)))
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    return modalShell('Material History', onClose, (
+        <>
+            {events.length === 0 ? (
+                <div style={{ fontSize: 13, color: '#94a3b8' }}>No late-material events recorded for this component yet.</div>
+            ) : events.map((e, i) => (
+                <div key={e._id || i} style={{ padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{e.eventType} · qty {e.qty} · allocate left {e.remainingToAllocateQty ?? e.remainingPendingQty} · resolve left {e.remainingToResolveQty ?? '—'}</div>
+                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
+                        {e.createdAt ? new Date(e.createdAt).toLocaleString() : '—'}
+                        {' · '}{e.createdBy?.name || '—'}
+                        {e.supplementaryWoNumber ? ` · ${e.supplementaryWoNumber}` : ''}
+                    </div>
+                    {e.remarks ? <div style={{ fontSize: 12, color: '#475569', marginTop: 4 }}>{e.remarks}</div> : null}
+                </div>
+            ))}
+        </>
+    ), (
+        <button type="button" onClick={onOpenTab} style={{ padding: '8px 12px', borderRadius: 7, border: '1px solid #cbd5e1', background: '#fff', fontWeight: 700, cursor: 'pointer' }}>Open full Material History tab</button>
+    ));
 }
 
 // ─── Process Execution Tab ────────────────────────────────────────────────────
@@ -1166,9 +1482,21 @@ function ProcessExecutionTab({
     onOpenPending = () => {}, onViewBom = () => {},
 }) {
     const canEdit = ['Released', 'In Process', 'WIP – Waiting Material'].includes(wo.status);
+    const sequenceIssues = getSequenceInconsistencies(wo.stages);
 
     return (
         <div>
+            {sequenceIssues.length > 0 && (
+                <div style={{ background: '#fff1f2', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#9f1239' }}>
+                    <div style={{ fontWeight: 800, marginBottom: 4 }}>Process sequence inconsistency detected</div>
+                    {sequenceIssues.map((iss) => (
+                        <div key={iss.stage.seq}>
+                            #{iss.stage.seq} {iss.stage.stageName} is {displayStageStatus(iss.stage)} while #{iss.previous.seq} {iss.previous.stageName} is {displayStageStatus(iss.previous)}. Admin review — records were not reset.
+                        </div>
+                    ))}
+                    <div style={{ marginTop: 4, fontSize: 12 }}>New forward stages stay locked until the earlier incomplete stage is Completed.</div>
+                </div>
+            )}
             {pendingCount > 0 && (
                 <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#92400e', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                     <span style={{ flex: 1, cursor: 'pointer' }} onClick={onOpenPending}>{pendingProceedWarning(pendingCount)}</span>
@@ -1199,12 +1527,24 @@ function ProcessExecutionTab({
                 {(wo.stages || []).map(s => {
                     const display = displayStageStatus(s);
                     const sc = STAGE_STATUS_COLORS[display] || STAGE_STATUS_COLORS[s.status] || STAGE_STATUS_COLORS['Not Started'];
+                    const blocker = getSequenceBlocker(wo.stages, s.seq);
                     return (
-                        <div key={s.seq} style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                        <div key={s.seq} style={{ background: '#ffffff', border: `1px solid ${blocker ? '#fde68a' : '#e5e7eb'}`, borderRadius: '10px', padding: '12px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                                 <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b' }}>#{s.seq} {s.stageName}</span>
                                 <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: sc.bg, color: sc.color }}>{display}</span>
                             </div>
+                            {isNaStage(s) && (
+                                <div style={{ fontSize: 10, fontWeight: 800, color: '#4338ca', marginBottom: 6 }}>
+                                    Not Applicable — completed in original WO
+                                </div>
+                            )}
+                            {blocker && (
+                                <div style={{ fontSize: 10, fontWeight: 800, color: '#92400e', marginBottom: 6 }}>
+                                    🔒 Locked — Complete previous stage first
+                                    <div style={{ fontWeight: 600, marginTop: 2 }}>Waiting for #{blocker.seq} {blocker.stageName}</div>
+                                </div>
+                            )}
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
                                     <span style={{ color: '#94a3b8' }}>Qty Started:</span>
@@ -1238,6 +1578,9 @@ function ProcessExecutionTab({
 function StageCard({ stage, wo, woId, targetQty, canEdit, load, setWo }) {
     const display = displayStageStatus(stage);
     const sc = STAGE_STATUS_COLORS[display] || STAGE_STATUS_COLORS[stage.status] || STAGE_STATUS_COLORS['Not Started'];
+    const blocker = getSequenceBlocker(wo.stages, stage.seq);
+    const sequenceLocked = !!blocker || isNaStage(stage);
+    const editable = canEdit && !sequenceLocked;
     const [open, setOpen] = useState(false);
 
     // Stage-level fields — inputQty / outputQty are Qty Started / Qty Completed
@@ -1299,7 +1642,10 @@ function StageCard({ stage, wo, woId, targetQty, canEdit, load, setWo }) {
     const balanceInProcess = Math.max(0, totalInput - totalOutput - totalRework - totalRejection);
 
     const save = async () => {
-        if (!canEdit) return;
+        if (!editable) {
+            if (blocker) toast.error(cannotStartMessage(stage, blocker));
+            return;
+        }
         const started = Number(form.inputQty);
         const completed = Number(form.outputQty);
         if (!Number.isFinite(started) || !Number.isFinite(completed) || started < 0 || completed < 0) {
@@ -1329,6 +1675,10 @@ function StageCard({ stage, wo, woId, targetQty, canEdit, load, setWo }) {
     };
 
     const handleAddLog = async () => {
+        if (!editable) {
+            if (blocker) toast.error(cannotStartMessage(stage, blocker));
+            return;
+        }
         if (newLog.outputQty > pendingOutput) {
             toast.error(`Output Qty cannot exceed Pending Output (${pendingOutput})`);
             return;
@@ -1383,6 +1733,18 @@ function StageCard({ stage, wo, woId, targetQty, canEdit, load, setWo }) {
                         <span>Qty Completed: <strong style={{ color: '#10b981' }}>{totalOutput}</strong></span>
                         <span>Remarks: {stage.remarks ? String(stage.remarks) : '—'}</span>
                     </div>
+                    {isNaStage(stage) && (
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#4338ca', marginTop: 4 }}>
+                            Not Applicable — completed in original WO
+                        </div>
+                    )}
+                    {sequenceLocked && blocker && (
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#92400e', marginTop: 4 }}>
+                            🔒 Locked — Complete previous stage first
+                            <span style={{ fontWeight: 600 }}> · Waiting for #{blocker.seq} {blocker.stageName}</span>
+                            <div style={{ fontWeight: 600, marginTop: 2 }}>{completeBeforeHint(stage, blocker)}</div>
+                        </div>
+                    )}
                 </div>
                 <span style={{ padding: '5px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: 700, background: sc.bg, color: sc.color }}>{display}</span>
                 <span style={{ color: '#334155', fontSize: '18px' }}>{open ? '▲' : '▼'}</span>
@@ -1396,7 +1758,7 @@ function StageCard({ stage, wo, woId, targetQty, canEdit, load, setWo }) {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
                         <div>
                             <label style={{ fontSize: '11px', color: '#6b7280', display: 'block', marginBottom: '4px' }}>Status</label>
-                            <select value={form.status} onChange={e => set('status', e.target.value)} disabled={!canEdit} style={{ ...inp, cursor: canEdit ? 'pointer' : 'not-allowed' }}>
+                            <select value={form.status} onChange={e => set('status', e.target.value)} disabled={!editable} style={{ ...inp, cursor: editable ? 'pointer' : 'not-allowed' }}>
                                 <option value="Not Started">Not Started</option>
                                 <option value="Running">In Progress</option>
                                 <option value="Completed">Completed</option>
@@ -1407,17 +1769,17 @@ function StageCard({ stage, wo, woId, targetQty, canEdit, load, setWo }) {
                         </div>
                         <div>
                             <label style={{ fontSize: '11px', color: '#6b7280', display: 'block', marginBottom: '4px' }}>Qty Started</label>
-                            <input type="number" min="0" value={form.inputQty} onChange={e => set('inputQty', e.target.value)} disabled={!canEdit} style={inp} />
+                            <input type="number" min="0" value={form.inputQty} onChange={e => set('inputQty', e.target.value)} disabled={!editable} style={inp} />
                         </div>
                         <div>
                             <label style={{ fontSize: '11px', color: '#6b7280', display: 'block', marginBottom: '4px' }}>Qty Completed</label>
-                            <input type="number" min="0" value={form.outputQty} onChange={e => set('outputQty', e.target.value)} disabled={!canEdit} style={inp} />
+                            <input type="number" min="0" value={form.outputQty} onChange={e => set('outputQty', e.target.value)} disabled={!editable} style={inp} />
                         </div>
                     </div>
 
                     <div style={{ marginBottom: '16px' }}>
                         <label style={{ fontSize: '11px', color: '#6b7280', display: 'block', marginBottom: '4px' }}>Remarks</label>
-                        <textarea rows={2} value={form.remarks} onChange={e => set('remarks', e.target.value)} style={{ ...inp, resize: 'vertical' }} disabled={!canEdit} />
+                        <textarea rows={2} value={form.remarks} onChange={e => set('remarks', e.target.value)} style={{ ...inp, resize: 'vertical' }} disabled={!editable} />
                     </div>
 
                     {/* Aggregate Totals (Read Only) */}
@@ -1438,7 +1800,11 @@ function StageCard({ stage, wo, woId, targetQty, canEdit, load, setWo }) {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                             <div style={{ fontSize: '13px', fontWeight: 600, color: '#374151' }}>Execution Runs ({productionLogs.length})</div>
                             {canEdit && !showNewLog && (
-                                <button onClick={() => setShowNewLog(true)} style={{ padding: '4px 10px', background: '#334155', color: '#f1f5f9', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}>+ Add Run Log</button>
+                                <button
+                                    onClick={() => { if (editable) setShowNewLog(true); else if (blocker) toast.error(cannotStartMessage(stage, blocker)); }}
+                                    disabled={!editable}
+                                    style={{ padding: '4px 10px', background: editable ? '#334155' : '#e2e8f0', color: editable ? '#f1f5f9' : '#94a3b8', border: 'none', borderRadius: '4px', cursor: editable ? 'pointer' : 'not-allowed', fontSize: '11px', fontWeight: 600 }}
+                                >+ Add Run Log</button>
                             )}
                         </div>
 
@@ -1476,7 +1842,7 @@ function StageCard({ stage, wo, woId, targetQty, canEdit, load, setWo }) {
                                                 )}
                                             </td>
                                             <td style={{ padding: '8px', textAlign: 'right' }}>
-                                                {canEdit && l._id && (
+                                                {editable && l._id && (
                                                     <button onClick={() => handleDeleteLog(l._id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '12px' }}>✕</button>
                                                 )}
                                             </td>
@@ -1517,7 +1883,7 @@ function StageCard({ stage, wo, woId, targetQty, canEdit, load, setWo }) {
 
                                 <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                                     <button onClick={() => setShowNewLog(false)} disabled={saving} style={{ padding: '6px 12px', background: 'transparent', color: '#64748b', border: '1px solid #d1d5db', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>Cancel</button>
-                                    <button onClick={handleAddLog} disabled={saving} style={{ padding: '6px 12px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}>{saving ? 'Saving...' : 'Save Run Log'}</button>
+                                    <button onClick={handleAddLog} disabled={saving || !editable} style={{ padding: '6px 12px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '4px', cursor: editable ? 'pointer' : 'not-allowed', fontSize: '11px', fontWeight: 600 }}>{saving ? 'Saving...' : 'Save Run Log'}</button>
                                 </div>
                             </div>
                         )}
@@ -1529,8 +1895,8 @@ function StageCard({ stage, wo, woId, targetQty, canEdit, load, setWo }) {
                                 style={{ padding: '8px 16px', borderRadius: '7px', background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', cursor: 'pointer', fontWeight: 600, fontSize: '13px' }}>
                                 Cancel
                             </button>
-                            <button onClick={save} disabled={saving}
-                                style={{ padding: '8px 18px', borderRadius: '7px', background: '#1d4ed8', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '13px' }}>
+                            <button onClick={save} disabled={saving || !editable}
+                                style={{ padding: '8px 18px', borderRadius: '7px', background: editable ? '#1d4ed8' : '#94a3b8', color: '#fff', border: 'none', cursor: editable ? 'pointer' : 'not-allowed', fontWeight: 600, fontSize: '13px' }}>
                                 {saving ? 'Saving...' : 'Save Stage'}
                             </button>
                         </div>
@@ -1553,14 +1919,17 @@ function QcTestingTab({ wo, load, isTextile }) {
                 <div style={{ color: '#64748b', textAlign: 'center', padding: '40px' }}>No QC/Testing stages found</div>
             )}
             {qcStages.map(stage => (
-                <QcStagePanel key={stage.seq} stage={stage} woId={wo._id} canEdit={canEdit} load={load} />
+                <QcStagePanel key={stage.seq} stage={stage} wo={wo} woId={wo._id} canEdit={canEdit} load={load} />
             ))}
         </div>
     );
 }
 
-function QcStagePanel({ stage, woId, canEdit, load }) {
-    const sc = STAGE_STATUS_COLORS[stage.status] || STAGE_STATUS_COLORS['Not Started'];
+function QcStagePanel({ stage, wo, woId, canEdit, load }) {
+    const display = displayStageStatus(stage);
+    const sc = STAGE_STATUS_COLORS[display] || STAGE_STATUS_COLORS[stage.status] || STAGE_STATUS_COLORS['Not Started'];
+    const blocker = getSequenceBlocker(wo?.stages, stage.seq);
+    const editable = canEdit && !blocker;
     const [checklist, setChecklist] = useState(stage.checklist || []);
     const [testData, setTestData] = useState(stage.testData || {});
     const [saving, setSaving] = useState(false);
@@ -1568,6 +1937,10 @@ function QcStagePanel({ stage, woId, canEdit, load }) {
     const setTest = (k, v) => setTestData(t => ({ ...t, [k]: v }));
 
     const save = async () => {
+        if (!editable) {
+            if (blocker) toast.error(cannotStartMessage(stage, blocker));
+            return;
+        }
         setSaving(true);
         try {
             const allPassed = checklist.every(c => c.result === 'Pass');
@@ -1590,7 +1963,12 @@ function QcStagePanel({ stage, woId, canEdit, load }) {
                 </div>
                 <div>
                     <span style={{ fontWeight: 700, fontSize: '15px', color: '#1e293b' }}>#{stage.seq} {stage.stageName}</span>
-                    <span style={{ marginLeft: '8px', padding: '3px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 600, background: sc.bg, color: sc.color }}>{stage.status}</span>
+                    <span style={{ marginLeft: '8px', padding: '3px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 600, background: sc.bg, color: sc.color }}>{display}</span>
+                    {blocker && (
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#92400e', marginTop: 4 }}>
+                            🔒 Locked — Waiting for #{blocker.seq} {blocker.stageName}
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -1603,14 +1981,14 @@ function QcStagePanel({ stage, woId, canEdit, load }) {
                             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#f9fafb', padding: '10px 14px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
                                 <span style={{ flex: 1, fontSize: '13px', color: '#1e293b' }}>{c.item}</span>
                                 <select value={c.result} onChange={e => setCheck(i, 'result', e.target.value)}
-                                    disabled={!canEdit}
+                                    disabled={!editable}
                                     style={{ padding: '5px 10px', background: '#1e293b', border: `1px solid ${c.result === 'Pass' ? '#10b981' : c.result === 'Fail' ? '#ef4444' : '#334155'}`, borderRadius: '6px', color: c.result === 'Pass' ? '#10b981' : c.result === 'Fail' ? '#ef4444' : '#94a3b8', cursor: 'pointer', fontWeight: 600, fontSize: '12px' }}>
                                     <option>Pending</option>
                                     <option>Pass</option>
                                     <option>Fail</option>
                                 </select>
                                 <input value={c.remarks} onChange={e => setCheck(i, 'remarks', e.target.value)}
-                                    placeholder="Remarks" disabled={!canEdit}
+                                    placeholder="Remarks" disabled={!editable}
                                     style={{ padding: '5px 10px', background: '#1e293b', border: '1px solid #334155', borderRadius: '6px', color: '#94a3b8', fontSize: '12px', width: '140px' }} />
                             </div>
                         ))}
@@ -1634,35 +2012,35 @@ function QcStagePanel({ stage, woId, canEdit, load }) {
                         ].map(([k, label]) => (
                             <div key={k}>
                                 <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px' }}>{label}</label>
-                                <input type="number" value={testData[k] || ''} onChange={e => setTest(k, e.target.value)} disabled={!canEdit}
+                                <input type="number" value={testData[k] || ''} onChange={e => setTest(k, e.target.value)} disabled={!editable}
                                     style={inp} />
                             </div>
                         ))}
                         <div>
                             <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px' }}>Result</label>
-                            <select value={testData.result || 'Pending'} onChange={e => setTest('result', e.target.value)} disabled={!canEdit}
+                            <select value={testData.result || 'Pending'} onChange={e => setTest('result', e.target.value)} disabled={!editable}
                                 style={{ ...inp, cursor: 'pointer' }}>
                                 <option>Pending</option><option>Pass</option><option>Fail</option>
                             </select>
                         </div>
                         <div>
                             <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px' }}>Tester Name</label>
-                            <input value={testData.testerName || ''} onChange={e => setTest('testerName', e.target.value)} disabled={!canEdit}
+                            <input value={testData.testerName || ''} onChange={e => setTest('testerName', e.target.value)} disabled={!editable}
                                 style={inp} />
                         </div>
                     </div>
                     <div style={{ marginTop: '10px' }}>
                         <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px' }}>Result Summary</label>
                         <textarea rows={2} value={testData.resultSummary || ''} onChange={e => setTest('resultSummary', e.target.value)}
-                            disabled={!canEdit} style={{ ...inp, resize: 'vertical' }} />
+                            disabled={!editable} style={{ ...inp, resize: 'vertical' }} />
                     </div>
                 </div>
             )}
 
             {canEdit && (
                 <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                    <button onClick={save} disabled={saving}
-                        style={{ padding: '8px 18px', borderRadius: '8px', background: '#1d4ed8', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '13px' }}>
+                    <button onClick={save} disabled={saving || !editable}
+                        style={{ padding: '8px 18px', borderRadius: '8px', background: editable ? '#1d4ed8' : '#94a3b8', color: '#fff', border: 'none', cursor: editable ? 'pointer' : 'not-allowed', fontWeight: 600, fontSize: '13px' }}>
                         {saving ? 'Saving...' : 'Save & Auto-Evaluate'}
                     </button>
                 </div>
@@ -1769,6 +2147,7 @@ function WipTab({ wo }) {
 
 // ─── Material History Tab ───────────────────────────────────────────────────
 function MaterialHistoryTab({ wo }) {
+    const lateEvents = [...(wo.materialEventHistory || [])].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     // Flatten all production logs from all stages that have missingComponents
     const history = (wo.stages || []).flatMap(s =>
         (s.productionLogs || []).filter(l => l.missingComponents?.length > 0).map(l => ({
@@ -1783,6 +2162,30 @@ function MaterialHistoryTab({ wo }) {
 
     return (
         <div style={{ maxWidth: '900px' }}>
+            <h2 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 700, color: '#1e293b' }}>Late material history</h2>
+            <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px', lineHeight: '1.5' }}>
+                Append-only log of deferred, added-later, restored, and supplementary events. Prior rows are never overwritten.
+            </p>
+            {lateEvents.length === 0 ? (
+                <div style={{ background: '#ffffff', border: '1px dashed #cbd5e1', borderRadius: '12px', padding: '24px', textAlign: 'center', marginBottom: 28 }}>
+                    <div style={{ fontSize: '13px', color: '#94a3b8' }}>No late-material events recorded on this Work Order.</div>
+                </div>
+            ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: 28 }}>
+                    {lateEvents.map((h, i) => (
+                        <div key={h._id || i} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '12px 16px' }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{h.itemName || '—'} · {h.eventType}</div>
+                            <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
+                                Qty {h.qty} · Remaining to allocate {h.remainingToAllocateQty ?? h.remainingPendingQty} · Remaining to resolve {h.remainingToResolveQty ?? '—'}
+                                {h.supplementaryWoNumber ? ` · ${h.supplementaryWoNumber}` : ''}
+                                {' · '}{h.createdAt ? new Date(h.createdAt).toLocaleString() : '—'}
+                                {' · '}{h.createdBy?.name || '—'}
+                            </div>
+                            {h.remarks ? <div style={{ fontSize: 12, color: '#475569', marginTop: 6 }}>{h.remarks}</div> : null}
+                        </div>
+                    ))}
+                </div>
+            )}
             <h2 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 700, color: '#1e293b' }}>Mandatory change history</h2>
             <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px', lineHeight: '1.5' }}>
                 Work Order Mandatory tick/untick only. Original BOM requirement is not overwritten.
