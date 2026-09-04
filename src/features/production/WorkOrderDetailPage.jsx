@@ -31,6 +31,7 @@ const WO_STATUS_COLORS = {
 const STAGE_STATUS_COLORS = {
     'Not Started': { color: '#000000', bg: '#e2e8f0', icon: '○' },
     'Running': { color: '#000000', bg: '#fde68a', icon: '▶' },
+    'In Progress': { color: '#000000', bg: '#fde68a', icon: '▶' },
     'Completed': { color: '#000000', bg: '#a7f3d0', icon: '✓' },
     'QC Hold': { color: '#000000', bg: '#fed7aa', icon: '⏸' },
     'Failed': { color: '#000000', bg: '#fecaca', icon: '✕' },
@@ -75,6 +76,49 @@ function pendingProceedWarning(count) {
     const n = Number(count) || 0;
     const noun = n === 1 ? 'component is' : 'components are';
     return `${n} ${noun} pending. Production may proceed temporarily.`;
+}
+
+function deferredByForMaterial(wo, materialId) {
+    const hits = (wo.mandatoryChangeHistory || []).filter((h) =>
+        String(h.materialId) === String(materialId) && h.newMandatory === false
+    );
+    if (!hits.length) return '';
+    hits.sort((a, b) => new Date(b.changedAt) - new Date(a.changedAt));
+    const by = hits[0].changedBy;
+    return (by && typeof by === 'object' ? by.name : '') || '';
+}
+
+function stageQtyStarted(stage) {
+    return Number(stage?.inputQty) || 0;
+}
+
+function stageQtyCompleted(stage) {
+    return Number(stage?.outputQty) || 0;
+}
+
+/** Display-only. Stored values remain Not Started / Running / Completed / QC Hold / Failed / Rework. */
+function displayStageStatus(stage) {
+    const raw = String(stage?.status || 'Not Started');
+    if (raw === 'Completed') return 'Completed';
+    if (raw === 'Running') return 'In Progress';
+    if (raw === 'Not Started') {
+        if (stageQtyStarted(stage) > 0 || stageQtyCompleted(stage) > 0) return 'In Progress';
+        return 'Not Started';
+    }
+    return raw;
+}
+
+function sectionLabelForMaterial(wo, m) {
+    if (m?.sectionName) return m.sectionName;
+    if (wo?.bomSectionName) return wo.bomSectionName;
+    if (m?.sectionNo) return `Section ${m.sectionNo}`;
+    return '—';
+}
+
+function formatWhen(dt) {
+    if (!dt) return '';
+    const d = new Date(dt);
+    return Number.isNaN(d.getTime()) ? '' : d.toLocaleString();
 }
 
 function deferredDateForMaterial(wo, materialId) {
@@ -290,7 +334,7 @@ export default function WorkOrderDetailPage() {
             <div style={{ padding: '28px' }}>
                 {tab === 0 && <OverviewTab wo={wo} load={load} isTextile={isTextile} labels={labels} />}
                 {tab === 1 && <BomMaterialTab wo={wo} load={load} />}
-                {tab === 2 && <ProcessExecutionTab wo={wo} load={load} />}
+                {tab === 2 && <ProcessExecutionTab wo={wo} load={load} setTab={setTab} setWo={setWo} />}
                 {tab === 3 && <QcTestingTab wo={wo} load={load} />}
                 {tab === 4 && <WipTab wo={wo} />}
                 {tab === 5 && <MaterialHistoryTab wo={wo} />}
@@ -808,36 +852,202 @@ function BomMaterialTab({ wo, load }) {
     );
 }
 
+function PendingComponentsDrawer({ wo, items, open, onClose, load, setTab }) {
+    const [selectedId, setSelectedId] = useState(null);
+    const [busy, setBusy] = useState('');
+    const materialLocked = ['Closed', 'Cancelled', 'Completed'].includes(wo.status);
+    const selected = selectedId ? items.find((m) => String(m._id) === String(selectedId)) : null;
+
+    useEffect(() => {
+        if (!open) setSelectedId(null);
+    }, [open]);
+
+    useEffect(() => {
+        if (selectedId && !items.some((m) => String(m._id) === String(selectedId))) {
+            setSelectedId(null);
+        }
+    }, [items, selectedId]);
+
+    const handleRestore = async (m) => {
+        if (materialLocked) return;
+        setBusy('restore');
+        try {
+            await updateMaterialStatus(wo._id, { materialUpdates: [{ materialId: m._id, isMandatory: true }] });
+            toast.success(`${m.itemName} restored to active list`);
+            setSelectedId(null);
+            load();
+        } catch (e) { toast.error(e.response?.data?.message || e.message); }
+        finally { setBusy(''); }
+    };
+
+    const handleRefreshStock = async () => {
+        setBusy('stock');
+        try {
+            await refreshMaterialStock(wo._id);
+            toast.success('Stock levels refreshed from Master');
+            load();
+        } catch (e) { toast.error(e.response?.data?.message || e.message); }
+        finally { setBusy(''); }
+    };
+
+    if (!open) return null;
+
+    const rowMeta = (m) => ({
+        deferredAt: formatWhen(deferredDateForMaterial(wo, m._id)),
+        deferredBy: deferredByForMaterial(wo, m._id),
+        statusText: materialStatusLabel(m),
+        remark: displayMaterialRemark(m.remarks) || '—',
+        section: sectionLabelForMaterial(wo, m),
+    });
+
+    const btn = (label, onClick, extra = {}) => (
+        <button
+            type="button"
+            onClick={onClick}
+            disabled={!!busy || extra.disabled}
+            style={{
+                padding: '8px 12px', borderRadius: 7, border: extra.primary ? 'none' : '1px solid #cbd5e1',
+                background: extra.primary ? '#1d4ed8' : '#fff', color: extra.primary ? '#fff' : '#334155',
+                fontWeight: 700, fontSize: 12, cursor: extra.disabled || busy ? 'not-allowed' : 'pointer',
+            }}
+        >
+            {label}
+        </button>
+    );
+
+    return (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000000, display: 'flex', justifyContent: 'flex-end' }}>
+            <div onClick={onClose} style={{ flex: 1, background: 'rgba(15,23,42,0.35)' }} />
+            <aside style={{ width: 'min(560px, 100vw)', height: '100%', background: '#fff', boxShadow: '-8px 0 24px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ padding: '16px 18px', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', gap: 10 }}>
+                    {selected && (
+                        <button type="button" onClick={() => setSelectedId(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#2563eb', fontWeight: 700, fontSize: 13 }}>← Back</button>
+                    )}
+                    <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: '#1e293b' }}>{selected ? (selected.itemCode || selected.itemName) : 'Pending Components'}</div>
+                        <div style={{ fontSize: 12, color: '#64748b' }}>{selected ? 'Deferred / pending material detail' : `${items.length} deferred for this Work Order`}</div>
+                    </div>
+                    <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#64748b' }}>✕</button>
+                </div>
+                <div style={{ flex: 1, overflow: 'auto' }}>
+                    {!selected && (
+                        <div style={{ overflowX: 'auto' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                                <thead>
+                                    <tr style={{ background: '#fffbeb', color: '#92400e' }}>
+                                        {['Item Code', 'Item Name', 'Section', 'Req', 'Avail', 'Short', 'Material', 'Procurement', 'Remarks'].map((h) => (
+                                            <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, borderBottom: '1px solid #fde68a', whiteSpace: 'nowrap' }}>{h}</th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {items.map((m) => {
+                                        const meta = rowMeta(m);
+                                        return (
+                                            <tr key={m._id} onClick={() => setSelectedId(m._id)} style={{ cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}>
+                                                <td style={{ padding: '10px', fontWeight: 700, color: '#1d4ed8' }}>{m.itemCode || '—'}</td>
+                                                <td style={{ padding: '10px', color: '#1e293b' }}>{m.itemName || '—'}</td>
+                                                <td style={{ padding: '10px', color: '#475569' }}>{meta.section}</td>
+                                                <td style={{ padding: '10px' }}>{m.requiredQty ?? 0}</td>
+                                                <td style={{ padding: '10px' }}>{m.availableStock ?? 0}</td>
+                                                <td style={{ padding: '10px', fontWeight: 700, color: Number(m.shortQty) > 0 ? '#dc2626' : '#1e293b' }}>{m.shortQty ?? 0}</td>
+                                                <td style={{ padding: '10px', color: '#b45309', fontWeight: 700, whiteSpace: 'nowrap' }}>{meta.statusText}</td>
+                                                <td style={{ padding: '10px' }}>{m.procurementStatus || '—'}</td>
+                                                <td style={{ padding: '10px', color: '#475569' }}>{meta.remark}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                    {!items.length && (
+                                        <tr><td colSpan={9} style={{ padding: 24, textAlign: 'center', color: '#64748b' }}>No pending components</td></tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                    {selected && (() => {
+                        const meta = rowMeta(selected);
+                        const rows = [
+                            ['Item', selected.itemCode ? `${selected.itemCode} — ${selected.itemName || ''}` : (selected.itemName || '—')],
+                            ['Section', meta.section],
+                            ['Required Qty', selected.requiredQty ?? 0],
+                            ['Available Qty', selected.availableStock ?? 0],
+                            ['Short Qty', selected.shortQty ?? 0],
+                            ['Status', meta.statusText],
+                            ['Procurement Status', selected.procurementStatus || '—'],
+                            ['Remarks', meta.remark],
+                        ];
+                        if (meta.deferredAt) rows.push(['Deferred date/time', meta.deferredAt]);
+                        if (meta.deferredBy) rows.push(['Deferred by', meta.deferredBy]);
+                        return (
+                            <div style={{ padding: 18 }}>
+                                {rows.map(([k, v]) => (
+                                    <div key={k} style={{ display: 'flex', gap: 12, padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
+                                        <div style={{ width: 150, fontSize: 12, fontWeight: 700, color: '#64748b' }}>{k}</div>
+                                        <div style={{ flex: 1, fontSize: 13, color: '#1e293b', fontWeight: 600 }}>{v}</div>
+                                    </div>
+                                ))}
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 18 }}>
+                                    {btn('Go to BOM', () => { onClose(); setTab(1); })}
+                                    {btn(busy === 'stock' ? 'Refreshing…' : 'Refresh Stock', handleRefreshStock)}
+                                    {btn(busy === 'restore' ? 'Restoring…' : 'Restore / Add Back', () => handleRestore(selected), { primary: true, disabled: materialLocked })}
+                                    {btn('Material History', () => { onClose(); setTab(5); })}
+                                </div>
+                            </div>
+                        );
+                    })()}
+                </div>
+            </aside>
+        </div>
+    );
+}
+
 // ─── Process Execution Tab ────────────────────────────────────────────────────
-function ProcessExecutionTab({ wo, load }) {
+function ProcessExecutionTab({ wo, load, setTab = () => {}, setWo }) {
     const canEdit = ['Released', 'In Process', 'WIP – Waiting Material'].includes(wo.status);
     const deferredPending = (wo.materialStatus || []).filter((m) => isDeferredLine(m));
+    const [pendingOpen, setPendingOpen] = useState(false);
 
     return (
         <div>
             {deferredPending.length > 0 && (
-                <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#92400e' }}>
-                    {pendingProceedWarning(deferredPending.length)}
+                <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#92400e', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                    <span style={{ flex: 1, cursor: 'pointer' }} onClick={() => setPendingOpen(true)}>{pendingProceedWarning(deferredPending.length)}</span>
+                    <button
+                        type="button"
+                        onClick={() => setPendingOpen(true)}
+                        style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid #f59e0b', background: '#fff', color: '#92400e', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}
+                    >
+                        View Pending Components ({deferredPending.length})
+                    </button>
                 </div>
             )}
-            {/* Stage Summary Grid */}
+            <PendingComponentsDrawer
+                wo={wo}
+                items={deferredPending}
+                open={pendingOpen}
+                onClose={() => setPendingOpen(false)}
+                load={load}
+                setTab={setTab}
+            />
+            {/* Stage Summary Grid — same wo.stages as Stage Execution */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px', marginBottom: '24px' }}>
                 {(wo.stages || []).map(s => {
-                    const sc = STAGE_STATUS_COLORS[s.status] || STAGE_STATUS_COLORS['Not Started'];
+                    const display = displayStageStatus(s);
+                    const sc = STAGE_STATUS_COLORS[display] || STAGE_STATUS_COLORS[s.status] || STAGE_STATUS_COLORS['Not Started'];
                     return (
                         <div key={s.seq} style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                                 <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b' }}>#{s.seq} {s.stageName}</span>
-                                <span style={{ fontSize: '10px', fontWeight: 700, color: sc.color }}>{s.status}</span>
+                                <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: sc.bg, color: sc.color }}>{display}</span>
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-                                    <span style={{ color: '#94a3b8' }}>Output:</span>
-                                    <span style={{ fontWeight: 700, color: '#10b981' }}>{s.outputQty || 0}</span>
+                                    <span style={{ color: '#94a3b8' }}>Qty Started:</span>
+                                    <span style={{ fontWeight: 700, color: '#2563eb' }}>{stageQtyStarted(s)}</span>
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-                                    <span style={{ color: '#94a3b8' }}>Rej/Rw:</span>
-                                    <span style={{ fontWeight: 600, color: '#ef4444' }}>{(s.rejectionQty || 0) + (s.reworkQty || 0)}</span>
+                                    <span style={{ color: '#94a3b8' }}>Qty Completed:</span>
+                                    <span style={{ fontWeight: 700, color: '#10b981' }}>{stageQtyCompleted(s)}</span>
                                 </div>
                             </div>
                         </div>
@@ -853,22 +1063,34 @@ function ProcessExecutionTab({ wo, load }) {
             )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 {(wo.stages || []).map(stage => (
-                    <StageCard key={stage.seq} stage={stage} wo={wo} woId={wo._id} targetQty={wo.targetQty} canEdit={canEdit} load={load} />
+                    <StageCard key={stage.seq} stage={stage} wo={wo} woId={wo._id} targetQty={wo.targetQty} canEdit={canEdit} load={load} setWo={setWo} />
                 ))}
             </div>
         </div>
     );
 }
 
-function StageCard({ stage, wo, woId, targetQty, canEdit, load }) {
-    const sc = STAGE_STATUS_COLORS[stage.status] || STAGE_STATUS_COLORS['Not Started'];
+function StageCard({ stage, wo, woId, targetQty, canEdit, load, setWo }) {
+    const display = displayStageStatus(stage);
+    const sc = STAGE_STATUS_COLORS[display] || STAGE_STATUS_COLORS[stage.status] || STAGE_STATUS_COLORS['Not Started'];
     const [open, setOpen] = useState(false);
 
-    // Stage-level fields
+    // Stage-level fields — inputQty / outputQty are Qty Started / Qty Completed
     const [form, setForm] = useState({
         status: stage.status,
         remarks: stage.remarks || '',
+        inputQty: stageQtyStarted(stage),
+        outputQty: stageQtyCompleted(stage),
     });
+
+    useEffect(() => {
+        setForm({
+            status: stage.status,
+            remarks: stage.remarks || '',
+            inputQty: stageQtyStarted(stage),
+            outputQty: stageQtyCompleted(stage),
+        });
+    }, [stage.status, stage.remarks, stage.inputQty, stage.outputQty, stage.seq]);
 
     // Backward compatibility & Logs init
     const productionLogs = stage.productionLogs || [];
@@ -913,12 +1135,30 @@ function StageCard({ stage, wo, woId, targetQty, canEdit, load }) {
 
     const save = async () => {
         if (!canEdit) return;
+        const started = Number(form.inputQty);
+        const completed = Number(form.outputQty);
+        if (!Number.isFinite(started) || !Number.isFinite(completed) || started < 0 || completed < 0) {
+            toast.error('Enter a valid non-negative quantity');
+            return;
+        }
+        if (completed > maxAllowedOutput) {
+            toast.error(stage.seq === 1
+                ? `Cannot exceed Target Qty (${targetQty}). Total is ${completed}.`
+                : `Cannot exceed Previous Stage Output (${maxAllowedOutput}). Total is ${completed}.`);
+            return;
+        }
         setSaving(true);
         try {
-            await updateStage(woId, stage.seq, form);
+            const updated = await updateStage(woId, stage.seq, {
+                status: form.status,
+                remarks: form.remarks,
+                inputQty: started,
+                outputQty: completed,
+            });
             toast.success(`${stage.stageName} updated`);
             setOpen(false);
-            load();
+            if (updated && typeof setWo === 'function') setWo(updated);
+            else load();
         } catch (e) { toast.error(e.response?.data?.message || e.message); }
         finally { setSaving(false); }
     };
@@ -973,11 +1213,13 @@ function StageCard({ stage, wo, woId, targetQty, canEdit, load }) {
                             </span>
                         )}
                     </div>
-                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
-                        {productionLogs.length > 0 ? `Total Output: ${totalOutput}` : ''}
+                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px', display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+                        <span>Qty Started: <strong style={{ color: '#2563eb' }}>{totalInput}</strong></span>
+                        <span>Qty Completed: <strong style={{ color: '#10b981' }}>{totalOutput}</strong></span>
+                        <span>Remarks: {stage.remarks ? String(stage.remarks) : '—'}</span>
                     </div>
                 </div>
-                <span style={{ padding: '5px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: 700, background: sc.bg, color: sc.color }}>{stage.status}</span>
+                <span style={{ padding: '5px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: 700, background: sc.bg, color: sc.color }}>{display}</span>
                 <span style={{ color: '#334155', fontSize: '18px' }}>{open ? '▲' : '▼'}</span>
             </div>
 
@@ -986,11 +1228,26 @@ function StageCard({ stage, wo, woId, targetQty, canEdit, load }) {
                 <div style={{ borderTop: '1px solid #f3f4f6', padding: '20px', background: '#ffffff' }}>
 
                     {/* Stage Level Info */}
-                    <div>
-                        <label style={{ fontSize: '11px', color: '#6b7280', display: 'block', marginBottom: '4px' }}>Overall Status</label>
-                        <select value={form.status} onChange={e => set('status', e.target.value)} disabled={!canEdit} style={{ ...inp, cursor: canEdit ? 'pointer' : 'not-allowed' }}>
-                            {['Not Started', 'Running', 'Completed', 'QC Hold', 'Failed', 'Rework'].map(s => <option key={s}>{s}</option>)}
-                        </select>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
+                        <div>
+                            <label style={{ fontSize: '11px', color: '#6b7280', display: 'block', marginBottom: '4px' }}>Status</label>
+                            <select value={form.status} onChange={e => set('status', e.target.value)} disabled={!canEdit} style={{ ...inp, cursor: canEdit ? 'pointer' : 'not-allowed' }}>
+                                <option value="Not Started">Not Started</option>
+                                <option value="Running">In Progress</option>
+                                <option value="Completed">Completed</option>
+                                <option value="QC Hold">QC Hold</option>
+                                <option value="Failed">Failed</option>
+                                <option value="Rework">Rework</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style={{ fontSize: '11px', color: '#6b7280', display: 'block', marginBottom: '4px' }}>Qty Started</label>
+                            <input type="number" min="0" value={form.inputQty} onChange={e => set('inputQty', e.target.value)} disabled={!canEdit} style={inp} />
+                        </div>
+                        <div>
+                            <label style={{ fontSize: '11px', color: '#6b7280', display: 'block', marginBottom: '4px' }}>Qty Completed</label>
+                            <input type="number" min="0" value={form.outputQty} onChange={e => set('outputQty', e.target.value)} disabled={!canEdit} style={inp} />
+                        </div>
                     </div>
 
                     <div style={{ marginBottom: '16px' }}>

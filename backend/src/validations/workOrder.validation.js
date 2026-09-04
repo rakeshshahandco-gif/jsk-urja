@@ -38,7 +38,7 @@ const updateWorkOrderSchema = Joi.object({
 });
 
 const updateStageSchema = Joi.object({
-    status: Joi.string().valid('Running', 'Completed', 'QC Hold', 'Failed', 'Rework').required(),
+    status: Joi.string().valid('Not Started', 'Running', 'Completed', 'QC Hold', 'Failed', 'Rework').required(),
     inputQty: Joi.number().min(0).optional(),
     outputQty: Joi.number().min(0).optional(),
     reworkQty: Joi.number().min(0).optional(),
