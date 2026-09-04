@@ -280,11 +280,16 @@ export const getWorkOrders = asyncHandler(async (req, res) => {
 // GET /work-orders/:id  – Get single WO
 // ────────────────────────────────────────────────────────────────────────────
 export const getWorkOrderById = asyncHandler(async (req, res) => {
-    const wo = await WorkOrder.findById(req.params.id)
+    let query = WorkOrder.findById(req.params.id)
         .populate('bomId', 'bomNumber version sectionCount sections')
         .populate('finishedProductId', 'itemName itemCode')
         .populate('createdBy', 'name')
         .populate('parentWorkOrderId', 'woNumber status targetQty finishedProductName');
+    // Read-only print support. Skip when the path is not on this schema (Mongoose 8 strictPopulate).
+    if (WorkOrder.schema.path('sourceSectionWorkOrderId')) {
+        query = query.populate('sourceSectionWorkOrderId', 'woNumber bomSectionName bomSectionNo status materialStatus');
+    }
+    const wo = await query;
 
     if (!wo) throw new ApiError(404, 'Work Order not found');
 

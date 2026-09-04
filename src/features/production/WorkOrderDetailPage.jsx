@@ -12,6 +12,7 @@ import toast from 'react-hot-toast';
 import WorkOrderSectionPanel from '@/features/production/WorkOrderSectionPanel';
 import {
     buildProductionSheetPrintHtml,
+    buildSupplementaryWorkOrderPrintHtml,
     openProductionSheetPrintWindow,
     isSectionWorkOrderForPrint,
 } from '@/features/production/buildProductionSheetPrintHtml';
@@ -189,22 +190,31 @@ export default function WorkOrderDetailPage() {
     const labels = getWorkOrderLabels(isTextile);
     const TABS = isTextile ? TEXTILE_TABS : ELECTRONICS_TABS;
 
-    const handlePrintProductionSheet = () => {
-        const html = buildProductionSheetPrintHtml({
-            wo,
-            companyName: selectedCompany?.companyName,
-            isTextile,
-        });
-        openProductionSheetPrintWindow(html);
-    };
-
     const sc = WO_STATUS_COLORS[wo.status] || WO_STATUS_COLORS['Draft'];
     const pct = wo.stages?.length ? Math.round((wo.stages.filter(s => s.status === 'Completed').length / wo.stages.length) * 100) : 0;
     const unresolvedRequired = (wo.materialStatus || []).filter(m => isBomRequiredLine(m) && m.shortQty > 0);
     const deferredPending = (wo.materialStatus || []).filter(m => isDeferredLine(m));
     const currentMandatoryShortages = (wo.materialStatus || []).filter(m => m.isMandatory && m.shortQty > 0);
-    const isSectionWo = isSectionWorkOrderForPrint(wo);
+    const isSupplementaryWo = wo.woKind === 'supplementary';
+    const isSectionWo = !isSupplementaryWo && isSectionWorkOrderForPrint(wo);
     const parentRef = wo.parentWorkOrderId && typeof wo.parentWorkOrderId === 'object' ? wo.parentWorkOrderId : null;
+    const sourceSectionRef = wo.sourceSectionWorkOrderId && typeof wo.sourceSectionWorkOrderId === 'object' ? wo.sourceSectionWorkOrderId : null;
+
+    const handlePrintProductionSheet = () => {
+        const html = isSupplementaryWo
+            ? buildSupplementaryWorkOrderPrintHtml({
+                wo,
+                companyName: selectedCompany?.companyName,
+                company: selectedCompany,
+                sourceSectionWo: sourceSectionRef,
+            })
+            : buildProductionSheetPrintHtml({
+                wo,
+                companyName: selectedCompany?.companyName,
+                isTextile,
+            });
+        openProductionSheetPrintWindow(html);
+    };
     const pendingBannerCount = isSectionWo
         ? Math.max(unresolvedRequired.length, deferredPending.length)
         : deferredPending.length;
@@ -249,7 +259,7 @@ export default function WorkOrderDetailPage() {
                         <button
                             onClick={handlePrintProductionSheet}
                             style={{ padding: '9px 18px', borderRadius: '8px', background: '#e2e8f0', color: '#475569', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}
-                        >🖨️ Print Production Sheet</button>
+                        >{isSupplementaryWo ? '🖨️ Print / PDF Supplementary WO' : '🖨️ Print Production Sheet'}</button>
                         {wo.status === 'Draft' && (
                             <button
                                 onClick={handleRelease} disabled={saving}
@@ -494,7 +504,67 @@ function OverviewTab({ wo, load, isTextile, labels }) {
                     </div>
                 ))}
             </div>
-            {!isTextile && wo.woKind !== 'section' && <WorkOrderSectionPanel wo={wo} load={load} />}
+            {!isTextile && wo.woKind !== 'section' && wo.woKind !== 'supplementary' && <WorkOrderSectionPanel wo={wo} load={load} />}
+            {!isTextile && wo.woKind === 'section' && <SupplementaryWorkOrdersPrintPanel wo={wo} />}
+        </div>
+    );
+}
+
+function SupplementaryWorkOrdersPrintPanel({ wo }) {
+    const navigate = useNavigate();
+    const { selectedCompany } = useCompany();
+    const [printingId, setPrintingId] = useState('');
+    const rows = wo.supplementaryWorkOrders || [];
+    if (!rows.length) return null;
+
+    const handlePrintRow = async (row) => {
+        setPrintingId(row._id);
+        try {
+            const full = await getWorkOrderById(row._id);
+            const html = buildSupplementaryWorkOrderPrintHtml({
+                wo: full,
+                companyName: selectedCompany?.companyName,
+                company: selectedCompany,
+                sourceSectionWo: wo,
+            });
+            openProductionSheetPrintWindow(html);
+        } catch (e) {
+            toast.error(e.response?.data?.message || e.message || 'Print failed');
+        } finally {
+            setPrintingId('');
+        }
+    };
+
+    return (
+        <div style={{ marginTop: 28, maxWidth: 900 }}>
+            <h2 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 700 }}>Supplementary Work Orders</h2>
+            <div style={{ overflowX: 'auto', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                    <thead>
+                        <tr style={{ background: '#eef2ff', color: '#3730a3' }}>
+                            {['Supplementary WO No.', 'Qty', 'Start From Stage', 'Status', 'Open', 'Print'].map((h) => (
+                                <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700 }}>{h}</th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows.map((s) => (
+                            <tr key={s._id} style={{ borderTop: '1px solid #e5e7eb' }}>
+                                <td style={{ padding: '8px 10px', fontWeight: 700 }}>{s.woNumber}</td>
+                                <td style={{ padding: '8px 10px' }}>{s.targetQty}</td>
+                                <td style={{ padding: '8px 10px' }}>{s.startFromStageName || '—'}</td>
+                                <td style={{ padding: '8px 10px' }}>{s.status}</td>
+                                <td style={{ padding: '8px 10px' }}>
+                                    <button type="button" onClick={() => navigate(PATHS.PRODUCTION.WO_DETAIL(s._id))} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #4338ca', background: '#eef2ff', color: '#3730a3', fontWeight: 700, cursor: 'pointer' }}>Open</button>
+                                </td>
+                                <td style={{ padding: '8px 10px' }}>
+                                    <button type="button" disabled={printingId === s._id} onClick={() => handlePrintRow(s)} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #64748b', background: '#f8fafc', color: '#334155', fontWeight: 700, cursor: 'pointer' }}>{printingId === s._id ? '…' : 'Print'}</button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
         </div>
     );
 }

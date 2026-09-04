@@ -3,8 +3,15 @@
  * Section identity is included only for Section / Subassembly WOs.
  */
 
+export function isSupplementaryWorkOrderForPrint(wo) {
+    if (!wo) return false;
+    if (wo.woKind === 'supplementary') return true;
+    return /-[Ss]\d+-SUP\d+$/i.test(String(wo.woNumber || ''));
+}
+
 export function isSectionWorkOrderForPrint(wo) {
     if (!wo) return false;
+    if (isSupplementaryWorkOrderForPrint(wo)) return false;
     if (wo.woKind === 'section') return true;
     if (wo.parentWorkOrderId) return true;
     const name = String(wo.bomSectionName || wo.sectionName || '').trim();
@@ -186,6 +193,261 @@ export function buildProductionSheetPrintHtml({ wo, companyName = '—', isTexti
                     ${emptyRows2}
                 </table>
                 `}
+            </body>
+            </html>`;
+}
+
+function esc(value) {
+    return String(value ?? '—')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+function num(value) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+}
+
+function fmtDate(value) {
+    if (!value) return '—';
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString();
+}
+
+function displayPrintStageStatus(stage) {
+    if (stage?.notApplicable === true || stage?.isApplicable === false) {
+        return 'Not Applicable — completed in original WO';
+    }
+    const raw = String(stage?.status || 'Not Started');
+    return raw === 'Running' ? 'In Progress' : raw;
+}
+
+function isNaPrintStage(stage) {
+    return stage?.notApplicable === true || stage?.isApplicable === false;
+}
+
+function resolveSectionWoNumberForPrint(wo) {
+    const s = wo?.sourceSectionWorkOrderId;
+    if (s && typeof s === 'object' && s.woNumber) return s.woNumber;
+    if (wo?.sourceSectionWoNumber) return wo.sourceSectionWoNumber;
+    const n = String(wo?.woNumber || '');
+    return n.replace(/-SUP\d+$/i, '') || '—';
+}
+
+function companyAddressLine(company) {
+    if (!company) return '';
+    const parts = [company.address, company.city, company.state, company.pincode].filter(Boolean);
+    return parts.join(', ');
+}
+
+function sourceMaterialForSupLine(sourceMaterials, sm) {
+    const list = sourceMaterials || [];
+    return list.find((m) => String(m._id) === String(sm.materialId))
+        || list.find((m) => sm.itemId && String(m.itemId) === String(sm.itemId))
+        || null;
+}
+
+function remainingToAllocateSaved(m) {
+    if (m?.remainingToAllocateQty != null) return Math.max(0, num(m.remainingToAllocateQty));
+    return Math.max(0, num(m?.requiredQty) - num(m?.addedLaterQty) - num(m?.supplementaryAllocatedQty));
+}
+
+function remainingToResolveSaved(m) {
+    if (m?.remainingToResolveQty != null) return Math.max(0, num(m.remainingToResolveQty));
+    return Math.max(0, num(m?.requiredQty) - num(m?.addedLaterQty) - num(m?.supplementaryCompletedQty));
+}
+
+const PRINT_SHEET_CSS = `
+                    body { font-family: sans-serif; font-size: 11px; margin: 0; padding: 20px; box-sizing: border-box; }
+                    .header-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; border: 1px solid #000; }
+                    .header-table td { border: 1px solid #000; padding: 6px; }
+                    .grid-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; border: 1px solid #000; text-align: center; }
+                    .grid-table th { background: #f8f9fa; border: 1px solid #000; padding: 6px; font-weight: bold; }
+                    .grid-table td { border: 1px solid #000; padding: 6px; }
+                    .section-title { font-weight: bold; font-size: 12px; background: #f8f9fa; text-align: center; padding: 6px; border: 1px solid #000; text-transform: uppercase; }
+                    @media print {
+                        @page { size: A4 portrait; margin: 10mm; }
+                        body { margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; width: 190mm; }
+                    }
+`;
+
+/**
+ * Read-only Supplementary WO print. Does not mutate WO / stock / FG.
+ * @param {{ wo: object, companyName?: string, company?: object, sourceSectionWo?: object }} args
+ */
+export function buildSupplementaryWorkOrderPrintHtml({
+    wo,
+    companyName = '—',
+    company = null,
+    sourceSectionWo = null,
+} = {}) {
+    const p = productDisplay(wo);
+    const parentWoNumber = resolveParentWoNumberForPrint(wo);
+    const sectionWoNumber = resolveSectionWoNumberForPrint(wo);
+    const sectionName = resolveSectionNameForPrint(wo) || sourceSectionWo?.bomSectionName || '—';
+    const reason = wo?.supplementaryReason || 'Pending material received later';
+    const fy = wo?.financialYear || company?.defaultFinancialYear || '—';
+    const address = companyAddressLine(company);
+    const logoUrl = company?.logoUrl || '';
+    const sourceMaterials = (sourceSectionWo?.materialStatus)
+        || (wo?.sourceSectionWorkOrderId && typeof wo.sourceSectionWorkOrderId === 'object'
+            ? wo.sourceSectionWorkOrderId.materialStatus
+            : null)
+        || [];
+
+    const supLines = (wo?.supplementaryMaterials || []).length
+        ? wo.supplementaryMaterials
+        : (wo?.materialStatus || []).map((m) => ({
+            materialId: m._id,
+            itemId: m.itemId,
+            itemCode: m.itemCode,
+            itemName: m.itemName,
+            qty: m.requiredQty,
+        }));
+
+    const materialRows = (supLines.length ? supLines : [{ itemCode: '—', itemName: '—', qty: wo?.targetQty || 0 }]).map((sm) => {
+        const src = sourceMaterialForSupLine(sourceMaterials, sm);
+        const required = src ? num(src.requiredQty) : '—';
+        const previouslyResolved = src ? (num(src.addedLaterQty) + num(src.supplementaryCompletedQty)) : '—';
+        const remainingPending = src ? remainingToResolveSaved(src) : '—';
+        return `<tr>
+            <td>${esc(sm.itemCode || src?.itemCode || '—')}</td>
+            <td style="text-align:left">${esc(sm.itemName || src?.itemName || '—')}</td>
+            <td>${esc(required)}</td>
+            <td>${esc(previouslyResolved)}</td>
+            <td>${esc(num(sm.qty))}</td>
+            <td>${esc(remainingPending)}</td>
+        </tr>`;
+    }).join('');
+
+    const traceLines = (supLines.length ? supLines : [{}]).map((sm) => {
+        const src = sourceMaterialForSupLine(sourceMaterials, sm) || {};
+        const name = sm.itemName || src.itemName || sm.itemCode || 'Component';
+        return `<tr>
+            <td style="text-align:left">${esc(name)}</td>
+            <td>${esc(src.requiredQty != null ? num(src.requiredQty) : '—')}</td>
+            <td>${esc(src.addedLaterQty != null ? num(src.addedLaterQty) : 0)}</td>
+            <td>${esc(src.supplementaryAllocatedQty != null ? num(src.supplementaryAllocatedQty) : num(sm.qty))}</td>
+            <td>${esc(src.supplementaryCompletedQty != null ? num(src.supplementaryCompletedQty) : 0)}</td>
+            <td>${esc(src.requiredQty != null ? remainingToAllocateSaved(src) : '—')}</td>
+            <td>${esc(src.requiredQty != null ? remainingToResolveSaved(src) : '—')}</td>
+        </tr>`;
+    }).join('');
+
+    const stageRows = (wo?.stages || []).map((s) => {
+        const na = isNaPrintStage(s);
+        return `<tr>
+            <td style="text-align:left">${esc(s.stageName)}</td>
+            <td>${esc(displayPrintStageStatus(s))}</td>
+            <td>${na ? '—' : esc(num(s.inputQty))}</td>
+            <td>${na ? '—' : esc(num(s.outputQty))}</td>
+            <td style="text-align:left">${esc(na ? 'Not Applicable — completed in original WO' : (s.remarks || '—'))}</td>
+        </tr>`;
+    }).join('') || '<tr><td colspan="5">No process stages</td></tr>';
+
+    const logoCell = logoUrl
+        ? `<img src="${esc(logoUrl)}" alt="Company Logo" style="max-height:48px; max-width:90px; object-fit:contain;" />`
+        : '';
+
+    return `<html>
+            <head>
+                <title>SUPPLEMENTARY WORK ORDER - ${esc(wo?.woNumber || '')}</title>
+                <style>${PRINT_SHEET_CSS}</style>
+            </head>
+            <body>
+                <div style="text-align:center; border:2px solid #000; padding:10px 12px; margin-bottom:12px;">
+                    <div style="display:flex; align-items:center; justify-content:center; gap:12px; margin-bottom:6px;">
+                        ${logoCell}
+                        <div>
+                            <div style="font-size:13px; font-weight:800;">${esc(companyName || '—')}</div>
+                            ${address ? `<div style="font-size:10px; margin-top:2px;">${esc(address)}</div>` : ''}
+                        </div>
+                    </div>
+                    <div style="font-size:20px; font-weight:900; letter-spacing:0.8px;">SUPPLEMENTARY WORK ORDER</div>
+                    <div style="font-size:14px; font-weight:800; margin-top:6px;">Supplementary WO No. : ${esc(wo?.woNumber || '—')}</div>
+                    <div style="font-size:11px; margin-top:4px;">Financial Year : ${esc(fy)}</div>
+                </div>
+
+                <table class="header-table">
+                    <tr>
+                        <td>Parent Work Order No. : <strong>${esc(parentWoNumber)}</strong></td>
+                        <td>Section Work Order No. : <strong>${esc(sectionWoNumber)}</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Section / Subassembly : <strong>${esc(sectionName)}</strong></td>
+                        <td>Product Name : ${esc(p.productName)}</td>
+                    </tr>
+                    <tr>
+                        <td>Model No. : ${esc(p.modelNo)}</td>
+                        <td>Item Code : ${esc(p.itemCode)}</td>
+                    </tr>
+                    <tr>
+                        <td>Supplementary WO Date : ${esc(fmtDate(wo?.createdAt))}</td>
+                        <td>Supervisor : ${esc(wo?.supervisor || '—')}</td>
+                    </tr>
+                    <tr>
+                        <td>Status : ${esc(wo?.status || '—')}</td>
+                        <td>Reason : ${esc(reason)}</td>
+                    </tr>
+                    <tr>
+                        <td>Start From Stage : <strong>${esc(wo?.startFromStageName || '—')}</strong></td>
+                        <td>Supplementary Qty : <strong>${esc(wo?.targetQty ?? '—')}</strong></td>
+                    </tr>
+                </table>
+
+                <div class="section-title">Supplementary Material Details</div>
+                <table class="grid-table">
+                    <tr>
+                        <th>Item Code</th>
+                        <th>Component</th>
+                        <th>Required Qty</th>
+                        <th>Previously Resolved</th>
+                        <th>Supplementary Qty</th>
+                        <th>Remaining Pending</th>
+                    </tr>
+                    ${materialRows}
+                </table>
+
+                <div class="section-title">Process Details — Start From Stage: ${esc(wo?.startFromStageName || '—')}</div>
+                <table class="grid-table">
+                    <tr>
+                        <th>Stage</th>
+                        <th>Status</th>
+                        <th>Qty Started</th>
+                        <th>Qty Completed</th>
+                        <th>Remarks</th>
+                    </tr>
+                    ${stageRows}
+                </table>
+
+                <div class="section-title">Material / Traceability Status</div>
+                <table class="grid-table">
+                    <tr>
+                        <th>Component</th>
+                        <th>Original Required Qty</th>
+                        <th>Added Later Qty</th>
+                        <th>Supplementary Allocated Qty</th>
+                        <th>Supplementary Completed Qty</th>
+                        <th>Remaining To Allocate</th>
+                        <th>Remaining To Resolve</th>
+                    </tr>
+                    ${traceLines}
+                </table>
+
+                <div style="border:1px solid #000; padding:8px 10px; margin-bottom:16px; font-size:11px;">
+                    This Supplementary Work Order records late-material production/process activity linked to the original Work Order. Phase 1 does not create separate Finished Goods or duplicate stock posting.
+                </div>
+
+                <table class="header-table" style="margin-bottom:0;">
+                    <tr>
+                        <td style="height:56px; width:25%;">Prepared By<br/><br/></td>
+                        <td style="width:25%;">Supervisor<br/>${esc(wo?.supervisor || '')}<br/></td>
+                        <td style="width:25%;">Production In-Charge<br/><br/></td>
+                        <td style="width:25%;">Date / Signature<br/>${esc(fmtDate(new Date()))}<br/></td>
+                    </tr>
+                </table>
             </body>
             </html>`;
 }
