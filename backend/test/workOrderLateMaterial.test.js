@@ -18,6 +18,8 @@ import {
     getResolvedMaterialQty,
     shouldMarkFullyResolved,
     getMaxMaterialCompleteFgQty,
+    getProductionResolvedQty,
+    getUnfittedSupplementaryQty,
     getUnresolvedRequiredMaterials,
     getLateMaterialStatusLabel,
     hasUnresolvedLateMaterialToResolve,
@@ -25,6 +27,11 @@ import {
     getReportableStageOutput,
     isApplicableStage,
     NA_STAGE_REMARK,
+    validateLateMaterialRecordQty,
+    validateLateMaterialRecordBatch,
+    applyAddedLaterQty,
+    buildMaterialEventEntry,
+    getAddedLaterQty,
 } from '../src/services/workOrderSection.service.js';
 
 const deferred100 = {
@@ -200,6 +207,34 @@ describe('parent FG quantity protection', () => {
         assert.equal(maxFg, 60);
         assert.equal(hasUnresolvedLateMaterialToResolve([], [{ materialStatus: lines }]), true);
     });
+
+    it('blocks FG while issued+allocated overlap required and Supplementary is still open', () => {
+        const open = {
+            ...deferred100,
+            requiredQty: 10,
+            addedLaterQty: 10,
+            supplementaryAllocatedQty: 10,
+            supplementaryCompletedQty: 0,
+        };
+        assert.equal(getUnfittedSupplementaryQty(open), 10);
+        assert.equal(getProductionResolvedQty(open), 0);
+        assert.equal(getMaxMaterialCompleteFgQty({
+            parentTargetQty: 10,
+            parentMaterials: [],
+            sectionWorkOrders: [{ materialStatus: [open] }],
+        }), 0);
+        assert.equal(hasUnresolvedLateMaterialToResolve([], [{ materialStatus: [open] }]), true);
+
+        const done = { ...open, supplementaryCompletedQty: 10 };
+        assert.equal(getUnfittedSupplementaryQty(done), 0);
+        assert.equal(getProductionResolvedQty(done), 10);
+        assert.equal(getMaxMaterialCompleteFgQty({
+            parentTargetQty: 10,
+            parentMaterials: [],
+            sectionWorkOrders: [{ materialStatus: [done] }],
+        }), 10);
+        assert.equal(hasUnresolvedLateMaterialToResolve([], [{ materialStatus: [done] }]), false);
+    });
 });
 
 describe('process-only stock guard', () => {
@@ -212,5 +247,65 @@ describe('process-only stock guard', () => {
 
     it('main list filter excludes supplementary as well as section', () => {
         assert.deepEqual(EXCLUDE_SECTION_WO.woKind.$nin, ['section', 'supplementary']);
+    });
+});
+
+describe('bulk late-material validation is all-or-nothing', () => {
+    it('defaults record qty to min(remaining allocate, available stock)', () => {
+        const a = { ...deferred100, itemCode: 'A', requiredQty: 10, availableStock: 15760 };
+        const remaining = getRemainingToAllocateQty(a);
+        assert.equal(Math.min(remaining, 15760), 10);
+    });
+
+    it('blocks one over-allocate line without applying any qty', () => {
+        const a = { ...deferred100, _id: 'a', itemCode: 'A', requiredQty: 10 };
+        const b = { ...deferred100, _id: 'b', itemCode: 'ES1J SMAF', itemName: 'ES1J SMAF', requiredQty: 20 };
+        const err = validateLateMaterialRecordBatch([
+            { materialId: 'a', material: a, qty: 10, availableStock: 100 },
+            { materialId: 'b', material: b, qty: 25, availableStock: 100 },
+        ]);
+        assert.equal(err, 'ES1J SMAF cannot be recorded: Qty 25 exceeds Remaining To Allocate 20.');
+        assert.equal(getAddedLaterQty(a), 0);
+        assert.equal(getAddedLaterQty(b), 0);
+    });
+
+    it('partial receipt 60 of 100 stays pending', () => {
+        const m = { ...deferred100 };
+        const applied = applyAddedLaterQty(m, 60);
+        assert.equal(applied.previousAddedLaterQty, 0);
+        assert.equal(applied.newAddedLaterQty, 60);
+        assert.equal(getRemainingToResolveQty(m), 40);
+        assert.equal(getLateMaterialStatusLabel(m, []), 'Partially Resolved — 60/100');
+        assert.equal(shouldMarkFullyResolved(m), false);
+    });
+
+    it('appends one history row per line with previous and new Added Later', () => {
+        const m = { ...deferred100, _id: 'm1', itemCode: 'A', itemName: 'Comp A', addedLaterQty: 0 };
+        const { previousAddedLaterQty, newAddedLaterQty } = applyAddedLaterQty(m, 10);
+        const entry = buildMaterialEventEntry({
+            eventType: 'added_later',
+            material: m,
+            qty: 10,
+            remainingPendingQty: getRemainingToAllocateQty(m),
+            remainingToAllocateQty: getRemainingToAllocateQty(m),
+            remainingToResolveQty: getRemainingToResolveQty(m),
+            remarks: '',
+            previousAddedLaterQty,
+            newAddedLaterQty,
+        });
+        assert.equal(entry.qty, 10);
+        assert.match(entry.remarks, /Added Later 0 → 10/);
+        assert.equal(entry.remainingToResolveQty, 90);
+    });
+
+    it('validates a clean 4-line batch', () => {
+        const lines = [
+            { materialId: 'a', material: { ...deferred100, _id: 'a', itemCode: 'A', requiredQty: 10 }, qty: 10, availableStock: 15760 },
+            { materialId: 'b', material: { ...deferred100, _id: 'b', itemCode: 'B', requiredQty: 40 }, qty: 40, availableStock: 15040 },
+            { materialId: 'c', material: { ...deferred100, _id: 'c', itemCode: 'C', requiredQty: 10 }, qty: 10, availableStock: 7064 },
+            { materialId: 'd', material: { ...deferred100, _id: 'd', itemCode: 'D', requiredQty: 20 }, qty: 20, availableStock: 26120 },
+        ];
+        assert.equal(validateLateMaterialRecordBatch(lines), null);
+        assert.equal(validateLateMaterialRecordQty(lines[0].material, 10, 15760), null);
     });
 });

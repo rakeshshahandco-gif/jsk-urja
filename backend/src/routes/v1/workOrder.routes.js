@@ -26,10 +26,16 @@ router.post('/:id/section-work-orders', woController.createSectionWorkOrder);
 router.patch('/:id/section-work-orders/restore', woController.restoreSectionWorkOrder);
 router.patch('/:id/section-config', woController.updateSectionConfig);
 router.patch('/:id/cancel', woController.cancelSectionWorkOrder);
+router.post('/:id/materials/add-later-bulk', woController.addMaterialLaterBulk);
+router.post('/:id/materials/add-missing-to-product', woController.addMissingMaterialToProduct);
 router.post('/:id/materials/:materialId/add-later', woController.addMaterialLater);
+router.post('/:id/material-issues/:batchId/supplementary-work-order', woController.createSupplementaryFromMaterialIssue);
+router.post('/:id/supplementary-work-orders/bulk', woController.createSupplementaryWorkOrderBulk);
 router.post('/:id/supplementary-work-orders', woController.createSupplementaryWorkOrder);
 
 // WO actions
+router.get('/:id/stage-material-consumption', woController.getStageMaterialConsumption);
+router.patch('/:id/complete-material-addition', woController.completeMaterialAddition);
 router.patch('/:id/release', woController.releaseWorkOrder);
 router.patch('/:id/refresh-stock', woController.refreshMaterialStock);
 router.patch('/:id/stages/:seq', woController.updateStage);

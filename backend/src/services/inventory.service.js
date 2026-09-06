@@ -2,6 +2,7 @@ import { StockLedger } from '../models/stockLedger.model.js';
 import { Item } from '../models/item.model.js';
 import { recalculateStockLedger } from '../utils/stockUtils.js';
 import { createProductionCostSnapshot } from './productCostEngine.service.js';
+import { allocateRemainingParentConsume, getAlreadyConsumedOutQtyByItem } from './workOrderMaterialIssue.service.js';
 
 /**
  * Synchronizes Work Order completion to Industry.
@@ -48,15 +49,15 @@ export const syncWorkOrderToInventory = async (wo, session, userId) => {
         createdBy: userId,
     }], { session });
 
-    // 4. Handle Consumption (Deduct components from stock)
+    // 4. Handle Consumption — skip qty already posted as Late Material Issue (same referenceId + WO_CONSUMPTION)
+    const alreadyByItem = await getAlreadyConsumedOutQtyByItem(wo._id, session);
+    const consumePlan = allocateRemainingParentConsume(wo.materialStatus, alreadyByItem);
     if (wo.materialStatus && wo.materialStatus.length > 0) {
         const consumptionEntries = [];
-        for (const mat of wo.materialStatus) {
+        for (let i = 0; i < wo.materialStatus.length; i++) {
+            const mat = wo.materialStatus[i];
             if (!mat.itemId) continue;
-            
-            // Get actual used qty (usually target * qty per unit, but could be adjusted)
-            // For now, using requiredQty as what was consumed.
-            const consumedQty = mat.requiredQty || 0;
+            const consumedQty = consumePlan[i]?.consumeQty || 0;
             if (consumedQty <= 0) continue;
 
             const compItem = await Item.findById(mat.itemId).session(session);
@@ -94,9 +95,11 @@ export const syncWorkOrderToInventory = async (wo, session, userId) => {
     }
 
     const materialConsumption = [];
-    for (const mat of wo.materialStatus || []) {
+    for (let i = 0; i < (wo.materialStatus || []).length; i++) {
+        const mat = wo.materialStatus[i];
         if (!mat.itemId) continue;
-        const consumedQty = mat.requiredQty || 0;
+        const plan = consumePlan[i] || {};
+        const consumedQty = (Number(plan.alreadyQty) || 0) + (Number(plan.consumeQty) || 0);
         if (consumedQty <= 0) continue;
         const ci = await Item.findById(mat.itemId).select('valuationRate').session(session).lean();
         materialConsumption.push({ consumedQty, rate: ci?.valuationRate || 0 });

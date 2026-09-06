@@ -145,11 +145,53 @@ const addProductionLogSchema = Joi.object({
 const addMaterialLaterSchema = Joi.object({
     qty: Joi.number().positive().required(),
     remarks: Joi.string().optional().allow(''),
+    idempotencyKey: Joi.string().optional().allow(''),
+});
+
+const addMaterialLaterBulkSchema = Joi.object({
+    remarks: Joi.string().optional().allow(''),
+    idempotencyKey: Joi.string().optional().allow(''),
+    items: Joi.array().min(1).items(Joi.object({
+        materialId: Joi.string().required(),
+        qty: Joi.number().positive().required(),
+        remarks: Joi.string().optional().allow(''),
+    })).required(),
 });
 
 const createSupplementaryWorkOrderSchema = Joi.object({
     materialId: Joi.string().required(),
     qty: Joi.number().positive().required(),
+    startFromSeq: Joi.number().integer().min(1).required(),
+    supervisor: Joi.string().optional().allow(''),
+    remarks: Joi.string().optional().allow(''),
+    reason: Joi.string().optional().allow(''),
+});
+
+const createSupplementaryWorkOrderBulkSchema = Joi.object({
+    startFromSeq: Joi.number().integer().min(1).required(),
+    supervisor: Joi.string().optional().allow(''),
+    remarks: Joi.string().optional().allow(''),
+    reason: Joi.string().optional().allow(''),
+    items: Joi.array().min(1).items(Joi.object({
+        materialId: Joi.string().required(),
+        qty: Joi.number().positive().required(),
+    })).required(),
+});
+
+const addMissingMaterialToProductSchema = Joi.object({
+    remarks: Joi.string().optional().allow(''),
+    idempotencyKey: Joi.string().optional().allow(''),
+    startFromSeq: Joi.number().integer().min(1).optional(),
+    supervisor: Joi.string().optional().allow(''),
+    reason: Joi.string().optional().allow(''),
+    items: Joi.array().min(1).items(Joi.object({
+        materialId: Joi.string().required(),
+        qty: Joi.number().positive().required(),
+        remarks: Joi.string().optional().allow(''),
+    })).required(),
+});
+
+const createSupplementaryFromMaterialIssueSchema = Joi.object({
     startFromSeq: Joi.number().integer().min(1).required(),
     supervisor: Joi.string().optional().allow(''),
     remarks: Joi.string().optional().allow(''),
@@ -170,6 +212,10 @@ export {
     createSectionWorkOrderSchema,
     updateSectionConfigSchema,
     addMaterialLaterSchema,
+    addMaterialLaterBulkSchema,
+    addMissingMaterialToProductSchema,
     createSupplementaryWorkOrderSchema,
+    createSupplementaryWorkOrderBulkSchema,
+    createSupplementaryFromMaterialIssueSchema,
     restoreSectionWorkOrderSchema,
 };

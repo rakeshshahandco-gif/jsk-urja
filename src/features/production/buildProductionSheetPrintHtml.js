@@ -307,45 +307,17 @@ export function buildSupplementaryWorkOrderPrintHtml({
             qty: m.requiredQty,
         }));
 
-    const materialRows = (supLines.length ? supLines : [{ itemCode: '—', itemName: '—', qty: wo?.targetQty || 0 }]).map((sm) => {
+    const materialRows = (supLines.length ? supLines : [{ itemCode: '—', itemName: '—', qty: wo?.targetQty || 0 }]).map((sm, i) => {
         const src = sourceMaterialForSupLine(sourceMaterials, sm);
-        const required = src ? num(src.requiredQty) : '—';
-        const previouslyResolved = src ? (num(src.addedLaterQty) + num(src.supplementaryCompletedQty)) : '—';
         const remainingPending = src ? remainingToResolveSaved(src) : '—';
         return `<tr>
+            <td>${i + 1}</td>
             <td>${esc(sm.itemCode || src?.itemCode || '—')}</td>
             <td style="text-align:left">${esc(sm.itemName || src?.itemName || '—')}</td>
-            <td>${esc(required)}</td>
-            <td>${esc(previouslyResolved)}</td>
             <td>${esc(num(sm.qty))}</td>
             <td>${esc(remainingPending)}</td>
         </tr>`;
     }).join('');
-
-    const traceLines = (supLines.length ? supLines : [{}]).map((sm) => {
-        const src = sourceMaterialForSupLine(sourceMaterials, sm) || {};
-        const name = sm.itemName || src.itemName || sm.itemCode || 'Component';
-        return `<tr>
-            <td style="text-align:left">${esc(name)}</td>
-            <td>${esc(src.requiredQty != null ? num(src.requiredQty) : '—')}</td>
-            <td>${esc(src.addedLaterQty != null ? num(src.addedLaterQty) : 0)}</td>
-            <td>${esc(src.supplementaryAllocatedQty != null ? num(src.supplementaryAllocatedQty) : num(sm.qty))}</td>
-            <td>${esc(src.supplementaryCompletedQty != null ? num(src.supplementaryCompletedQty) : 0)}</td>
-            <td>${esc(src.requiredQty != null ? remainingToAllocateSaved(src) : '—')}</td>
-            <td>${esc(src.requiredQty != null ? remainingToResolveSaved(src) : '—')}</td>
-        </tr>`;
-    }).join('');
-
-    const stageRows = (wo?.stages || []).map((s) => {
-        const na = isNaPrintStage(s);
-        return `<tr>
-            <td style="text-align:left">${esc(s.stageName)}</td>
-            <td>${esc(displayPrintStageStatus(s))}</td>
-            <td>${na ? '—' : esc(num(s.inputQty))}</td>
-            <td>${na ? '—' : esc(num(s.outputQty))}</td>
-            <td style="text-align:left">${esc(na ? 'Not Applicable — completed in original WO' : (s.remarks || '—'))}</td>
-        </tr>`;
-    }).join('') || '<tr><td colspan="5">No process stages</td></tr>';
 
     const logoCell = logoUrl
         ? `<img src="${esc(logoUrl)}" alt="Company Logo" style="max-height:48px; max-width:90px; object-fit:contain;" />`
@@ -366,6 +338,7 @@ export function buildSupplementaryWorkOrderPrintHtml({
                         </div>
                     </div>
                     <div style="font-size:20px; font-weight:900; letter-spacing:0.8px;">SUPPLEMENTARY WORK ORDER</div>
+                    <div style="font-size:13px; font-weight:800; margin-top:8px;">Purpose: Add late-received missing components to existing production.</div>
                     <div style="font-size:14px; font-weight:800; margin-top:6px;">Supplementary WO No. : ${esc(wo?.woNumber || '—')}</div>
                     <div style="font-size:11px; margin-top:4px;">Financial Year : ${esc(fy)}</div>
                 </div>
@@ -388,68 +361,145 @@ export function buildSupplementaryWorkOrderPrintHtml({
                         <td>Supervisor : ${esc(wo?.supervisor || '—')}</td>
                     </tr>
                     <tr>
-                        <td>Status : ${esc(wo?.status || '—')}</td>
+                        <td>Status : ${esc(['Completed', 'Closed', 'Cancelled'].includes(wo?.status) ? wo.status : 'Pending')}</td>
                         <td>Reason : ${esc(reason)}</td>
                     </tr>
                     <tr>
-                        <td>Start From Stage : <strong>${esc(wo?.startFromStageName || '—')}</strong></td>
-                        <td>Supplementary Qty : <strong>${esc(wo?.targetQty ?? '—')}</strong></td>
+                        <td>Material Issue No. : <strong>${esc(wo?.materialIssueNo || '—')}</strong></td>
+                        <td>Company : ${esc(companyName || '—')}</td>
                     </tr>
                 </table>
 
-                <div class="section-title">Supplementary Material Details</div>
+                <div class="section-title">Missing components to add</div>
                 <table class="grid-table">
                     <tr>
+                        <th>Sr</th>
                         <th>Item Code</th>
                         <th>Component</th>
-                        <th>Required Qty</th>
-                        <th>Previously Resolved</th>
-                        <th>Supplementary Qty</th>
-                        <th>Remaining Pending</th>
+                        <th>Qty Issued</th>
+                        <th>Remaining</th>
                     </tr>
                     ${materialRows}
                 </table>
 
-                <div class="section-title">Process Details — Start From Stage: ${esc(wo?.startFromStageName || '—')}</div>
-                <table class="grid-table">
-                    <tr>
-                        <th>Stage</th>
-                        <th>Status</th>
-                        <th>Qty Started</th>
-                        <th>Qty Completed</th>
-                        <th>Remarks</th>
-                    </tr>
-                    ${stageRows}
-                </table>
-
-                <div class="section-title">Material / Traceability Status</div>
-                <table class="grid-table">
-                    <tr>
-                        <th>Component</th>
-                        <th>Original Required Qty</th>
-                        <th>Added Later Qty</th>
-                        <th>Supplementary Allocated Qty</th>
-                        <th>Supplementary Completed Qty</th>
-                        <th>Remaining To Allocate</th>
-                        <th>Remaining To Resolve</th>
-                    </tr>
-                    ${traceLines}
-                </table>
-
                 <div style="border:1px solid #000; padding:8px 10px; margin-bottom:16px; font-size:11px;">
-                    This Supplementary Work Order records late-material production/process activity linked to the original Work Order. Phase 1 does not create separate Finished Goods or duplicate stock posting.
+                    The following missing components have been received and issued from stock. Add these components to the existing ${esc(sectionName || 'section')} production. Printing does not change inventory.
                 </div>
 
                 <table class="header-table" style="margin-bottom:0;">
                     <tr>
-                        <td style="height:56px; width:25%;">Prepared By<br/><br/></td>
-                        <td style="width:25%;">Supervisor<br/>${esc(wo?.supervisor || '')}<br/></td>
-                        <td style="width:25%;">Production In-Charge<br/><br/></td>
-                        <td style="width:25%;">Date / Signature<br/>${esc(fmtDate(new Date()))}<br/></td>
+                        <td style="height:64px; width:20%;">Store / Issued By<br/><br/></td>
+                        <td style="width:20%;">Received By<br/><br/></td>
+                        <td style="width:20%;">Production Supervisor<br/>${esc(wo?.supervisor || '')}<br/></td>
+                        <td style="width:20%;">Production In-Charge<br/><br/></td>
+                        <td style="width:20%;">Signature / Date<br/>${esc(fmtDate(new Date()))}<br/></td>
                     </tr>
                 </table>
             </body>
             </html>`;
+}
+
+/**
+ * Read-only Material Issue Note. Printing never posts or reverses stock.
+ */
+export function buildLateMaterialIssueNoteHtml({ batch, wo, companyName = '—', company = null } = {}) {
+    const p = productDisplay(wo);
+    const lines = batch?.lines || [];
+    const parentNo = batch?.parentWoNumber || resolveParentWoNumberForPrint(wo);
+    const sectionNo = batch?.sectionWoNumber || (wo?.woKind === 'section' ? wo.woNumber : '—');
+    const supNo = batch?.supplementaryWorkOrderId
+        ? (wo?.woKind === 'supplementary' ? wo.woNumber : (batch.supplementaryWoNumber || '—'))
+        : (wo?.woKind === 'supplementary' ? wo.woNumber : '');
+    const issuedBy = (batch?.createdBy && typeof batch.createdBy === 'object')
+        ? (batch.createdBy.name || '—')
+        : '—';
+    const logoUrl = company?.logoUrl || '';
+    const logoCell = logoUrl
+        ? `<img src="${esc(logoUrl)}" alt="Company Logo" style="max-height:48px; max-width:90px; object-fit:contain;" />`
+        : '';
+    const rows = lines.map((l, i) => (
+        `<tr>
+            <td>${i + 1}</td>
+            <td style="text-align:left;">${esc(l.itemCode)}</td>
+            <td style="text-align:left;">${esc(l.itemName)}</td>
+            <td>${esc(l.requiredQty)}</td>
+            <td>${esc(l.qtyIssued)}</td>
+            <td>${esc(l.remainingAfter)}</td>
+            <td style="text-align:left;">${esc(l.remarks)}</td>
+        </tr>`
+    )).join('');
+    return `<!DOCTYPE html>
+            <html>
+            <head>
+                <title>MATERIAL ISSUE NOTE ${esc(batch?.issueNo)}</title>
+                <style>${PRINT_SHEET_CSS}</style>
+            </head>
+            <body>
+                <div style="text-align:center; border:2px solid #000; padding:10px; margin-bottom:12px;">
+                    <div style="display:flex; align-items:center; justify-content:center; gap:12px; margin-bottom:6px;">
+                        ${logoCell}
+                        <div>
+                            <div style="font-size:13px; font-weight:800;">${esc(companyName || company?.companyName || '—')}</div>
+                        </div>
+                    </div>
+                    <div style="font-size:20px; font-weight:900; letter-spacing:0.6px; margin-top:4px;">MATERIAL ISSUE NOTE</div>
+                    <div style="font-size:11px; margin-top:4px;">Read-only copy · printing does not change inventory</div>
+                </div>
+                <table class="header-table">
+                    <tr>
+                        <td><strong>Material Issue No.</strong><br/>${esc(batch?.issueNo)}</td>
+                        <td><strong>Date</strong><br/>${esc(fmtDate(batch?.issueDate || batch?.createdAt))}</td>
+                        <td><strong>Financial Year</strong><br/>${esc(batch?.financialYear || wo?.financialYear)}</td>
+                        <td><strong>Issued By</strong><br/>${esc(issuedBy)}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Parent WO</strong><br/>${esc(parentNo)}</td>
+                        <td><strong>Section WO</strong><br/>${esc(sectionNo)}</td>
+                        <td><strong>Section</strong><br/>${esc(batch?.sectionName || wo?.bomSectionName)}</td>
+                        <td><strong>Supervisor</strong><br/>${esc(batch?.supervisor || wo?.supervisor)}</td>
+                    </tr>
+                    <tr>
+                        <td colspan="2"><strong>Product</strong><br/>${esc(p.productName)}</td>
+                        <td><strong>Model</strong><br/>${esc(p.modelNo)}</td>
+                        <td><strong>Supplementary WO</strong><br/>${esc(supNo || '—')}</td>
+                    </tr>
+                </table>
+                <div class="section-title">Materials Issued</div>
+                <table class="grid-table">
+                    <thead>
+                        <tr>
+                            <th>Sr.</th>
+                            <th>Item Code</th>
+                            <th>Item Name</th>
+                            <th>Required Qty</th>
+                            <th>Qty Issued</th>
+                            <th>Remaining Pending Qty</th>
+                            <th>Remarks</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+                <div style="margin:10px 0; font-size:12px;"><strong>Remarks:</strong> ${esc(batch?.remarks)}</div>
+                <table class="header-table" style="margin-bottom:0;">
+                    <tr>
+                        <td style="height:56px; width:25%;">Issued By<br/>${esc(issuedBy)}<br/></td>
+                        <td style="width:25%;">Received By<br/><br/></td>
+                        <td style="width:25%;">Production Supervisor<br/>${esc(batch?.supervisor || wo?.supervisor)}<br/></td>
+                        <td style="width:25%;">Signature<br/><br/></td>
+                    </tr>
+                </table>
+            </body>
+            </html>`;
+}
+
+/** Opens a print preview window. Does not auto-invoke the OS print dialog. */
+export function openProductionSheetPrintPreview(html) {
+    const printWindow = window.open('', '', 'width=900,height=800');
+    if (!printWindow) return false;
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    return true;
 }
 
 export function openProductionSheetPrintWindow(html) {

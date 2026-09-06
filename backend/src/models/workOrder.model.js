@@ -86,6 +86,9 @@ const stageSchema = new mongoose.Schema({
     },
     inputQty: { type: Number, default: 0 },
     outputQty: { type: Number, default: 0 },
+    /** Completed qty for which stage-wise StockLedger consumption has been posted. Display/watermark only. */
+    materialConsumedForQty: { type: Number, default: 0 },
+    lastMaterialConsumptionAt: { type: Date, default: null },
     reworkQty: { type: Number, default: 0 },
     rejectionQty: { type: Number, default: 0 },
     rejectionReason: { type: String, default: '' },
@@ -182,8 +185,15 @@ const workOrderSchema = new mongoose.Schema({
         ref: 'WorkOrder',
         default: null,
     },
+    /** Embedded materialIssueHistory[] _id on the source Section WO (no separate collection). */
+    sourceMaterialIssueId: {
+        type: mongoose.Schema.Types.ObjectId,
+        default: null,
+    },
     startFromSeq: { type: Number, default: null },
     startFromStageName: { type: String, default: '', trim: true },
+    /** Material Issue number this missing-material SUP was created/linked from. */
+    materialIssueNo: { type: String, default: '', trim: true },
     supplementaryReason: { type: String, default: '', trim: true },
     supplementaryMaterials: [{
         materialId: { type: mongoose.Schema.Types.ObjectId },
@@ -272,6 +282,54 @@ const workOrderSchema = new mongoose.Schema({
         remarks: { type: String, default: '' },
         supplementaryWorkOrderId: { type: mongoose.Schema.Types.ObjectId, ref: 'WorkOrder' },
         supplementaryWoNumber: { type: String, default: '' },
+        createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        createdAt: { type: Date, default: Date.now },
+    }],
+
+    /**
+     * Immutable Material Issue batches for missing/late material.
+     * Lives on the existing WorkOrder document — do not create a separate collection.
+     * Stock movement remains authoritative in StockLedger.
+     */
+    materialIssueHistory: [{
+        issueNo: { type: String, required: true, trim: true },
+        issueDate: { type: Date, default: Date.now },
+        companyId: { type: mongoose.Schema.Types.ObjectId, default: null },
+        financialYear: { type: String, default: '' },
+        parentWorkOrderId: { type: mongoose.Schema.Types.ObjectId, ref: 'WorkOrder', default: null },
+        sectionWorkOrderId: { type: mongoose.Schema.Types.ObjectId, ref: 'WorkOrder', default: null },
+        supplementaryWorkOrderId: { type: mongoose.Schema.Types.ObjectId, ref: 'WorkOrder', default: null },
+        supplementaryWoNumber: { type: String, default: '' },
+        stockReferenceId: { type: mongoose.Schema.Types.ObjectId, default: null },
+        parentWoNumber: { type: String, default: '' },
+        sectionWoNumber: { type: String, default: '' },
+        sectionName: { type: String, default: '' },
+        supervisor: { type: String, default: '' },
+        productName: { type: String, default: '' },
+        idempotencyKey: { type: String, default: '' },
+        status: { type: String, enum: ['Posted', 'Reversed'], default: 'Posted' },
+        destinations: [{
+            workOrderId: { type: mongoose.Schema.Types.ObjectId, ref: 'WorkOrder' },
+            woNumber: { type: String, default: '' },
+            created: { type: Boolean, default: false },
+            joined: { type: Boolean, default: false },
+            materialCount: { type: Number, default: 0 },
+        }],
+        lines: [{
+            materialId: { type: mongoose.Schema.Types.ObjectId },
+            itemId: { type: mongoose.Schema.Types.ObjectId, ref: 'Item' },
+            itemCode: { type: String, default: '' },
+            itemName: { type: String, default: '' },
+            requiredQty: { type: Number, default: 0 },
+            qtyIssued: { type: Number, default: 0 },
+            remainingAfter: { type: Number, default: 0 },
+            rate: { type: Number, default: 0 },
+            amount: { type: Number, default: 0 },
+            remarks: { type: String, default: '' },
+            supplementaryWorkOrderId: { type: mongoose.Schema.Types.ObjectId, ref: 'WorkOrder', default: null },
+            supplementaryWoNumber: { type: String, default: '' },
+        }],
+        remarks: { type: String, default: '' },
         createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
         createdAt: { type: Date, default: Date.now },
     }],

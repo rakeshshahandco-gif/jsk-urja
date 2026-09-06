@@ -254,6 +254,55 @@ export function getAddedLaterQty(m) {
     return Math.max(0, Number(m?.addedLaterQty) || 0);
 }
 
+export function lateMaterialItemLabel(m) {
+    return String(m?.itemCode || m?.itemName || 'Component').trim() || 'Component';
+}
+
+/** Validate one Record Late Material qty. Returns an error message or null. */
+export function validateLateMaterialRecordQty(m, qty, availableStock) {
+    const label = lateMaterialItemLabel(m);
+    const n = Number(qty);
+    const remaining = getRemainingToAllocateQty(m);
+    const stock = Math.max(0, Number(availableStock) || 0);
+    if (!Number.isFinite(n) || !(n > 0)) {
+        return `${label} cannot be recorded: Qty must be greater than 0.`;
+    }
+    if (n > remaining) {
+        return `${label} cannot be recorded: Qty ${n} exceeds Remaining To Allocate ${remaining}.`;
+    }
+    if (n > stock) {
+        return `${label} cannot be recorded: Qty ${n} exceeds current available stock (${stock}).`;
+    }
+    return null;
+}
+
+/** First invalid line fails the whole batch. Does not mutate materials. */
+export function validateLateMaterialRecordBatch(lines = []) {
+    const seen = new Set();
+    if (!Array.isArray(lines) || lines.length === 0) {
+        return 'Select at least one pending component.';
+    }
+    for (const line of lines) {
+        const id = String(line?.materialId || line?.material?._id || '');
+        if (!id) return 'Each selected component must have a material id.';
+        if (seen.has(id)) return `${lateMaterialItemLabel(line.material || line)} cannot be recorded twice in the same batch.`;
+        seen.add(id);
+        const err = validateLateMaterialRecordQty(line.material || line, line.qty, line.availableStock);
+        if (err) return err;
+    }
+    return null;
+}
+
+export function applyAddedLaterQty(mat, qty) {
+    const previousAddedLaterQty = getAddedLaterQty(mat);
+    const add = Math.max(0, Number(qty) || 0);
+    mat.addedLaterQty = previousAddedLaterQty + add;
+    return {
+        previousAddedLaterQty,
+        newAddedLaterQty: getAddedLaterQty(mat),
+    };
+}
+
 export function getSupplementaryAllocatedQty(m) {
     return Math.max(0, Number(m?.supplementaryAllocatedQty) || 0);
 }
@@ -296,6 +345,24 @@ export function getResolvedMaterialQty(m) {
     );
 }
 
+/** Issued qty still waiting to be fitted on an open Supplementary WO. */
+export function getUnfittedSupplementaryQty(m) {
+    const req = Math.max(0, Number(m?.requiredQty) || 0);
+    const added = getAddedLaterQty(m);
+    const allocated = getSupplementaryAllocatedQty(m);
+    const completed = getSupplementaryCompletedQty(m);
+    const openSup = Math.max(0, allocated - completed);
+    if (added + allocated <= req) return 0;
+    return Math.min(added, openSup);
+}
+
+/** FG-safe resolved qty: open missing-material SUP must be Completed before that issued qty counts. */
+export function getProductionResolvedQty(m) {
+    if (!isLateMaterialLine(m)) return Math.max(0, Number(m?.requiredQty) || 0);
+    const req = Math.max(0, Number(m?.requiredQty) || 0);
+    return Math.min(req, getAddedLaterQty(m) + getSupplementaryCompletedQty(m) - getUnfittedSupplementaryQty(m));
+}
+
 export function shouldMarkFullyResolved(m) {
     const req = Math.max(0, Number(m?.requiredQty) || 0);
     if (req <= 0) return false;
@@ -320,7 +387,7 @@ export function getMaxMaterialCompleteFgQty({
     for (const m of lines) {
         if (!isBomRequiredMaterial(m)) continue;
         if (isLateMaterialLine(m)) {
-            maxFg = Math.min(maxFg, getResolvedMaterialQty(m));
+            maxFg = Math.min(maxFg, getProductionResolvedQty(m));
             continue;
         }
         if (Number(m.shortQty) > 0) maxFg = 0;
@@ -345,7 +412,10 @@ export function collectLateMaterialLines(parentMaterials = [], sectionWorkOrders
 /** True when any required late-material line still has Remaining to Resolve > 0. */
 export function hasUnresolvedLateMaterialToResolve(parentMaterials = [], sectionWorkOrders = []) {
     return collectLateMaterialLines(parentMaterials, sectionWorkOrders)
-        .some((m) => getRemainingToResolveQty(m) > 0);
+        .some((m) => {
+            const req = Math.max(0, Number(m?.requiredQty) || 0);
+            return getRemainingToResolveQty(m) > 0 || getProductionResolvedQty(m) < req;
+        });
 }
 
 /**
@@ -405,7 +475,14 @@ export function buildMaterialEventEntry({
     remarks = '',
     supplementaryWorkOrderId = null,
     supplementaryWoNumber = '',
+    previousAddedLaterQty = null,
+    newAddedLaterQty = null,
 }) {
+    const extra = [];
+    if (previousAddedLaterQty != null && newAddedLaterQty != null) {
+        extra.push(`Added Later ${Number(previousAddedLaterQty) || 0} → ${Number(newAddedLaterQty) || 0}`);
+    }
+    const note = [remarks, ...extra].filter(Boolean).join(' · ');
     return {
         eventType,
         materialId: material?._id,
@@ -416,7 +493,7 @@ export function buildMaterialEventEntry({
         remainingPendingQty: Number(remainingPendingQty) || 0,
         remainingToAllocateQty: Number(remainingToAllocateQty) || 0,
         remainingToResolveQty: Number(remainingToResolveQty) || 0,
-        remarks: remarks || '',
+        remarks: note,
         supplementaryWorkOrderId: supplementaryWorkOrderId || null,
         supplementaryWoNumber: supplementaryWoNumber || '',
         createdBy: userId || null,

@@ -93,7 +93,37 @@ export const addMaterialLater = async (id, materialId, data) => {
     return response.data.data;
 };
 
+export const addMaterialLaterBulk = async (id, data) => {
+    const response = await api.post(`${BASE}/${id}/materials/add-later-bulk`, data);
+    return response.data.data;
+};
+
+export const addMissingMaterialToProduct = async (id, data) => {
+    const response = await api.post(`${BASE}/${id}/materials/add-missing-to-product`, data);
+    return response.data.data;
+};
+
 export const createSupplementaryWorkOrder = async (sectionId, data) => {
     const response = await api.post(`${BASE}/${sectionId}/supplementary-work-orders`, data);
+    return response.data.data;
+};
+
+export const createSupplementaryWorkOrderBulk = async (sectionId, data) => {
+    const response = await api.post(`${BASE}/${sectionId}/supplementary-work-orders/bulk`, data);
+    return response.data.data;
+};
+
+export const createSupplementaryFromMaterialIssue = async (sectionId, batchId, data) => {
+    const response = await api.post(`${BASE}/${sectionId}/material-issues/${batchId}/supplementary-work-order`, data);
+    return response.data.data;
+};
+
+export const completeMaterialAddition = async (id) => {
+    const response = await api.patch(`${BASE}/${id}/complete-material-addition`);
+    return response.data.data;
+};
+
+export const getStageMaterialConsumption = async (id) => {
+    const response = await api.get(`${BASE}/${id}/stage-material-consumption`);
     return response.data.data;
 };

@@ -1,11 +1,12 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
     getWorkOrderById, releaseWorkOrder, updateWorkOrder, updateStage, updateMaterialStatus, refreshMaterialStock,
-    addProductionLog, deleteProductionLog, cancelSectionWorkOrder, restoreSectionWorkOrder, deleteWorkOrder, addMaterialLater, createSupplementaryWorkOrder
+    addProductionLog, deleteProductionLog, cancelSectionWorkOrder, restoreSectionWorkOrder, deleteWorkOrder, addMaterialLater, addMaterialLaterBulk, addMissingMaterialToProduct, createSupplementaryWorkOrder, createSupplementaryWorkOrderBulk, createSupplementaryFromMaterialIssue, completeMaterialAddition, getStageMaterialConsumption
 } from '@/services/workOrderApi';
 import { PATHS } from '@/routes/paths';
 import { useCompany } from '@/contexts/CompanyContext';
+import { useAuth } from '@/hooks/useAuth';
 import { isTextileIndustryCompany } from '@/utils/industryInventoryLabels';
 import { getWorkOrderLabels, isTextileWorkOrder } from '@/utils/textileWorkOrder';
 import toast from 'react-hot-toast';
@@ -13,7 +14,9 @@ import WorkOrderSectionPanel from '@/features/production/WorkOrderSectionPanel';
 import {
     buildProductionSheetPrintHtml,
     buildSupplementaryWorkOrderPrintHtml,
+    buildLateMaterialIssueNoteHtml,
     openProductionSheetPrintWindow,
+    openProductionSheetPrintPreview,
 } from '@/features/production/buildProductionSheetPrintHtml';
 
 // ─── Status Colors ───────────────────────────────────────────────────────────
@@ -26,7 +29,15 @@ const WO_STATUS_COLORS = {
     'Completed': { color: '#000000', bg: '#6ee7b7' },
     'Closed': { color: '#000000', bg: '#cbd5e1' },
     'Cancelled': { color: '#000000', bg: '#fecaca' },
+    'Pending': { color: '#000000', bg: '#fde68a' },
 };
+
+function supplementaryDisplayStatus(wo) {
+    if (['Completed', 'Closed', 'Cancelled'].includes(wo?.status) || wo?.displayStatus) {
+        return wo.displayStatus || wo.status;
+    }
+    return 'Pending';
+}
 
 const STAGE_STATUS_COLORS = {
     'Not Started': { color: '#000000', bg: '#e2e8f0', icon: '○' },
@@ -72,6 +83,43 @@ function materialStatusLabel(m, currentMandatory = m?.isMandatory) {
     return 'Available';
 }
 
+const COMPONENT_PROCESS_TYPES = ['SMD', 'TH', 'PCB', 'OTHER'];
+
+function normalizeComponentProcessType(raw) {
+    const v = String(raw || '').trim().toUpperCase();
+    return COMPONENT_PROCESS_TYPES.includes(v) ? v : '';
+}
+
+function bomComponentsForProcessType(wo) {
+    if (Array.isArray(wo?.bomId?.components) && wo.bomId.components.length) return wo.bomId.components;
+    return [];
+}
+
+/** Reuses BOM componentType, then explicit WO/item SMD|TH|PCB. Does not guess from names. */
+function resolveComponentProcessType(m, bomComponents = []) {
+    const bom = (bomComponents || []).find((c) =>
+        (m?.itemId && c?.itemId && String(c.itemId) === String(m.itemId))
+        || (m?.itemCode && c?.itemCode && String(c.itemCode) === String(m.itemCode))
+    );
+    const fromBom = normalizeComponentProcessType(bom?.componentType);
+    if (fromBom) return fromBom;
+    const fromLine = normalizeComponentProcessType(m?.itemType);
+    if (fromLine && fromLine !== 'OTHER') return fromLine;
+    return 'UNCLASSIFIED';
+}
+
+function isMaterialAvailableForSelect(m) {
+    return !(Number(m?.shortQty) > 0);
+}
+
+function processTypeForStage(stage) {
+    const seq = Number(stage?.seq);
+    if (seq === 1) return 'PCB';
+    if (seq === 2) return 'SMD';
+    if (seq === 3) return 'TH';
+    return '';
+}
+
 function pendingProceedWarning(count) {
     const n = Number(count) || 0;
     const noun = n === 1 ? 'component is' : 'components are';
@@ -79,7 +127,7 @@ function pendingProceedWarning(count) {
 }
 
 function isUnresolvedPendingLine(m) {
-    return isDeferredLine(m) && remainingToResolveOf(m) > 0;
+    return isDeferredLine(m) && remainingToIssueOf(m) > 0;
 }
 
 function PendingMaterialBannerActions({ count, onManage, onViewBom }) {
@@ -123,11 +171,49 @@ function deferredByForMaterial(wo, materialId) {
 }
 
 function stageQtyStarted(stage) {
-    return Number(stage?.inputQty) || 0;
+    return Math.max(0, Number(stage?.inputQty) || 0);
 }
 
 function stageQtyCompleted(stage) {
-    return Number(stage?.outputQty) || 0;
+    if (isNaStage(stage)) return 0;
+    return Math.max(0, Number(stage?.outputQty) || 0);
+}
+
+function stageWipQty(stage) {
+    return Math.max(0, stageQtyStarted(stage) - stageQtyCompleted(stage));
+}
+
+function getApplicablePreviousStage(stages, seq) {
+    const n = Number(seq);
+    return [...(stages || [])]
+        .filter((s) => Number(s.seq) < n && !isNaStage(s))
+        .sort((a, b) => Number(b.seq) - Number(a.seq))[0] || null;
+}
+
+function getApplicableNextStage(stages, seq) {
+    const n = Number(seq);
+    return [...(stages || [])]
+        .filter((s) => Number(s.seq) > n && !isNaStage(s))
+        .sort((a, b) => Number(a.seq) - Number(b.seq))[0] || null;
+}
+
+/** Available For Current Stage = Previous Completed - Current Started (min 0). First applicable stage: null. */
+function getAvailableFromPrevious(stages, seq, currentStarted = null) {
+    const n = Number(seq);
+    if (!Number.isFinite(n) || n <= 1) return null;
+    const prev = getApplicablePreviousStage(stages, n);
+    if (!prev) return null;
+    const current = (stages || []).find((s) => Number(s.seq) === n);
+    const started = currentStarted != null ? Math.max(0, Number(currentStarted) || 0) : stageQtyStarted(current);
+    return Math.max(0, stageQtyCompleted(prev) - started);
+}
+
+function getReadyForNext(stages, seq) {
+    const current = (stages || []).find((s) => Number(s.seq) === Number(seq));
+    if (!current) return 0;
+    const next = getApplicableNextStage(stages, seq);
+    const nextStarted = next ? stageQtyStarted(next) : 0;
+    return Math.max(0, stageQtyCompleted(current) - nextStarted);
 }
 
 /** Display-only label. Stored values remain Not Started / Running / Completed / QC Hold / Failed / Rework. */
@@ -137,38 +223,57 @@ function displayStageStatus(stage) {
     return raw;
 }
 
-function getSequenceBlocker(stages, seq) {
+function getSequenceBlocker(stages, seq, options = {}) {
     const n = Number(seq);
     if (!Number.isFinite(n) || n <= 1) return null;
-    return [...(stages || [])]
-        .filter((s) => Number(s.seq) < n)
-        .sort((a, b) => Number(a.seq) - Number(b.seq))
-        .find((s) => String(s.status || 'Not Started') !== 'Completed') || null;
+    const current = (stages || []).find((s) => Number(s.seq) === n);
+    if (current && isNaStage(current)) return null;
+    const prev = getApplicablePreviousStage(stages, n);
+    if (!prev) return null;
+    const proposedStarted = options.proposedStarted != null
+        ? Math.max(0, Number(options.proposedStarted) || 0)
+        : stageQtyStarted(current);
+    const prevCompleted = stageQtyCompleted(prev);
+    if (proposedStarted > prevCompleted) {
+        return { ...prev, reason: 'qty', prevCompleted, proposedStarted };
+    }
+    if (proposedStarted <= 0 && prevCompleted <= 0) {
+        return { ...prev, reason: 'waiting', prevCompleted, proposedStarted };
+    }
+    return null;
 }
 
 function stageHasProgress(stage) {
     const status = String(stage?.status || 'Not Started');
     if (status !== 'Not Started') return true;
-    return (Number(stage?.inputQty) || 0) > 0 || (Number(stage?.outputQty) || 0) > 0;
+    return stageQtyStarted(stage) > 0 || (Number(stage?.outputQty) || 0) > 0;
 }
 
 function getSequenceInconsistencies(stages) {
     return [...(stages || [])]
-        .filter((s) => Number(s.seq) > 1 && stageHasProgress(s))
+        .filter((s) => Number(s.seq) > 1 && !isNaStage(s) && stageHasProgress(s))
         .map((s) => {
-            const previous = getSequenceBlocker(stages, s.seq);
+            const previous = getApplicablePreviousStage(stages, s.seq);
             if (!previous) return null;
+            if (stageQtyStarted(s) <= stageQtyCompleted(previous) && stageQtyCompleted(s) <= stageQtyCompleted(previous)) {
+                return null;
+            }
             return { stage: s, previous };
         })
         .filter(Boolean);
 }
 
-function completeBeforeHint(current, blocker) {
-    return `Complete ${blocker.stageName} before starting ${current.stageName}.`;
+function completeBeforeHint(_current, blocker) {
+    return `Waiting for output from ${blocker?.stageName || 'the previous stage'}.`;
 }
 
 function cannotStartMessage(current, blocker) {
-    return `Cannot start ${current.stageName}. ${blocker.stageName} must be completed first.`;
+    const currentName = current?.stageName || 'this stage';
+    const prevName = blocker?.stageName || 'the previous stage';
+    if (blocker?.reason === 'qty') {
+        return `Cannot start ${blocker.proposedStarted} pcs in ${currentName}. Only ${blocker.prevCompleted} pcs have been completed in ${prevName}.`;
+    }
+    return `Waiting for output from ${prevName}.`;
 }
 
 function sectionLabelForMaterial(wo, m) {
@@ -211,6 +316,18 @@ function remainingToAllocateOf(m) {
     return Math.max(0, req - addedLaterQtyOf(m) - allocated);
 }
 
+function remainingToResolveLive(m) {
+    const req = Math.max(0, Number(m?.requiredQty) || 0);
+    return Math.max(0, req - addedLaterQtyOf(m) - (Number(m?.supplementaryCompletedQty) || 0));
+}
+
+function remainingToIssueOf(m) {
+    if (m?.remainingToIssueQty != null) return Math.max(0, Number(m.remainingToIssueQty) || 0);
+    const req = Math.max(0, Number(m?.requiredQty) || 0);
+    const posted = Math.max(0, Number(m?.postedIssueQty) || 0);
+    return Math.max(0, req - posted);
+}
+
 function remainingToResolveOf(m) {
     if (m?.remainingToResolveQty != null) return Math.max(0, Number(m.remainingToResolveQty) || 0);
     const req = Math.max(0, Number(m?.requiredQty) || 0);
@@ -238,7 +355,7 @@ function isNaStage(stage) {
     return stage?.notApplicable === true || stage?.isApplicable === false;
 }
 
-const LATE_MATERIAL_PROCESS_WARNING = 'This records late material against the Work Order. Inventory will remain controlled by the existing Parent Work Order posting process.';
+const LATE_MATERIAL_PROCESS_WARNING = 'Issuing late material deducts inventory now. Parent Work Order completion will consume only the remaining unissued quantity. Printing this note does not change stock.';
 
 function supplementaryRowsForMaterial(wo, m) {
     return (wo.supplementaryWorkOrders || []).filter((w) =>
@@ -344,14 +461,17 @@ export default function WorkOrderDetailPage() {
 
     const isTextile = isTextileWorkOrder(wo) || isTextileIndustryCompany(selectedCompany);
     const labels = getWorkOrderLabels(isTextile);
-    const TABS = isTextile ? TEXTILE_TABS : ELECTRONICS_TABS;
+    const isSectionWo = wo.woKind === 'section';
+    const isSupplementaryWo = wo.woKind === 'supplementary';
+    const TABS = isSupplementaryWo
+        ? ['Overview', 'Material History']
+        : (isTextile ? TEXTILE_TABS : ELECTRONICS_TABS);
 
-    const sc = WO_STATUS_COLORS[wo.status] || WO_STATUS_COLORS['Draft'];
+    const displayStatus = isSupplementaryWo ? supplementaryDisplayStatus(wo) : wo.status;
+    const sc = WO_STATUS_COLORS[displayStatus] || WO_STATUS_COLORS[wo.status] || WO_STATUS_COLORS['Draft'];
     const deferredPending = (wo.materialStatus || []).filter(m => isDeferredLine(m));
     const unresolvedPending = (wo.materialStatus || []).filter(m => isUnresolvedPendingLine(m));
     const currentMandatoryShortages = (wo.materialStatus || []).filter(m => m.isMandatory && m.shortQty > 0);
-    const isSectionWo = wo.woKind === 'section';
-    const isSupplementaryWo = wo.woKind === 'supplementary';
     const parentRef = wo.parentWorkOrderId && typeof wo.parentWorkOrderId === 'object' ? wo.parentWorkOrderId : null;
     const sourceSectionRef = wo.sourceSectionWorkOrderId && typeof wo.sourceSectionWorkOrderId === 'object' ? wo.sourceSectionWorkOrderId : null;
     const progressStages = isSupplementaryWo ? (wo.stages || []).filter((s) => !isNaStage(s)) : (wo.stages || []);
@@ -394,7 +514,7 @@ export default function WorkOrderDetailPage() {
                             {isSupplementaryWo && (
                                 <span style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 800, background: '#e0e7ff', color: '#3730a3', letterSpacing: 0.3 }}>SUPPLEMENTARY WORK ORDER</span>
                             )}
-                            <span style={{ padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 600, background: sc.bg, color: sc.color }}>{wo.status}</span>
+                            <span style={{ padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 600, background: sc.bg, color: sc.color }}>{displayStatus}</span>
                             <span style={{ fontSize: '13px', color: '#94a3b8' }}>Priority: <strong style={{ color: '#f59e0b' }}>{wo.priority}</strong></span>
                         </div>
                         <div style={{ color: '#64748b', fontSize: '13px', marginTop: '4px' }}>
@@ -411,14 +531,14 @@ export default function WorkOrderDetailPage() {
                                         </>
                                     )}
                                     {' · '}Section: <strong>{wo.bomSectionName || '—'}</strong>
-                                    {isSupplementaryWo && wo.startFromStageName ? ` · Start From: ${wo.startFromStageName}` : ''}
                                     {' · '}
                                 </span>
                             )}
                             {(() => { const p = woProductDisplay(wo); return `${p.productName} · Model No: ${p.modelNo} · Item Code: ${p.itemCode}`; })()}
                             {isTextile && wo.textile?.designNo ? ` · Design: ${wo.textile.designNo}` : ''}
                             {' · '}{isTextile ? 'Qty' : 'Target'}: {wo.targetQty}{isTextile ? ' PCS' : ' pcs'}
-                            {(isSectionWo || isSupplementaryWo) ? ` · Completed: ${wo.completedQty ?? 0} · Stage: ${wo.currentStageName || '—'}` : ''}
+                            {isSectionWo ? ` · Completed: ${wo.completedQty ?? 0} · Stage: ${wo.currentStageName || '—'}` : ''}
+                            {isSupplementaryWo && wo.materialIssueNo ? ` · Material Issue: ${wo.materialIssueNo}` : ''}
                             {' · '}{labels.detailSupervisor}: {wo.textile?.assignedVendorWorker || wo.supervisor || '—'}
                         </div>
                     </div>
@@ -427,6 +547,25 @@ export default function WorkOrderDetailPage() {
                             onClick={handlePrintProductionSheet}
                             style={{ padding: '9px 18px', borderRadius: '8px', background: '#e2e8f0', color: '#475569', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}
                         >{isSupplementaryWo ? '🖨️ Print / PDF Supplementary WO' : '🖨️ Print Production Sheet'}</button>
+                        {isSupplementaryWo && displayStatus !== 'Completed' && displayStatus !== 'Cancelled' && (
+                            <button
+                                onClick={async () => {
+                                    const issued = (wo.supplementaryMaterials || wo.materialStatus || [])
+                                        .map((m, i) => `${i + 1}. ${m.itemCode || ''} ${m.itemName || ''} × ${m.qty ?? m.requiredQty ?? '—'}`)
+                                        .join('\n');
+                                    if (!window.confirm(`Confirm that these issued missing materials have been physically fitted to this section/product?\n\n${issued || 'No lines'}\n\nStock will not be deducted again.`)) return;
+                                    setSaving(true);
+                                    try {
+                                        await completeMaterialAddition(wo._id);
+                                        toast.success('Material addition marked completed. Stock was not deducted.');
+                                        load();
+                                    } catch (e) { toast.error(e.response?.data?.message || e.message); }
+                                    finally { setSaving(false); }
+                                }}
+                                disabled={saving}
+                                style={{ padding: '9px 18px', borderRadius: '8px', background: '#166534', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: '13px' }}
+                            >{saving ? '...' : 'Mark Material Addition Completed'}</button>
+                        )}
                         {wo.status === 'Draft' && (
                             <button
                                 onClick={handleRelease} disabled={saving}
@@ -453,7 +592,8 @@ export default function WorkOrderDetailPage() {
                         )}
                     </div>
                 </div>
-                {/* Progress bar */}
+                {/* Progress bar — hidden on missing-material Supplementary WO */}
+                {!isSupplementaryWo && (
                 <div style={{ marginTop: '12px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                         <span style={{ fontSize: '11px', color: '#64748b' }}>Overall Progress</span>
@@ -463,11 +603,17 @@ export default function WorkOrderDetailPage() {
                         <div style={{ height: '100%', width: `${pct}%`, background: 'linear-gradient(90deg,#3b82f6,#10b981)', transition: 'width 0.4s' }} />
                     </div>
                 </div>
+                )}
             </div>
 
-            {(isSectionWo || isSupplementaryWo) && (
+            {isSupplementaryWo && (
+                <div style={{ background: '#eef2ff', borderBottom: '1px solid #c7d2fe', padding: '12px 28px', fontSize: 13, color: '#3730a3' }}>
+                    The following missing components have been received and issued from stock. Add these components to the existing <strong>{wo.bomSectionName || 'section'}</strong> production. Completing this Supplementary WO does <strong>not</strong> deduct stock or create finished goods.
+                </div>
+            )}
+            {isSectionWo && (
                 <div style={{ background: '#fffbeb', borderBottom: '1px solid #fcd34d', padding: '12px 28px', fontSize: 13, color: '#92400e' }}>
-                    Process / progress tracking only. Completing this {isSupplementaryWo ? 'Supplementary WO' : 'section'} does <strong>not</strong> create finished product {woProductDisplay(wo).productName} in stock. Stock and FG posting stay on the parent Work Order.
+                    Process / progress tracking only. Completing this section does <strong>not</strong> create finished product {woProductDisplay(wo).productName} in stock. Stock and FG posting stay on the parent Work Order.
                 </div>
             )}
 
@@ -488,7 +634,7 @@ export default function WorkOrderDetailPage() {
             )}
 
             {/* Deferred / pending: warning only — process may continue */}
-            {pendingBannerCount > 0 && (
+            {pendingBannerCount > 0 && !isSupplementaryWo && (
                 <div style={{ background: '#fffbeb', borderBottom: '1px solid #fcd34d', padding: '12px 28px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <span style={{ fontSize: '16px' }}>⏳</span>
                     <div>
@@ -535,6 +681,13 @@ export default function WorkOrderDetailPage() {
 
             {/* Tab Content */}
             <div style={{ padding: '28px' }}>
+                {isSupplementaryWo ? (
+                    <>
+                        {tab === 0 && <OverviewTab wo={wo} load={load} isTextile={isTextile} labels={labels} />}
+                        {tab === 1 && <MaterialHistoryTab wo={wo} />}
+                    </>
+                ) : (
+                    <>
                 {tab === 0 && <OverviewTab wo={wo} load={load} isTextile={isTextile} labels={labels} />}
                 {tab === 1 && <BomMaterialTab wo={wo} load={load} />}
                 {tab === 2 && (
@@ -553,6 +706,8 @@ export default function WorkOrderDetailPage() {
                 {tab === 3 && <QcTestingTab wo={wo} load={load} />}
                 {tab === 4 && <WipTab wo={wo} />}
                 {tab === 5 && <MaterialHistoryTab wo={wo} />}
+                    </>
+                )}
             </div>
 
             <PendingComponentsDrawer
@@ -662,7 +817,7 @@ function OverviewTab({ wo, load, isTextile, labels }) {
 
     const rows = [
         ['WO Number', wo.woNumber],
-        ['Status', wo.status],
+        ['Status', wo.woKind === 'supplementary' ? supplementaryDisplayStatus(wo) : wo.status],
         ...(wo.woKind === 'section' ? [
             ['Type', 'SECTION WORK ORDER'],
             ['Parent WO', wo.parentWorkOrderId?.woNumber || '—'],
@@ -675,10 +830,9 @@ function OverviewTab({ wo, load, isTextile, labels }) {
             ['Linked Parent WO', wo.parentWorkOrderId?.woNumber || '—'],
             ['Linked Section WO', wo.sourceSectionWorkOrderId?.woNumber || '—'],
             ['Section', wo.bomSectionName || '—'],
-            ['Reason', wo.supplementaryReason || 'Pending material received later'],
-            ['Start From Stage', wo.startFromStageName || '—'],
-            ['Supplementary Qty', wo.targetQty],
-            ['Completed Qty', wo.completedQty ?? 0],
+            ['Reason', wo.supplementaryReason || 'Missing material received later and added to production'],
+            ['Material Issue No.', wo.materialIssueNo || '—'],
+            ['Qty to add', wo.targetQty],
         ] : []),
         ['BOM Version', wo.bomVersion || '—'],
         ['Finished Product', woProductDisplay(wo).productName],
@@ -728,6 +882,41 @@ function OverviewTab({ wo, load, isTextile, labels }) {
                     </div>
                 ))}
             </div>
+            {wo.woKind === 'supplementary' && (
+                <div style={{ marginTop: 20, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
+                    <div style={{ padding: '12px 16px', fontWeight: 800, color: '#1e293b', borderBottom: '1px solid #e5e7eb' }}>Issued missing components to add</div>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                        <thead>
+                            <tr style={{ background: '#f8fafc', color: '#475569' }}>
+                                {['Sr.', 'Item Code', 'Component Name', 'Original Missing Qty', 'Qty Issued / Added', 'Remaining Pending Qty', 'Remarks'].map((h) => (
+                                    <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700 }}>{h}</th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {(wo.supplementaryMaterials || wo.materialStatus || []).map((m, i) => {
+                                const src = (wo.sourceSectionWorkOrderId?.materialStatus || []).find((s) =>
+                                    (m.materialId && String(s._id) === String(m.materialId))
+                                    || (m.itemId && String(s.itemId) === String(m.itemId))
+                                    || (m.itemCode && s.itemCode === m.itemCode)
+                                );
+                                const issued = m.qty ?? m.requiredQty ?? '—';
+                                return (
+                                <tr key={m._id || m.itemCode || i} style={{ borderTop: '1px solid #e5e7eb' }}>
+                                    <td style={{ padding: '8px 12px' }}>{i + 1}</td>
+                                    <td style={{ padding: '8px 12px', fontWeight: 700 }}>{m.itemCode || '—'}</td>
+                                    <td style={{ padding: '8px 12px' }}>{m.itemName || '—'}</td>
+                                    <td style={{ padding: '8px 12px' }}>{src?.requiredQty ?? issued}</td>
+                                    <td style={{ padding: '8px 12px' }}>{issued}</td>
+                                    <td style={{ padding: '8px 12px' }}>{src ? remainingToResolveOf(src) : '—'}</td>
+                                    <td style={{ padding: '8px 12px' }}>{m.remarks || '—'}</td>
+                                </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+            )}
             {!isTextile && wo.woKind !== 'section' && wo.woKind !== 'supplementary' && <WorkOrderSectionPanel wo={wo} load={load} />}
             {!isTextile && wo.woKind === 'section' && <SupplementaryWorkOrdersPanel wo={wo} />}
         </div>
@@ -740,7 +929,10 @@ function BomMaterialTab({ wo, load }) {
     const [saving, setSaving] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [sectionFilter, setSectionFilter] = useState('all');
+    const [processFilter, setProcessFilter] = useState('all');
     const [pendingOpen, setPendingOpen] = useState(false);
+    const isTextile = isTextileWorkOrder(wo);
+    const showProcessSelect = !isTextile && wo.woKind !== 'supplementary';
     const isSection = wo.woKind === 'section' || wo.woKind === 'supplementary';
     const materialLocked = ['Closed', 'Cancelled', 'Completed'].includes(wo.status);
     const stockInputsDisabled = isSection || materialLocked;
@@ -760,9 +952,34 @@ function BomMaterialTab({ wo, load }) {
     const pendingMaterials = isSection
         ? sectionMaterials.filter((m) => isDeferredLine(m))
         : [];
+    const bomComponents = bomComponentsForProcessType(wo);
+    const processTypeOf = (m) => resolveComponentProcessType(m, bomComponents);
+    const matchProcessFilter = (m) => processFilter === 'all' || processTypeOf(m) === processFilter;
+    const visibleActiveMaterials = activeMaterials.filter(matchProcessFilter);
+    const visiblePendingMaterials = pendingMaterials.filter(matchProcessFilter);
     const unsavedDeferredCount = Object.values(updates).filter((v) => v && v.isMandatory === false).length;
 
     const setUpd = (id, k, v) => setUpdates(u => ({ ...u, [id]: { ...(u[id] || {}), [k]: v } }));
+
+    const applyProcessSelection = (type, mode) => {
+        const targets = sectionMaterials.filter((m) => processTypeOf(m) === type);
+        if (!targets.length) {
+            toast(`${type} components: none classified on this Work Order`);
+            return;
+        }
+        setUpdates((prev) => {
+            const next = { ...prev };
+            for (const m of targets) {
+                const checked = mode === 'available' ? isMaterialAvailableForSelect(m) : true;
+                next[m._id] = { ...(next[m._id] || {}), isMandatory: checked };
+            }
+            return next;
+        });
+        const availableCount = targets.filter(isMaterialAvailableForSelect).length;
+        toast.success(mode === 'available'
+            ? `Selected available ${type} (${availableCount} of ${targets.length}). Save to apply.`
+            : `Selected all ${type} (${targets.length}). Save to apply.`);
+    };
 
     const save = async () => {
         const materialUpdates = Object.entries(updates).map(([materialId, vals]) => {
@@ -942,6 +1159,50 @@ function BomMaterialTab({ wo, load }) {
                     <span style={{ fontSize: 11, color: '#94a3b8' }}>Display only — does not change BOM Master.</span>
                 </div>
             )}
+            {showProcessSelect && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>Process type</label>
+                    <select
+                        value={processFilter}
+                        onChange={(e) => setProcessFilter(e.target.value)}
+                        style={{ ...inp, width: 180, cursor: 'pointer' }}
+                    >
+                        <option value="all">All</option>
+                        <option value="SMD">SMD</option>
+                        <option value="TH">TH</option>
+                        <option value="PCB">PCB</option>
+                        <option value="OTHER">OTHER</option>
+                        <option value="UNCLASSIFIED">UNCLASSIFIED</option>
+                    </select>
+                    <button
+                        type="button"
+                        disabled={mandatoryDisabled}
+                        onClick={() => applyProcessSelection('SMD', 'all')}
+                        style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #1d4ed8', background: '#eff6ff', color: '#1d4ed8', fontWeight: 700, fontSize: 12, cursor: mandatoryDisabled ? 'not-allowed' : 'pointer' }}
+                    >Select All SMD</button>
+                    <button
+                        type="button"
+                        disabled={mandatoryDisabled}
+                        onClick={() => applyProcessSelection('TH', 'all')}
+                        style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #1d4ed8', background: '#eff6ff', color: '#1d4ed8', fontWeight: 700, fontSize: 12, cursor: mandatoryDisabled ? 'not-allowed' : 'pointer' }}
+                    >Select All TH</button>
+                    <button
+                        type="button"
+                        disabled={mandatoryDisabled}
+                        onClick={() => applyProcessSelection('SMD', 'available')}
+                        style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #64748b', background: '#fff', color: '#334155', fontWeight: 700, fontSize: 12, cursor: mandatoryDisabled ? 'not-allowed' : 'pointer' }}
+                    >Select Available SMD</button>
+                    <button
+                        type="button"
+                        disabled={mandatoryDisabled}
+                        onClick={() => applyProcessSelection('TH', 'available')}
+                        style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #64748b', background: '#fff', color: '#334155', fontWeight: 700, fontSize: 12, cursor: mandatoryDisabled ? 'not-allowed' : 'pointer' }}
+                    >Select Available TH</button>
+                    <span style={{ fontSize: 11, color: '#94a3b8' }}>
+                        Tick/untick is for this Work Order only. Unticked BOM-required items go to Pending Material on Save. Does not change BOM Master.
+                    </span>
+                </div>
+            )}
             {isSection && (pendingMaterials.length > 0 || unsavedDeferredCount > 0) && (
                 <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: 12, color: '#92400e' }}>
                     {pendingProceedWarning(pendingMaterials.length || unsavedDeferredCount)}
@@ -952,13 +1213,13 @@ function BomMaterialTab({ wo, load }) {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                     <thead>
                         <tr style={{ background: '#f9fafb' }}>
-                            {['Item', 'UOM', 'Required Qty', 'Available Qty', 'Short Qty', 'Mandatory', 'Material Status', 'Procurement Status', 'Remarks'].map(h => (
+                            {['Item', 'Type', 'UOM', 'Required Qty', 'Available Qty', 'Short Qty', 'Mandatory', 'Material Status', 'Procurement Status', 'Remarks'].map(h => (
                                 <th key={h} style={{ padding: '10px 12px', textAlign: 'left', color: '#6b7280', fontWeight: 600, borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap' }}>{h}</th>
                             ))}
                         </tr>
                     </thead>
                     <tbody>
-                        {activeMaterials.map((m, i) => {
+                        {visibleActiveMaterials.map((m, i) => {
                             const upd = updates[m._id] || {};
                             const currentMandatory = upd.isMandatory !== undefined ? upd.isMandatory : m.isMandatory;
                             const isShort = m.shortQty > 0;
@@ -976,6 +1237,7 @@ function BomMaterialTab({ wo, load }) {
                                         {isMandShort && <span style={{ marginLeft: '6px', fontSize: '10px', background: '#dc2626', color: '#fff', padding: '1px 5px', borderRadius: '3px' }}>SHORT</span>}
                                         {deferredPreview && <span style={{ marginLeft: '6px', fontSize: '10px', background: '#f59e0b', color: '#fff', padding: '1px 5px', borderRadius: '3px' }}>Will move to Pending</span>}
                                     </td>
+                                    <td style={{ padding: '10px 12px', color: '#475569', fontWeight: 700, borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap' }}>{processTypeOf(m)}</td>
                                     <td style={{ padding: '10px 12px', color: '#6b7280', borderBottom: '1px solid #e5e7eb' }}>{m.uom || '—'}</td>
                                     <td style={{ padding: '10px 12px', color: '#1e293b', borderBottom: '1px solid #e5e7eb' }}>{m.requiredQty}</td>
                                     <td style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb' }}>
@@ -1016,9 +1278,11 @@ function BomMaterialTab({ wo, load }) {
                                 </tr>
                             );
                         })}
-                        {!activeMaterials.length && (
-                            <tr><td colSpan={9} style={{ padding: '32px', textAlign: 'center', color: '#64748b' }}>
-                                {pendingMaterials.length ? 'No active components — restore pending material to continue this stage.' : 'No components in BOM'}
+                        {!visibleActiveMaterials.length && (
+                            <tr><td colSpan={10} style={{ padding: '32px', textAlign: 'center', color: '#64748b' }}>
+                                {processFilter !== 'all' && activeMaterials.length
+                                    ? `No ${processFilter} components in this view.`
+                                    : (pendingMaterials.length ? 'No active components — restore pending material to continue this stage.' : 'No components in BOM')}
                             </td></tr>
                         )}
                     </tbody>
@@ -1050,7 +1314,7 @@ function BomMaterialTab({ wo, load }) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {pendingMaterials.map((m) => {
+                                    {visiblePendingMaterials.map((m) => {
                                         const dt = deferredDateForMaterial(wo, m._id);
                                         return (
                                             <tr key={m._id}>
@@ -1122,7 +1386,7 @@ function SupplementaryWorkOrdersPanel({ wo }) {
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                         <thead>
                             <tr style={{ background: '#eef2ff', color: '#3730a3' }}>
-                                {['Supplementary WO No.', 'Component(s)', 'Qty', 'Start From Stage', 'Completed Qty', 'Status', 'Created Date', 'Open', 'Print'].map((h) => (
+                                {['Supplementary WO No.', 'Component(s)', 'Qty Issued', 'Material Issue No.', 'Status', 'Created Date', 'Open', 'Print'].map((h) => (
                                     <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, whiteSpace: 'nowrap' }}>{h}</th>
                                 ))}
                             </tr>
@@ -1133,9 +1397,8 @@ function SupplementaryWorkOrdersPanel({ wo }) {
                                     <td style={{ padding: '8px 10px', fontWeight: 700 }}>{s.woNumber}</td>
                                     <td style={{ padding: '8px 10px' }}>{(s.supplementaryMaterials || []).map((m) => m.itemName || m.itemCode).join(', ') || '—'}</td>
                                     <td style={{ padding: '8px 10px' }}>{s.targetQty}</td>
-                                    <td style={{ padding: '8px 10px' }}>{s.startFromStageName || '—'}</td>
-                                    <td style={{ padding: '8px 10px' }}>{s.completedQty ?? 0}</td>
-                                    <td style={{ padding: '8px 10px' }}>{s.status}</td>
+                                    <td style={{ padding: '8px 10px' }}>{s.materialIssueNo || '—'}</td>
+                                    <td style={{ padding: '8px 10px' }}>{s.displayStatus || supplementaryDisplayStatus(s)}</td>
                                     <td style={{ padding: '8px 10px' }}>{s.createdAt ? new Date(s.createdAt).toLocaleString() : '—'}</td>
                                     <td style={{ padding: '8px 10px' }}>
                                         <button type="button" onClick={() => navigate(PATHS.PRODUCTION.WO_DETAIL(s._id))} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #4338ca', background: '#eef2ff', color: '#3730a3', fontWeight: 700, cursor: 'pointer' }}>Open</button>
@@ -1153,21 +1416,209 @@ function SupplementaryWorkOrdersPanel({ wo }) {
     );
 }
 
+function printMaterialIssueNote(batch, wo, company, issuedByFallback) {
+    if (!batch?.issueNo) {
+        toast.error('Material Issue was not saved. Print is not available.');
+        return;
+    }
+    const createdBy = (batch?.createdBy && typeof batch.createdBy === 'object' && batch.createdBy.name)
+        ? batch.createdBy
+        : { name: issuedByFallback || '—' };
+    const opened = openProductionSheetPrintPreview(buildLateMaterialIssueNoteHtml({
+        batch: { ...batch, createdBy },
+        wo,
+        companyName: company?.companyName || '—',
+        company,
+    }));
+    if (!opened) toast.error('Print preview was blocked. Allow pop-ups, then click Print Material Issue Note again.');
+}
+
+async function printSupplementaryWorkOrder(supWo, sectionWo, company) {
+    if (!supWo?._id && !supWo?.woNumber) {
+        toast.error('Supplementary Work Order was not saved. Print is not available.');
+        return;
+    }
+    try {
+        const full = supWo.stages ? supWo : await getWorkOrderById(supWo._id);
+        const opened = openProductionSheetPrintPreview(buildSupplementaryWorkOrderPrintHtml({
+            wo: full,
+            companyName: company?.companyName || '—',
+            company,
+            sourceSectionWo: sectionWo,
+        }));
+        if (!opened) toast.error('Print preview was blocked. Allow pop-ups, then click Print Supplementary Work Order again.');
+    } catch (e) {
+        toast.error(e.response?.data?.message || e.message || 'Could not open Supplementary WO print.');
+    }
+}
+
+function issuedByName(batch, fallback) {
+    const by = batch?.createdBy;
+    if (by && typeof by === 'object' && by.name) return by.name;
+    return fallback || '—';
+}
+
+function MaterialIssueSuccessModal({ batch, wo, supplementaryWo, supplementaryDestinations, onClose, onPrint, onPrintSup, onOpenSup, startViewing = false, title }) {
+    const { user } = useAuth();
+    const [viewing, setViewing] = useState(startViewing);
+    const autoPrintedRef = useRef(false);
+    const lines = batch?.lines || [];
+    const uniqueComponents = new Set(lines.map((l) => String(l.itemCode || l.itemName || ''))).size;
+    const parentNo = batch?.parentWoNumber || (wo?.parentWorkOrderId && typeof wo.parentWorkOrderId === 'object' ? wo.parentWorkOrderId.woNumber : '') || '—';
+    const sectionNo = batch?.sectionWoNumber || (wo?.woKind === 'section' ? wo.woNumber : wo?.woNumber) || '—';
+    const issueDate = batch?.issueDate || batch?.createdAt;
+    const dests = (supplementaryDestinations || []).filter((d) => d?.woNumber);
+    const destLabel = dests.length
+        ? dests.map((d) => `${d.woNumber}${d.materialCount ? ` — ${d.materialCount} material${d.materialCount === 1 ? '' : 's'}` : ''}${d.created ? ' (new)' : ''}`).join('\n')
+        : (supplementaryWo?.woNumber || batch?.supplementaryWoNumber || '—');
+    useEffect(() => {
+        if (autoPrintedRef.current || !onPrintSup) return;
+        const dest = dests[0] || supplementaryWo || (batch?.supplementaryWoNumber
+            ? { _id: batch.supplementaryWorkOrderId, woNumber: batch.supplementaryWoNumber }
+            : null);
+        if (!dest) return;
+        autoPrintedRef.current = true;
+        onPrintSup(dest);
+    }, [batch, dests, onPrintSup, supplementaryWo]);
+    return modalShell(title || 'Material Issued Successfully', onClose, (
+        <div>
+            {!startViewing && (
+            <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '12px 14px', marginBottom: 14, color: '#166534', fontWeight: 700 }}>
+                Stock posting completed. Print uses the saved Material Issue only and will not deduct stock again.
+            </div>
+            )}
+            {!viewing && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {[
+                        ['Material Issue No.', batch?.issueNo || '—'],
+                        ['Supplementary WO', destLabel],
+                        ['Issue Date', issueDate ? new Date(issueDate).toLocaleString() : '—'],
+                        ['Parent WO', parentNo],
+                        ['Section WO', sectionNo],
+                        ['Section', batch?.sectionName || wo?.bomSectionName || '—'],
+                        ['Materials Added', String(uniqueComponents || lines.length)],
+                        ['Total issue lines', String(lines.length)],
+                        ['Issued By', issuedByName(batch, user?.name)],
+                    ].map(([k, v]) => (
+                        <div key={k} style={{ display: 'flex', gap: 12, padding: '6px 0', borderBottom: '1px solid #f1f5f9' }}>
+                            <div style={{ width: 170, fontSize: 12, fontWeight: 700, color: '#64748b' }}>{k}</div>
+                            <div style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', whiteSpace: 'pre-line' }}>{v}</div>
+                        </div>
+                    ))}
+                </div>
+            )}
+            {viewing && (
+                <div>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: '#1e293b', marginBottom: 8 }}>{batch?.issueNo} · read-only</div>
+                    <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                            <thead>
+                                <tr style={{ background: '#f8fafc', color: '#475569' }}>
+                                    {['Sr.', 'Item Code', 'Item Name', 'Required Qty', 'Qty Issued', 'Remaining Pending'].map((h) => (
+                                        <th key={h} style={{ padding: '8px 6px', textAlign: 'left', fontWeight: 700 }}>{h}</th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {lines.map((l, i) => (
+                                    <tr key={`${l.itemCode}-${i}`} style={{ borderTop: '1px solid #e5e7eb' }}>
+                                        <td style={{ padding: '8px 6px' }}>{i + 1}</td>
+                                        <td style={{ padding: '8px 6px', fontWeight: 700 }}>{l.itemCode || '—'}</td>
+                                        <td style={{ padding: '8px 6px' }}>{l.itemName || '—'}</td>
+                                        <td style={{ padding: '8px 6px' }}>{l.requiredQty ?? '—'}</td>
+                                        <td style={{ padding: '8px 6px' }}>{l.qtyIssued ?? '—'}</td>
+                                        <td style={{ padding: '8px 6px' }}>{l.remainingAfter ?? '—'}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+        </div>
+    ), (
+        <>
+            {viewing && (
+                <button type="button" onClick={() => setViewing(false)} style={{ padding: '8px 12px', borderRadius: 7, border: '1px solid #cbd5e1', background: '#fff', fontWeight: 700, cursor: 'pointer' }}>Back</button>
+            )}
+            <button type="button" onClick={onClose} style={{ padding: '8px 12px', borderRadius: 7, border: '1px solid #cbd5e1', background: '#fff', fontWeight: 700, cursor: 'pointer' }}>Close</button>
+            {!viewing && (
+                <button type="button" onClick={() => setViewing(true)} style={{ padding: '8px 12px', borderRadius: 7, border: '1px solid #4338ca', background: '#eef2ff', color: '#3730a3', fontWeight: 700, cursor: 'pointer' }}>View Material Issue</button>
+            )}
+            {onOpenSup && (supplementaryWo?._id || batch?.supplementaryWorkOrderId) && (
+                <button type="button" onClick={onOpenSup} style={{ padding: '8px 12px', borderRadius: 7, border: '1px solid #4338ca', background: '#eef2ff', color: '#3730a3', fontWeight: 700, cursor: 'pointer' }}>Open Supplementary WO</button>
+            )}
+            <button
+                type="button"
+                onClick={onPrint}
+                style={{ padding: '8px 12px', borderRadius: 7, border: '1px solid #1d4ed8', background: '#fff', color: '#1d4ed8', fontWeight: 700, cursor: 'pointer' }}
+            >
+                Print Material Issue Note
+            </button>
+            {dests.length > 1
+                ? dests.map((d) => (
+                    <button
+                        key={String(d._id || d.woNumber)}
+                        type="button"
+                        onClick={() => onPrintSup(d)}
+                        style={{ padding: '10px 16px', borderRadius: 7, border: 'none', background: '#1d4ed8', color: '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer' }}
+                    >
+                        Print Supplementary Work Order {d.woNumber?.replace(/^.*-(SUP\d+)$/i, '$1') || ''}
+                    </button>
+                ))
+                : onPrintSup && (supplementaryWo?.woNumber || batch?.supplementaryWoNumber || dests[0]?.woNumber) && (
+                <button
+                    type="button"
+                    onClick={() => onPrintSup(dests[0] || supplementaryWo)}
+                    style={{ padding: '10px 16px', borderRadius: 7, border: 'none', background: '#1d4ed8', color: '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer' }}
+                >
+                    Print Supplementary Work Order
+                </button>
+            )}
+        </>
+    ), 'min(640px, 96vw)');
+}
+
 function PendingComponentsDrawer({ wo, items, open, onClose, load, setTab }) {
+    const { selectedCompany } = useCompany();
+    const { user } = useAuth();
     const [selectedId, setSelectedId] = useState(null);
+    const [checkedIds, setCheckedIds] = useState([]);
     const [busy, setBusy] = useState('');
     const [addOpen, setAddOpen] = useState(false);
     const [supOpen, setSupOpen] = useState(false);
     const [histOpen, setHistOpen] = useState(false);
+    const [bulkAddOpen, setBulkAddOpen] = useState(false);
+    const [bulkSupOpen, setBulkSupOpen] = useState(false);
+    const [issuedBatch, setIssuedBatch] = useState(null);
+    const [supplementaryWo, setSupplementaryWo] = useState(null);
+    const [supplementaryDestinations, setSupplementaryDestinations] = useState([]);
+    const [supAfterIssueOpen, setSupAfterIssueOpen] = useState(false);
+    const [confirmError, setConfirmError] = useState('');
+    const issueIdempotencyKeyRef = useRef('');
+    const navigate = useNavigate();
     const materialLocked = ['Closed', 'Cancelled', 'Completed'].includes(wo.status);
     const selected = selectedId ? items.find((m) => String(m._id) === String(selectedId)) : null;
+    const selectableItems = items.filter((m) => remainingToResolveOf(m) > 0);
+    const availableItems = selectableItems.filter((m) => (Number(m.availableStock) || 0) > 0);
+    const checkedItems = selectableItems.filter((m) => checkedIds.includes(String(m._id)));
+    const selectedCount = checkedItems.length;
 
     useEffect(() => {
         if (!open) {
             setSelectedId(null);
+            setCheckedIds([]);
             setAddOpen(false);
             setSupOpen(false);
             setHistOpen(false);
+            setBulkAddOpen(false);
+            setBulkSupOpen(false);
+            setIssuedBatch(null);
+            setSupplementaryWo(null);
+            setSupplementaryDestinations([]);
+            setSupAfterIssueOpen(false);
+            setConfirmError('');
+            issueIdempotencyKeyRef.current = '';
         }
     }, [open]);
 
@@ -1175,7 +1626,20 @@ function PendingComponentsDrawer({ wo, items, open, onClose, load, setTab }) {
         if (selectedId && !items.some((m) => String(m._id) === String(selectedId))) {
             setSelectedId(null);
         }
+        const live = new Set(items.filter((m) => remainingToResolveOf(m) > 0).map((m) => String(m._id)));
+        setCheckedIds((prev) => prev.filter((id) => live.has(id)));
     }, [items, selectedId]);
+
+    const toggleChecked = (m, on) => {
+        if (remainingToResolveOf(m) <= 0) return;
+        const id = String(m._id);
+        setCheckedIds((prev) => {
+            const has = prev.includes(id);
+            if (on && !has) return [...prev, id];
+            if (!on && has) return prev.filter((x) => x !== id);
+            return prev;
+        });
+    };
 
     const handleRestore = async (m) => {
         if (materialLocked) return;
@@ -1227,7 +1691,7 @@ function PendingComponentsDrawer({ wo, items, open, onClose, load, setTab }) {
     return (
         <div style={{ position: 'fixed', inset: 0, zIndex: 1000000, display: 'flex', justifyContent: 'flex-end' }}>
             <div onClick={onClose} style={{ flex: 1, background: 'rgba(15,23,42,0.35)' }} />
-            <aside style={{ width: 'min(560px, 100vw)', height: '100%', background: '#fff', boxShadow: '-8px 0 24px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column' }}>
+            <aside style={{ width: 'min(780px, 100vw)', height: '100%', background: '#fff', boxShadow: '-8px 0 24px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column' }}>
                 <div style={{ padding: '16px 18px', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', gap: 10 }}>
                     {selected && (
                         <button type="button" onClick={() => setSelectedId(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#2563eb', fontWeight: 700, fontSize: 13 }}>← Back</button>
@@ -1240,37 +1704,53 @@ function PendingComponentsDrawer({ wo, items, open, onClose, load, setTab }) {
                 </div>
                 <div style={{ flex: 1, overflow: 'auto' }}>
                     {!selected && (
-                        <div style={{ overflowX: 'auto' }}>
+                        <div>
+                            <div style={{ padding: '10px 12px', display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', borderBottom: '1px solid #fde68a', background: '#fffbeb' }}>
+                                <button type="button" onClick={() => setCheckedIds(selectableItems.map((m) => String(m._id)))} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #f59e0b', background: '#fff', color: '#92400e', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>Select All</button>
+                                <button type="button" onClick={() => setCheckedIds(availableItems.map((m) => String(m._id)))} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #f59e0b', background: '#fff', color: '#92400e', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>Select Available</button>
+                                <button type="button" onClick={() => setCheckedIds([])} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>Clear Selection</button>
+                                <span style={{ fontSize: 12, fontWeight: 800, color: '#92400e' }}>{selectedCount} Selected</span>
+                            </div>
+                            <div style={{ overflowX: 'auto' }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                                 <thead>
                                     <tr style={{ background: '#fffbeb', color: '#92400e' }}>
-                                        {['Item Code', 'Item Name', 'Section', 'Req', 'Avail', 'Short', 'Material', 'Procurement', 'Remarks'].map((h) => (
-                                            <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, borderBottom: '1px solid #fde68a', whiteSpace: 'nowrap' }}>{h}</th>
+                                        {['', 'Item Code', 'Item Name', 'Section', 'Required Qty', 'Available Qty', 'Remaining To Resolve', 'Status'].map((h) => (
+                                            <th key={h || 'chk'} style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, borderBottom: '1px solid #fde68a', whiteSpace: 'nowrap' }}>{h}</th>
                                         ))}
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {items.map((m) => {
                                         const meta = rowMeta(m);
+                                        const canSelect = remainingToResolveOf(m) > 0;
+                                        const checked = canSelect && checkedIds.includes(String(m._id));
                                         return (
                                             <tr key={m._id} onClick={() => setSelectedId(m._id)} style={{ cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}>
+                                                <td style={{ padding: '10px', width: 36 }} onClick={(e) => e.stopPropagation()}>
+                                                    <input
+                                                        type="checkbox"
+                                                        disabled={!canSelect}
+                                                        checked={checked}
+                                                        onChange={(e) => toggleChecked(m, e.target.checked)}
+                                                    />
+                                                </td>
                                                 <td style={{ padding: '10px', fontWeight: 700, color: '#1d4ed8' }}>{m.itemCode || '—'}</td>
                                                 <td style={{ padding: '10px', color: '#1e293b' }}>{m.itemName || '—'}</td>
                                                 <td style={{ padding: '10px', color: '#475569' }}>{meta.section}</td>
                                                 <td style={{ padding: '10px' }}>{m.requiredQty ?? 0}</td>
                                                 <td style={{ padding: '10px' }}>{m.availableStock ?? 0}</td>
-                                                <td style={{ padding: '10px', fontWeight: 700, color: Number(m.shortQty) > 0 ? '#dc2626' : '#1e293b' }}>{m.shortQty ?? 0}</td>
+                                                <td style={{ padding: '10px', fontWeight: 700 }}>{remainingToResolveOf(m)}</td>
                                                 <td style={{ padding: '10px', color: '#b45309', fontWeight: 700, whiteSpace: 'nowrap' }}>{meta.statusText}</td>
-                                                <td style={{ padding: '10px' }}>{m.procurementStatus || '—'}</td>
-                                                <td style={{ padding: '10px', color: '#475569' }}>{meta.remark}</td>
                                             </tr>
                                         );
                                     })}
                                     {!items.length && (
-                                        <tr><td colSpan={9} style={{ padding: 24, textAlign: 'center', color: '#64748b' }}>No pending components</td></tr>
+                                        <tr><td colSpan={8} style={{ padding: 24, textAlign: 'center', color: '#64748b' }}>No pending components</td></tr>
                                     )}
                                 </tbody>
                             </table>
+                            </div>
                         </div>
                     )}
                     {selected && (() => {
@@ -1318,8 +1798,6 @@ function PendingComponentsDrawer({ wo, items, open, onClose, load, setTab }) {
                                 )}
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 18 }}>
                                     {btn(busy === 'stock' ? 'Refreshing…' : 'Refresh Stock', handleRefreshStock)}
-                                    {btn('Record Late Material', () => setAddOpen(true), { primary: true, disabled: materialLocked || remainingAllocate <= 0 })}
-                                    {btn('Create Supplementary WO', () => setSupOpen(true), { disabled: materialLocked || remainingAllocate <= 0 || wo.woKind !== 'section' })}
                                     {btn(busy === 'restore' ? 'Restoring…' : 'Restore / Add Back', () => handleRestore(selected), { disabled: materialLocked })}
                                     {btn('Material History', () => setHistOpen(true))}
                                 </div>
@@ -1327,6 +1805,28 @@ function PendingComponentsDrawer({ wo, items, open, onClose, load, setTab }) {
                         );
                     })()}
                 </div>
+                {!selected && selectedCount > 0 && (
+                    <div style={{ padding: '10px 12px', borderTop: '1px solid #e5e7eb', display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', background: '#f8fafc' }}>
+                        <span style={{ fontSize: 13, fontWeight: 800, color: '#1e293b' }}>{selectedCount} Selected</span>
+                        <button
+                            type="button"
+                            disabled={materialLocked || !!busy || wo.woKind !== 'section'}
+                            onClick={() => {
+                                setConfirmError('');
+                                if (!issueIdempotencyKeyRef.current) {
+                                    issueIdempotencyKeyRef.current = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-bulk`;
+                                }
+                                setBulkAddOpen(true);
+                            }}
+                            style={{ padding: '8px 12px', borderRadius: 7, border: 'none', background: '#1d4ed8', color: '#fff', fontWeight: 700, fontSize: 12, cursor: materialLocked || busy ? 'not-allowed' : 'pointer' }}
+                        >
+                            Add Missing Material to Product ({selectedCount})
+                        </button>
+                        <button type="button" onClick={() => setCheckedIds([])} style={{ padding: '8px 12px', borderRadius: 7, border: '1px solid #cbd5e1', background: '#fff', color: '#334155', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                            Clear Selection
+                        </button>
+                    </div>
+                )}
             </aside>
             {addOpen && selected && (
                 <AddMaterialModal
@@ -1337,10 +1837,18 @@ function PendingComponentsDrawer({ wo, items, open, onClose, load, setTab }) {
                     onConfirm={async ({ qty, remarks }) => {
                         setBusy('add');
                         try {
-                            await addMaterialLater(wo._id, selected._id, { qty, remarks });
-                            toast.success('Late material recorded (process only — stock not reserved)');
+                            const result = await addMaterialLater(wo._id, selected._id, {
+                                qty,
+                                remarks,
+                                idempotencyKey: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${selected._id}`,
+                            });
+                            const batch = result?.batch;
+                            if (!batch?.issueNo) {
+                                toast.error(result?.message || 'Issue completed but Material Issue number was not returned. Print is not available.');
+                                return;
+                            }
                             setAddOpen(false);
-                            load();
+                            setIssuedBatch(batch);
                         } catch (e) { toast.error(e.response?.data?.message || e.message); }
                         finally { setBusy(''); }
                     }}
@@ -1372,14 +1880,135 @@ function PendingComponentsDrawer({ wo, items, open, onClose, load, setTab }) {
                     onOpenTab={() => { setHistOpen(false); onClose(); setTab(5); }}
                 />
             )}
+            {bulkAddOpen && selectedCount > 0 && (
+                <BulkAddMaterialModal
+                    wo={wo}
+                    materials={checkedItems}
+                    busy={busy === 'bulk-add'}
+                    confirmError={confirmError}
+                    onClose={() => setBulkAddOpen(false)}
+                    onConfirm={async (payload) => {
+                        setBusy('bulk-add');
+                        setConfirmError('');
+                        try {
+                            const items = payload.items || payload;
+                            const refreshed = await refreshMaterialStock(wo._id);
+                            const mats = refreshed?.materialStatus || [];
+                            for (const item of items) {
+                                const m = mats.find((x) => String(x._id) === String(item.materialId));
+                                if (!m) {
+                                    const msg = 'A selected component is no longer on this Work Order. No material was issued.';
+                                    setConfirmError(msg);
+                                    toast.error(msg);
+                                    return;
+                                }
+                                const stock = Math.max(0, Number(m.availableStock) || 0);
+                                const remaining = remainingToIssueOf(checkedItems.find((x) => String(x._id) === String(item.materialId)) || m);
+                                const cap = Math.min(remaining, stock);
+                                const qty = Number(item.qty);
+                                if (!Number.isFinite(qty) || !(qty > 0)) {
+                                    const msg = `${m.itemCode || m.itemName}: Qty To Add must be greater than 0. No material was issued.`;
+                                    setConfirmError(msg);
+                                    toast.error(msg);
+                                    return;
+                                }
+                                if (qty > cap) {
+                                    const msg = `${m.itemCode || m.itemName}: Qty To Add ${qty} exceeds ${cap} (remaining ${remaining}, stock ${stock}). No material was issued.`;
+                                    setConfirmError(msg);
+                                    toast.error(msg);
+                                    return;
+                                }
+                            }
+                            if (!issueIdempotencyKeyRef.current) {
+                                issueIdempotencyKeyRef.current = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-bulk`;
+                            }
+                            const result = await addMissingMaterialToProduct(wo._id, {
+                                items,
+                                startFromSeq: payload.startFromSeq,
+                                supervisor: payload.supervisor,
+                                reason: payload.reason,
+                                remarks: payload.remarks,
+                                idempotencyKey: issueIdempotencyKeyRef.current,
+                            });
+                            const batch = result?.batch;
+                            if (!batch?.issueNo) {
+                                const msg = result?.message || 'Add completed but Material Issue number was not returned.';
+                                setConfirmError(msg);
+                                toast.error(msg);
+                                return;
+                            }
+                            setBulkAddOpen(false);
+                            setIssuedBatch(batch);
+                            setSupplementaryDestinations(result.supplementaryDestinations || batch.destinations || []);
+                            setSupplementaryWo(result.supplementaryWo || result.supplementaryDestinations?.[0] || (batch.supplementaryWoNumber
+                                ? { _id: batch.supplementaryWorkOrderId, woNumber: batch.supplementaryWoNumber }
+                                : null));
+                            setSupAfterIssueOpen(false);
+                        } catch (e) {
+                            const msg = e.response?.data?.message || e.message;
+                            setConfirmError(msg);
+                            toast.error(msg);
+                        }
+                        finally { setBusy(''); }
+                    }}
+                />
+            )}
+            {issuedBatch?.issueNo && (
+                <MaterialIssueSuccessModal
+                    batch={issuedBatch}
+                    wo={wo}
+                    supplementaryWo={supplementaryWo}
+                    supplementaryDestinations={supplementaryDestinations}
+                    title="Missing Material Added Successfully"
+                    onClose={() => {
+                        setIssuedBatch(null);
+                        setSupplementaryWo(null);
+                        setSupplementaryDestinations([]);
+                        setCheckedIds([]);
+                        issueIdempotencyKeyRef.current = '';
+                        load();
+                    }}
+                    onPrint={() => printMaterialIssueNote(issuedBatch, wo, selectedCompany, user?.name)}
+                    onPrintSup={(dest) => printSupplementaryWorkOrder(dest || supplementaryWo || { _id: issuedBatch.supplementaryWorkOrderId, woNumber: issuedBatch.supplementaryWoNumber }, wo, selectedCompany)}
+                    onOpenSup={() => {
+                        const id = supplementaryWo?._id || supplementaryDestinations[0]?._id || issuedBatch.supplementaryWorkOrderId;
+                        if (id) {
+                            setIssuedBatch(null);
+                            setSupplementaryWo(null);
+                            setSupplementaryDestinations([]);
+                            onClose();
+                            navigate(PATHS.PRODUCTION.WO_DETAIL(id));
+                        }
+                    }}
+                />
+            )}
+            {bulkSupOpen && selectedCount > 0 && (
+                <BulkSupplementaryWoModal
+                    wo={wo}
+                    materials={checkedItems}
+                    busy={busy === 'bulk-sup'}
+                    onClose={() => setBulkSupOpen(false)}
+                    onConfirm={async (payload) => {
+                        setBusy('bulk-sup');
+                        try {
+                            const created = await createSupplementaryWorkOrderBulk(wo._id, payload);
+                            toast.success(`Supplementary WO ${created.woNumber} created for ${payload.items.length} component(s)`);
+                            setBulkSupOpen(false);
+                            setCheckedIds([]);
+                            load();
+                        } catch (e) { toast.error(e.response?.data?.message || e.message); }
+                        finally { setBusy(''); }
+                    }}
+                />
+            )}
         </div>
     );
 }
 
-function modalShell(title, onClose, children, footer) {
+function modalShell(title, onClose, children, footer, width = 'min(520px, 96vw)') {
     return (
         <div style={{ position: 'fixed', inset: 0, zIndex: 1000001, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(15,23,42,0.45)' }}>
-            <div style={{ width: 'min(520px, 96vw)', background: '#fff', borderRadius: 12, boxShadow: '0 16px 40px rgba(0,0,0,0.18)', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ width, background: '#fff', borderRadius: 12, boxShadow: '0 16px 40px rgba(0,0,0,0.18)', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
                 <div style={{ padding: '14px 18px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ fontWeight: 800, color: '#1e293b' }}>{title}</div>
                     <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#64748b' }}>✕</button>
@@ -1408,7 +2037,7 @@ function AddMaterialModal({ wo, material, busy, onClose, onConfirm }) {
         ['Remaining To Resolve', remainingResolve],
         ['Current Stock Available (display only)', stock],
     ];
-    return modalShell('Record Late Material', onClose, (
+    return modalShell('Issue Late Material', onClose, (
         <>
             <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 8, padding: '10px 12px', marginBottom: 12, fontSize: 12, color: '#92400e', fontWeight: 600, lineHeight: 1.45 }}>
                 {LATE_MATERIAL_PROCESS_WARNING}
@@ -1419,7 +2048,7 @@ function AddMaterialModal({ wo, material, busy, onClose, onConfirm }) {
                     <div style={{ fontSize: 13, fontWeight: 600 }}>{v}</div>
                 </div>
             ))}
-            <label style={{ display: 'block', marginTop: 14, fontSize: 12, fontWeight: 700, color: '#334155' }}>Qty to Record</label>
+            <label style={{ display: 'block', marginTop: 14, fontSize: 12, fontWeight: 700, color: '#334155' }}>Qty To Issue</label>
             <input type="number" min="0" step="any" value={qty} onChange={(e) => setQty(e.target.value)} style={inp} />
             <label style={{ display: 'block', marginTop: 10, fontSize: 12, fontWeight: 700, color: '#334155' }}>Remarks</label>
             <textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} style={{ ...inp, minHeight: 64 }} />
@@ -1433,10 +2062,279 @@ function AddMaterialModal({ wo, material, busy, onClose, onConfirm }) {
                 onClick={() => onConfirm({ qty: Number(qty), remarks })}
                 style={{ padding: '8px 12px', borderRadius: 7, border: 'none', background: '#1d4ed8', color: '#fff', fontWeight: 700, cursor: 'pointer' }}
             >
-                {busy ? 'Saving…' : 'Confirm Record Late Material'}
+                {busy ? 'Issuing…' : 'Confirm Issue Late Material'}
             </button>
         </>
     ));
+}
+
+function defaultLateMaterialQty(material) {
+    const remaining = remainingToIssueOf(material);
+    const stock = Math.max(0, Number(material.availableStock) || 0);
+    return Math.max(0, Math.min(remaining, stock));
+}
+
+function issueDestinationGroups(materials = []) {
+    const existing = [...new Set(materials.map((m) => m.existingSupplementaryWoNumber).filter(Boolean))];
+    const assignedCount = materials.filter((m) => m.existingSupplementaryWoNumber).length;
+    const unassignedCount = materials.filter((m) => !m.existingSupplementaryWoNumber).length;
+    return { existing, needsNew: unassignedCount > 0, assignedCount, unassignedCount };
+}
+
+function canJoinExistingSupPreview(wo, existingWoNumber) {
+    const sup = (wo.supplementaryWorkOrders || []).find((s) => s.woNumber === existingWoNumber);
+    if (!sup) return false;
+    if (sup.canAcceptLateMaterialAppend === false) return false;
+    if (sup.canAcceptLateMaterialAppend !== true) {
+        if (!['Draft', 'Released', 'Pending'].includes(String(sup.status || ''))) return false;
+    }
+    return true;
+}
+
+function BulkAddMaterialModal({ wo, materials, busy, onClose, onConfirm, confirmError }) {
+    const [rows, setRows] = useState(() => materials.map((m) => ({
+        materialId: m._id,
+        qty: defaultLateMaterialQty(m) || '',
+        remarks: '',
+    })));
+    const [supervisor, setSupervisor] = useState(wo.supervisor || '');
+    const [reason, setReason] = useState('Missing material received later and added to production');
+    const [headerRemarks, setHeaderRemarks] = useState('');
+    const setRow = (id, patch) => setRows((prev) => prev.map((r) => (String(r.materialId) === String(id) ? { ...r, ...patch } : r)));
+    const dest = issueDestinationGroups(materials);
+    const reuseExisting = dest.existing.length === 1 && !dest.needsNew;
+    const joinExisting = dest.existing.length === 1 && dest.needsNew && canJoinExistingSupPreview(wo, dest.existing[0]);
+    const splitNew = dest.needsNew && !joinExisting && dest.assignedCount > 0;
+    return modalShell(`Add Missing Material to Product (${materials.length})`, onClose, (
+        <>
+            <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 8, padding: '10px 12px', marginBottom: 12, fontSize: 12, color: '#92400e', fontWeight: 600, lineHeight: 1.45 }}>
+                This adds the selected missing BOM components to this Work Order and deducts stock once. Existing Supplementary WOs are reused when safe. A new Supplementary WO is created only for materials that cannot join an existing one. It does not change BOM Master.
+            </div>
+            {reuseExisting ? (
+                <div style={{ background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 8, padding: '10px 12px', marginBottom: 12, fontSize: 12, color: '#3730a3', fontWeight: 700, lineHeight: 1.45 }}>
+                    These materials already belong to {dest.existing[0]}. Stock will be deducted once and linked to that Supplementary WO. A new SUP will not be created.
+                </div>
+            ) : joinExisting ? (
+                <div style={{ background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 8, padding: '10px 12px', marginBottom: 12, fontSize: 12, color: '#3730a3', fontWeight: 700, lineHeight: 1.45 }}>
+                    All selected materials will be linked to {dest.existing[0]}.
+                </div>
+            ) : splitNew ? (
+                <div style={{ background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 8, padding: '10px 12px', marginBottom: 12, fontSize: 12, color: '#3730a3', fontWeight: 700, lineHeight: 1.45 }}>
+                    {materials.length} selected materials will be processed:
+                    <div style={{ marginTop: 6, fontWeight: 600 }}>
+                        • {dest.assignedCount} material{dest.assignedCount === 1 ? '' : 's'} will be linked to existing {dest.existing.join(', ')}
+                    </div>
+                    <div style={{ fontWeight: 600 }}>
+                        • {dest.unassignedCount} material{dest.unassignedCount === 1 ? '' : 's'} will create a new Supplementary WO
+                    </div>
+                </div>
+            ) : (
+                <div style={{ background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 8, padding: '10px 12px', marginBottom: 12, fontSize: 12, color: '#3730a3', fontWeight: 700, lineHeight: 1.45 }}>
+                    A Supplementary WO will be created as a production instruction to add these issued missing components. No process-stage selection is required.
+                </div>
+            )}
+            {confirmError ? (
+                <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 12px', marginBottom: 12, fontSize: 13, color: '#991b1b', fontWeight: 700, lineHeight: 1.45 }}>
+                    {confirmError}
+                </div>
+            ) : null}
+            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>{wo.woNumber} · {wo.bomSectionName || 'Section'}</div>
+            <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                    <thead>
+                        <tr style={{ background: '#f8fafc', color: '#475569' }}>
+                            {['Item Code', 'Item Name', 'Section', 'Required Qty', 'Already Added/Issued Qty', 'Missing / Remaining Qty', 'Available Stock', 'Qty To Add', 'Remarks'].map((h) => (
+                                <th key={h} style={{ padding: '8px 6px', textAlign: 'left', fontWeight: 700, whiteSpace: 'nowrap' }}>{h}</th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {materials.map((m) => {
+                            const row = rows.find((r) => String(r.materialId) === String(m._id)) || {};
+                            return (
+                                <tr key={m._id} style={{ borderTop: '1px solid #e5e7eb' }}>
+                                    <td style={{ padding: '8px 6px', fontWeight: 700 }}>{m.itemCode || '—'}</td>
+                                    <td style={{ padding: '8px 6px' }}>{m.itemName || '—'}</td>
+                                    <td style={{ padding: '8px 6px' }}>{sectionLabelForMaterial(wo, m)}</td>
+                                    <td style={{ padding: '8px 6px' }}>{m.requiredQty ?? 0}</td>
+                                    <td style={{ padding: '8px 6px' }}>{m.postedIssueQty ?? addedLaterQtyOf(m)}</td>
+                                    <td style={{ padding: '8px 6px', fontWeight: 800 }}>{remainingToIssueOf(m)}</td>
+                                    <td style={{ padding: '8px 6px' }}>{m.availableStock ?? 0}</td>
+                                    <td style={{ padding: '8px 6px' }}>
+                                        <input type="number" min="0" step="any" value={row.qty} onChange={(e) => setRow(m._id, { qty: e.target.value })} style={{ ...inp, width: 90, padding: 6 }} />
+                                    </td>
+                                    <td style={{ padding: '8px 6px' }}>
+                                        <input value={row.remarks || ''} onChange={(e) => setRow(m._id, { remarks: e.target.value })} style={{ ...inp, width: 140, padding: 6 }} />
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+            <label style={{ display: 'block', marginTop: 14, fontSize: 12, fontWeight: 700, color: '#334155' }}>Supervisor</label>
+            <input value={supervisor} onChange={(e) => setSupervisor(e.target.value)} style={inp} />
+            <label style={{ display: 'block', marginTop: 10, fontSize: 12, fontWeight: 700, color: '#334155' }}>Reason</label>
+            <input value={reason} onChange={(e) => setReason(e.target.value)} style={inp} />
+            <label style={{ display: 'block', marginTop: 10, fontSize: 12, fontWeight: 700, color: '#334155' }}>Remarks</label>
+            <textarea value={headerRemarks} onChange={(e) => setHeaderRemarks(e.target.value)} style={{ ...inp, minHeight: 64 }} />
+        </>
+    ), (
+        <>
+            <button type="button" onClick={onClose} style={{ padding: '8px 12px', borderRadius: 7, border: '1px solid #cbd5e1', background: '#fff', fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+            <button
+                type="button"
+                disabled={busy}
+                onClick={() => onConfirm({
+                    items: rows.map((r) => ({ materialId: r.materialId, qty: Number(r.qty), remarks: r.remarks || '' })),
+                    supervisor,
+                    reason,
+                    remarks: headerRemarks,
+                })}
+                style={{ padding: '10px 16px', borderRadius: 7, border: 'none', background: '#1d4ed8', color: '#fff', fontWeight: 800, cursor: busy ? 'not-allowed' : 'pointer' }}
+            >
+                {busy ? 'Processing...' : reuseExisting ? `Add Material & Link ${dest.existing[0]}` : 'Add Material & Process Supplementary WO'}
+            </button>
+        </>
+    ), 'min(1100px, 96vw)');
+}
+
+function AfterIssueSupModal({ wo, batch, busy, onClose, onConfirm }) {
+    const stages = (wo.stages || []).filter((s) => !isNaStage(s));
+    const defaultSeq = stages[0]?.seq || 1;
+    const [startFromSeq, setStartFromSeq] = useState(defaultSeq);
+    const [supervisor, setSupervisor] = useState(wo.supervisor || batch?.supervisor || '');
+    const [remarks, setRemarks] = useState('');
+    const [reason, setReason] = useState('Late material received and issued after original production started');
+    const lines = batch?.lines || [];
+    return modalShell('Create Supplementary Work Order', onClose, (
+        <>
+            <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '10px 12px', marginBottom: 12, fontSize: 12, color: '#166534', fontWeight: 700, lineHeight: 1.45 }}>
+                Material Issue {batch?.issueNo} is posted and stock is already deducted. This Supplementary WO is process tracking only and will not deduct stock again.
+            </div>
+            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>{wo.woNumber} · {wo.bomSectionName || 'Section'} · {lines.length} issued component(s)</div>
+            <div style={{ overflowX: 'auto', marginBottom: 12 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                    <thead>
+                        <tr style={{ background: '#f8fafc', color: '#475569' }}>
+                            {['Item Code', 'Item Name', 'Qty Issued'].map((h) => (
+                                <th key={h} style={{ padding: '8px 6px', textAlign: 'left', fontWeight: 700 }}>{h}</th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {lines.map((l, i) => (
+                            <tr key={`${l.itemCode}-${i}`} style={{ borderTop: '1px solid #e5e7eb' }}>
+                                <td style={{ padding: '8px 6px', fontWeight: 700 }}>{l.itemCode || '—'}</td>
+                                <td style={{ padding: '8px 6px' }}>{l.itemName || '—'}</td>
+                                <td style={{ padding: '8px 6px' }}>{l.qtyIssued}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+            <label style={{ display: 'block', marginTop: 8, fontSize: 12, fontWeight: 700, color: '#334155' }}>Start From Stage *</label>
+            <select value={startFromSeq} onChange={(e) => setStartFromSeq(Number(e.target.value))} style={inp}>
+                {stages.map((s) => <option key={s.seq} value={s.seq}>#{s.seq} {s.stageName}</option>)}
+            </select>
+            <label style={{ display: 'block', marginTop: 10, fontSize: 12, fontWeight: 700, color: '#334155' }}>Reason</label>
+            <input value={reason} onChange={(e) => setReason(e.target.value)} style={inp} />
+            <label style={{ display: 'block', marginTop: 10, fontSize: 12, fontWeight: 700, color: '#334155' }}>Supervisor</label>
+            <input value={supervisor} onChange={(e) => setSupervisor(e.target.value)} style={inp} />
+            <label style={{ display: 'block', marginTop: 10, fontSize: 12, fontWeight: 700, color: '#334155' }}>Remarks</label>
+            <textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} style={{ ...inp, minHeight: 64 }} />
+        </>
+    ), (
+        <>
+            <button type="button" onClick={onClose} style={{ padding: '8px 12px', borderRadius: 7, border: '1px solid #cbd5e1', background: '#fff', fontWeight: 700, cursor: 'pointer' }}>Skip for now</button>
+            <button
+                type="button"
+                disabled={busy || !startFromSeq}
+                onClick={() => onConfirm({ startFromSeq: Number(startFromSeq), supervisor, remarks, reason })}
+                style={{ padding: '8px 12px', borderRadius: 7, border: 'none', background: '#1d4ed8', color: '#fff', fontWeight: 700, cursor: busy ? 'not-allowed' : 'pointer' }}
+            >
+                {busy ? 'Creating…' : 'Create Supplementary WO'}
+            </button>
+        </>
+    ), 'min(720px, 96vw)');
+}
+
+function BulkSupplementaryWoModal({ wo, materials, busy, onClose, onConfirm }) {
+    const stages = (wo.stages || []).filter((s) => !isNaStage(s));
+    const defaultSeq = stages[0]?.seq || 1;
+    const [startFromSeq, setStartFromSeq] = useState(defaultSeq);
+    const [supervisor, setSupervisor] = useState(wo.supervisor || '');
+    const [remarks, setRemarks] = useState('');
+    const [reason, setReason] = useState('Pending material received later');
+    const [rows, setRows] = useState(() => materials.map((m) => ({
+        materialId: m._id,
+        qty: remainingToAllocateOf(m) || '',
+    })));
+    const setRowQty = (id, qty) => setRows((prev) => prev.map((r) => (String(r.materialId) === String(id) ? { ...r, qty } : r)));
+    return modalShell(`Create Supplementary WO (${materials.length})`, onClose, (
+        <>
+            <div style={{ background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 8, padding: '10px 12px', marginBottom: 12, fontSize: 12, color: '#3730a3', fontWeight: 600, lineHeight: 1.45 }}>
+                One Supplementary Work Order will include all selected components. Choose a common Start From Stage. Each line keeps its own Supplementary Qty. Phase 1 does not post stock or FG.
+            </div>
+            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>{wo.woNumber} · {wo.bomSectionName || 'Section'} · {materials.length} selected</div>
+            <div style={{ overflowX: 'auto', marginBottom: 12 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                    <thead>
+                        <tr style={{ background: '#f8fafc', color: '#475569' }}>
+                            {['Item Code', 'Item Name', 'Required Qty', 'Remaining To Allocate', 'Remaining To Resolve', 'Supplementary Qty'].map((h) => (
+                                <th key={h} style={{ padding: '8px 6px', textAlign: 'left', fontWeight: 700, whiteSpace: 'nowrap' }}>{h}</th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {materials.map((m) => {
+                            const row = rows.find((r) => String(r.materialId) === String(m._id)) || {};
+                            return (
+                                <tr key={m._id} style={{ borderTop: '1px solid #e5e7eb' }}>
+                                    <td style={{ padding: '8px 6px', fontWeight: 700 }}>{m.itemCode || '—'}</td>
+                                    <td style={{ padding: '8px 6px' }}>{m.itemName || '—'}</td>
+                                    <td style={{ padding: '8px 6px' }}>{m.requiredQty ?? 0}</td>
+                                    <td style={{ padding: '8px 6px' }}>{remainingToAllocateOf(m)}</td>
+                                    <td style={{ padding: '8px 6px' }}>{remainingToResolveOf(m)}</td>
+                                    <td style={{ padding: '8px 6px' }}>
+                                        <input type="number" min="0" step="any" value={row.qty} onChange={(e) => setRowQty(m._id, e.target.value)} style={{ ...inp, width: 90, padding: 6 }} />
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+            <label style={{ display: 'block', marginTop: 8, fontSize: 12, fontWeight: 700, color: '#334155' }}>Start From Stage</label>
+            <select value={startFromSeq} onChange={(e) => setStartFromSeq(Number(e.target.value))} style={inp}>
+                {stages.map((s) => <option key={s.seq} value={s.seq}>#{s.seq} {s.stageName}</option>)}
+            </select>
+            <label style={{ display: 'block', marginTop: 10, fontSize: 12, fontWeight: 700, color: '#334155' }}>Reason</label>
+            <input value={reason} onChange={(e) => setReason(e.target.value)} style={inp} />
+            <label style={{ display: 'block', marginTop: 10, fontSize: 12, fontWeight: 700, color: '#334155' }}>Supervisor</label>
+            <input value={supervisor} onChange={(e) => setSupervisor(e.target.value)} style={inp} />
+            <label style={{ display: 'block', marginTop: 10, fontSize: 12, fontWeight: 700, color: '#334155' }}>Remarks</label>
+            <textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} style={{ ...inp, minHeight: 64 }} />
+        </>
+    ), (
+        <>
+            <button type="button" onClick={onClose} style={{ padding: '8px 12px', borderRadius: 7, border: '1px solid #cbd5e1', background: '#fff', fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+            <button
+                type="button"
+                disabled={busy}
+                onClick={() => onConfirm({
+                    startFromSeq: Number(startFromSeq),
+                    supervisor,
+                    remarks,
+                    reason,
+                    items: rows.map((r) => ({ materialId: r.materialId, qty: Number(r.qty) })),
+                })}
+                style={{ padding: '8px 12px', borderRadius: 7, border: 'none', background: '#4338ca', color: '#fff', fontWeight: 700, cursor: 'pointer' }}
+            >
+                {busy ? 'Creating…' : `Create Supplementary WO (${materials.length})`}
+            </button>
+        </>
+    ), 'min(860px, 96vw)');
 }
 
 function SupplementaryWoModal({ wo, material, busy, onClose, onConfirm }) {
@@ -1540,7 +2438,7 @@ function ProcessExecutionTab({
                             #{iss.stage.seq} {iss.stage.stageName} is {displayStageStatus(iss.stage)} while #{iss.previous.seq} {iss.previous.stageName} is {displayStageStatus(iss.previous)}. Admin review — records were not reset.
                         </div>
                     ))}
-                    <div style={{ marginTop: 4, fontSize: 12 }}>New forward stages stay locked until the earlier incomplete stage is Completed.</div>
+                    <div style={{ marginTop: 4, fontSize: 12 }}>New forward stages stay locked until transferable quantity is available from the earlier stage.</div>
                 </div>
             )}
             {pendingCount > 0 && (
@@ -1569,13 +2467,18 @@ function ProcessExecutionTab({
                 </div>
             )}
             {/* Stage Summary Grid — same wo.stages as Stage Execution */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px', marginBottom: '24px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px', marginBottom: '24px' }}>
                 {(wo.stages || []).map(s => {
                     const display = displayStageStatus(s);
                     const sc = STAGE_STATUS_COLORS[display] || STAGE_STATUS_COLORS[s.status] || STAGE_STATUS_COLORS['Not Started'];
                     const blocker = getSequenceBlocker(wo.stages, s.seq);
+                    const waiting = blocker?.reason === 'waiting';
+                    const prev = getApplicablePreviousStage(wo.stages, s.seq);
+                    const available = getAvailableFromPrevious(wo.stages, s.seq);
+                    const ready = getReadyForNext(wo.stages, s.seq);
+                    const next = getApplicableNextStage(wo.stages, s.seq);
                     return (
-                        <div key={s.seq} style={{ background: '#ffffff', border: `1px solid ${blocker ? '#fde68a' : '#e5e7eb'}`, borderRadius: '10px', padding: '12px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                        <div key={s.seq} style={{ background: '#ffffff', border: `1px solid ${waiting ? '#fde68a' : '#e5e7eb'}`, borderRadius: '10px', padding: '12px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                                 <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b' }}>#{s.seq} {s.stageName}</span>
                                 <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: sc.bg, color: sc.color }}>{display}</span>
@@ -1585,13 +2488,22 @@ function ProcessExecutionTab({
                                     Not Applicable — completed in original WO
                                 </div>
                             )}
-                            {blocker && (
+                            {waiting && (
                                 <div style={{ fontSize: 10, fontWeight: 800, color: '#92400e', marginBottom: 6 }}>
-                                    🔒 Locked — Complete previous stage first
-                                    <div style={{ fontWeight: 600, marginTop: 2 }}>Waiting for #{blocker.seq} {blocker.stageName}</div>
+                                    Waiting for output from {blocker.stageName}.
                                 </div>
                             )}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                                    <span style={{ color: '#94a3b8' }}>Target Qty:</span>
+                                    <span style={{ fontWeight: 700, color: '#1e293b' }}>{wo.targetQty || 0}</span>
+                                </div>
+                                {prev && (
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                                        <span style={{ color: '#94a3b8' }}>Available from {prev.stageName}:</span>
+                                        <span style={{ fontWeight: 700, color: '#7c3aed' }}>{available}</span>
+                                    </div>
+                                )}
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
                                     <span style={{ color: '#94a3b8' }}>Qty Started:</span>
                                     <span style={{ fontWeight: 700, color: '#2563eb' }}>{stageQtyStarted(s)}</span>
@@ -1600,6 +2512,16 @@ function ProcessExecutionTab({
                                     <span style={{ color: '#94a3b8' }}>Qty Completed:</span>
                                     <span style={{ fontWeight: 700, color: '#10b981' }}>{stageQtyCompleted(s)}</span>
                                 </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                                    <span style={{ color: '#94a3b8' }}>WIP Qty:</span>
+                                    <span style={{ fontWeight: 700, color: '#f59e0b' }}>{stageWipQty(s)}</span>
+                                </div>
+                                {next && (
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                                        <span style={{ color: '#94a3b8' }}>Ready for {next.stageName}:</span>
+                                        <span style={{ fontWeight: 700, color: '#0f766e' }}>{ready}</span>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     );
@@ -1625,9 +2547,22 @@ function StageCard({ stage, wo, woId, targetQty, canEdit, load, setWo }) {
     const display = displayStageStatus(stage);
     const sc = STAGE_STATUS_COLORS[display] || STAGE_STATUS_COLORS[stage.status] || STAGE_STATUS_COLORS['Not Started'];
     const blocker = getSequenceBlocker(wo.stages, stage.seq);
-    const sequenceLocked = !!blocker || isNaStage(stage);
+    const waiting = blocker?.reason === 'waiting';
+    const sequenceLocked = isNaStage(stage) || waiting;
     const editable = canEdit && !sequenceLocked;
+    const prevStage = getApplicablePreviousStage(wo.stages, stage.seq);
+    const nextStage = getApplicableNextStage(wo.stages, stage.seq);
+    const availableFromPrev = getAvailableFromPrevious(wo.stages, stage.seq);
+    const readyForNext = getReadyForNext(wo.stages, stage.seq);
     const [open, setOpen] = useState(false);
+    const [consumeOpen, setConsumeOpen] = useState(false);
+    const [consumeRows, setConsumeRows] = useState([]);
+    const [consumeBusy, setConsumeBusy] = useState(false);
+    const consumeType = processTypeForStage(stage);
+    const showStageConsume = !!consumeType && wo.woKind !== 'supplementary' && !isTextileWorkOrder(wo);
+    const consumePending = showStageConsume
+        ? (wo.materialStatus || []).filter((m) => resolveComponentProcessType(m, bomComponentsForProcessType(wo)) === consumeType && isDeferredLine(m)).length
+        : 0;
 
     // Stage-level fields — inputQty / outputQty are Qty Started / Qty Completed
     const [form, setForm] = useState({
@@ -1680,10 +2615,9 @@ function StageCard({ stage, wo, woId, targetQty, canEdit, load, setWo }) {
     // New Production Math
     const pendingToStart = Math.max(0, targetQty - totalInput);
 
-    // Calculate max allowed output depending on the stage
-    const prevStage = wo.stages.find(s => s.seq === stage.seq - 1);
-    const maxAllowedOutput = stage.seq === 1 ? targetQty : (prevStage ? prevStage.outputQty : targetQty);
+    const maxAllowedOutput = prevStage ? stageQtyCompleted(prevStage) : targetQty;
     const pendingOutput = Math.max(0, maxAllowedOutput - totalOutput);
+    const additionalAvailable = availableFromPrev == null ? Math.max(0, targetQty - totalInput) : availableFromPrev;
 
     const balanceInProcess = Math.max(0, totalInput - totalOutput - totalRework - totalRejection);
 
@@ -1698,10 +2632,28 @@ function StageCard({ stage, wo, woId, targetQty, canEdit, load, setWo }) {
             toast.error('Enter a valid non-negative quantity');
             return;
         }
+        if (completed > started) {
+            toast.error(`Qty Completed (${completed}) cannot exceed Qty Started (${started}).`);
+            return;
+        }
+        if (started > maxAllowedOutput) {
+            toast.error(prevStage
+                ? `Cannot start ${started} pcs in ${stage.stageName}. Only ${maxAllowedOutput} pcs have been completed in ${prevStage.stageName}.`
+                : `Cannot start ${started} pcs in ${stage.stageName}. Target Qty is ${targetQty}.`);
+            return;
+        }
         if (completed > maxAllowedOutput) {
             toast.error(stage.seq === 1
                 ? `Cannot exceed Target Qty (${targetQty}). Total is ${completed}.`
                 : `Cannot exceed Previous Stage Output (${maxAllowedOutput}). Total is ${completed}.`);
+            return;
+        }
+        if (nextStage && completed < stageQtyStarted(nextStage)) {
+            toast.error(`Cannot reduce ${stage.stageName} completed quantity to ${completed} because ${stageQtyStarted(nextStage)} pcs have already started ${nextStage.stageName}.`);
+            return;
+        }
+        if (form.status === 'Completed' && completed < (Number(targetQty) || 0)) {
+            toast.error(`Cannot mark ${stage.stageName} Completed until ${targetQty} pcs are completed (currently ${completed}).`);
             return;
         }
         setSaving(true);
@@ -1723,6 +2675,13 @@ function StageCard({ stage, wo, woId, targetQty, canEdit, load, setWo }) {
     const handleAddLog = async () => {
         if (!editable) {
             if (blocker) toast.error(cannotStartMessage(stage, blocker));
+            return;
+        }
+        const nextStartedTotal = totalInput + (Number(newLog.inputQty) || 0);
+        if (nextStartedTotal > maxAllowedOutput) {
+            toast.error(prevStage
+                ? `Cannot start ${nextStartedTotal} pcs in ${stage.stageName}. Only ${maxAllowedOutput} pcs have been completed in ${prevStage.stageName}.`
+                : `Cannot start ${nextStartedTotal} pcs in ${stage.stageName}. Target Qty is ${targetQty}.`);
             return;
         }
         if (newLog.outputQty > pendingOutput) {
@@ -1775,20 +2734,51 @@ function StageCard({ stage, wo, woId, targetQty, canEdit, load, setWo }) {
                         )}
                     </div>
                     <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px', display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
-                        <span>Qty Started: <strong style={{ color: '#2563eb' }}>{totalInput}</strong></span>
-                        <span>Qty Completed: <strong style={{ color: '#10b981' }}>{totalOutput}</strong></span>
-                        <span>Remarks: {stage.remarks ? String(stage.remarks) : '—'}</span>
+                        <span>Target: <strong style={{ color: '#1e293b' }}>{targetQty || 0}</strong></span>
+                        {prevStage && (
+                            <span>Available from {prevStage.stageName}: <strong style={{ color: '#7c3aed' }}>{availableFromPrev}</strong></span>
+                        )}
+                        <span>Started: <strong style={{ color: '#2563eb' }}>{totalInput}</strong></span>
+                        <span>Completed: <strong style={{ color: '#10b981' }}>{totalOutput}</strong></span>
+                        <span>WIP: <strong style={{ color: '#f59e0b' }}>{stageWipQty(stage)}</strong></span>
+                        {nextStage && (
+                            <span>Ready for {nextStage.stageName}: <strong style={{ color: '#0f766e' }}>{readyForNext}</strong></span>
+                        )}
+                        {additionalAvailable > 0 && (
+                            <span>Additional available: <strong style={{ color: '#7c3aed' }}>{additionalAvailable}</strong></span>
+                        )}
                     </div>
+                    {showStageConsume && (
+                        <div style={{ fontSize: '12px', color: '#334155', marginTop: 6 }}>
+                            <strong>Material Consumption</strong>
+                            {' · '}Stage Completed: {totalOutput}
+                            {' · '}Material consumed for: {stage.materialConsumedForQty ?? 0} pcs
+                            {' · '}Pending materials: {consumePending}
+                            {stage.lastMaterialConsumptionAt ? ` · Last material posting: ${new Date(stage.lastMaterialConsumptionAt).toLocaleDateString()}` : ''}
+                            <button
+                                type="button"
+                                onClick={async (e) => {
+                                    e.stopPropagation();
+                                    setConsumeBusy(true);
+                                    try {
+                                        const rows = await getStageMaterialConsumption(woId);
+                                        setConsumeRows(Array.isArray(rows) ? rows.filter((r) => String(r.remarks || '').includes(` / ${consumeType} /`) || String(r.voucherType || '') === 'Stage Consumption') : []);
+                                        setConsumeOpen(true);
+                                    } catch (err) { toast.error(err.response?.data?.message || err.message); }
+                                    finally { setConsumeBusy(false); }
+                                }}
+                                style={{ marginLeft: 8, padding: '2px 8px', borderRadius: 4, border: '1px solid #cbd5e1', background: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                            >{consumeBusy ? '…' : 'View Consumption'}</button>
+                        </div>
+                    )}
                     {isNaStage(stage) && (
                         <div style={{ fontSize: 12, fontWeight: 700, color: '#4338ca', marginTop: 4 }}>
                             Not Applicable — completed in original WO
                         </div>
                     )}
-                    {sequenceLocked && blocker && (
+                    {waiting && blocker && (
                         <div style={{ fontSize: 12, fontWeight: 700, color: '#92400e', marginTop: 4 }}>
-                            🔒 Locked — Complete previous stage first
-                            <span style={{ fontWeight: 600 }}> · Waiting for #{blocker.seq} {blocker.stageName}</span>
-                            <div style={{ fontWeight: 600, marginTop: 2 }}>{completeBeforeHint(stage, blocker)}</div>
+                            {completeBeforeHint(stage, blocker)}
                         </div>
                     )}
                 </div>
@@ -1830,15 +2820,17 @@ function StageCard({ stage, wo, woId, targetQty, canEdit, load, setWo }) {
 
                     {/* Aggregate Totals (Read Only) */}
                     <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', background: '#f9fafb', padding: '12px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
-                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Max Allowed</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#1e293b' }}>{maxAllowedOutput}</div></div>
+                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Available From Prev</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#7c3aed' }}>{availableFromPrev == null ? (targetQty || 0) : availableFromPrev}</div></div>
                         <div style={{ width: '1px', background: '#e5e7eb' }}></div>
-                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#fca5a5' }}>Prev. Pending</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#ef4444' }}>{pendingOutput}</div></div>
+                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Ready For Next</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#0f766e' }}>{readyForNext}</div></div>
+                        <div style={{ width: '1px', background: '#e5e7eb' }}></div>
+                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>WIP</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#f59e0b' }}>{stageWipQty(stage)}</div></div>
                         <div style={{ width: '1px', background: '#e5e7eb' }}></div>
                         <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Total Started</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#3b82f6' }}>{totalInput}</div></div>
                         <div style={{ width: '1px', background: '#e5e7eb' }}></div>
                         <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Total Completed</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#10b981' }}>{totalOutput}</div></div>
                         <div style={{ width: '1px', background: '#e5e7eb' }}></div>
-                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#f59e0b' }}>Total Pending</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#f59e0b' }}>{balanceInProcess}</div></div>
+                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#f59e0b' }}>Balance / Pending</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#f59e0b' }}>{balanceInProcess}</div></div>
                     </div>
 
                     {/* Execution Logs Table */}
@@ -1949,6 +2941,40 @@ function StageCard({ stage, wo, woId, targetQty, canEdit, load, setWo }) {
                     )}
                 </div>
             )}
+            {consumeOpen && (
+                <div
+                    onClick={() => setConsumeOpen(false)}
+                    style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', zIndex: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+                >
+                    <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, maxWidth: 720, width: '100%', maxHeight: '80vh', overflow: 'auto', padding: 18 }}>
+                        <div style={{ fontWeight: 800, marginBottom: 10 }}>{stage.stageName} — Material Consumption</div>
+                        <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>Read-only StockLedger. Printing or viewing does not change stock.</div>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                            <thead>
+                                <tr style={{ background: '#f8fafc' }}>
+                                    {['Date', 'Item', 'Qty', 'Remarks'].map((h) => (
+                                        <th key={h} style={{ textAlign: 'left', padding: '8px 6px' }}>{h}</th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {consumeRows.map((r) => (
+                                    <tr key={r._id} style={{ borderTop: '1px solid #e5e7eb' }}>
+                                        <td style={{ padding: '8px 6px' }}>{r.date ? new Date(r.date).toLocaleString() : '—'}</td>
+                                        <td style={{ padding: '8px 6px' }}>{r.itemCode} {r.itemName}</td>
+                                        <td style={{ padding: '8px 6px' }}>{r.outQty}</td>
+                                        <td style={{ padding: '8px 6px' }}>{r.remarks}</td>
+                                    </tr>
+                                ))}
+                                {!consumeRows.length && (
+                                    <tr><td colSpan={4} style={{ padding: 16, color: '#94a3b8' }}>No stage consumption posted yet.</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                        <button type="button" onClick={() => setConsumeOpen(false)} style={{ marginTop: 12, padding: '8px 12px', borderRadius: 6, border: '1px solid #cbd5e1', background: '#fff', fontWeight: 700, cursor: 'pointer' }}>Close</button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
@@ -1975,7 +3001,8 @@ function QcStagePanel({ stage, wo, woId, canEdit, load }) {
     const display = displayStageStatus(stage);
     const sc = STAGE_STATUS_COLORS[display] || STAGE_STATUS_COLORS[stage.status] || STAGE_STATUS_COLORS['Not Started'];
     const blocker = getSequenceBlocker(wo?.stages, stage.seq);
-    const editable = canEdit && !blocker;
+    const waiting = blocker?.reason === 'waiting';
+    const editable = canEdit && !waiting && !isNaStage(stage);
     const [checklist, setChecklist] = useState(stage.checklist || []);
     const [testData, setTestData] = useState(stage.testData || {});
     const [saving, setSaving] = useState(false);
@@ -2193,6 +3220,10 @@ function WipTab({ wo }) {
 
 // ─── Material History Tab ───────────────────────────────────────────────────
 function MaterialHistoryTab({ wo }) {
+    const { selectedCompany } = useCompany();
+    const { user } = useAuth();
+    const navigate = useNavigate();
+    const [historyIssue, setHistoryIssue] = useState(null);
     const lateEvents = [...(wo.materialEventHistory || [])].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     // Flatten all production logs from all stages that have missingComponents
     const history = (wo.stages || []).flatMap(s =>
@@ -2208,6 +3239,36 @@ function MaterialHistoryTab({ wo }) {
 
     return (
         <div style={{ maxWidth: '900px' }}>
+            <h2 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 700, color: '#1e293b' }}>Material Issue batches</h2>
+            <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px', lineHeight: '1.5' }}>
+                Posted late-material issues. Print is read-only and does not deduct stock.
+            </p>
+            {(wo.lateMaterialIssueBatches || []).length === 0 ? (
+                <div style={{ background: '#ffffff', border: '1px dashed #cbd5e1', borderRadius: '12px', padding: '24px', textAlign: 'center', marginBottom: 28 }}>
+                    <div style={{ fontSize: '13px', color: '#94a3b8' }}>No material issue batches posted on this Work Order.</div>
+                </div>
+            ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: 28 }}>
+                    {(wo.lateMaterialIssueBatches || []).map((b) => (
+                        <div key={b._id || b.issueNo} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <div>
+                                <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{b.issueNo} · {(b.lines || []).length} Items · {b.status || 'Issued'}{b.supplementaryWoNumber ? ` · ${b.supplementaryWoNumber}` : ''}</div>
+                                <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>{b.issueDate ? new Date(b.issueDate).toLocaleString() : '—'}</div>
+                            </div>
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                <button type="button" onClick={() => setHistoryIssue(b)} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #cbd5e1', background: '#fff', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>View Issue</button>
+                                <button type="button" onClick={() => printMaterialIssueNote(b, wo, selectedCompany, user?.name)} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #1d4ed8', background: '#fff', color: '#1d4ed8', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>Print Issue Note</button>
+                                {b.supplementaryWorkOrderId && (
+                                    <button type="button" onClick={() => navigate(PATHS.PRODUCTION.WO_DETAIL(b.supplementaryWorkOrderId._id || b.supplementaryWorkOrderId))} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #4338ca', background: '#eef2ff', color: '#3730a3', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>Open Supplementary WO</button>
+                                )}
+                                {(b.supplementaryWorkOrderId || b.supplementaryWoNumber) && (
+                                    <button type="button" onClick={() => printSupplementaryWorkOrder({ _id: b.supplementaryWorkOrderId?._id || b.supplementaryWorkOrderId, woNumber: b.supplementaryWoNumber }, wo, selectedCompany)} style={{ padding: '6px 10px', borderRadius: 6, border: 'none', background: '#1d4ed8', color: '#fff', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>Print Supplementary WO</button>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
             <h2 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 700, color: '#1e293b' }}>Late material history</h2>
             <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px', lineHeight: '1.5' }}>
                 Append-only log of deferred, added-later, restored, and supplementary events. Prior rows are never overwritten.
@@ -2306,6 +3367,16 @@ function MaterialHistoryTab({ wo }) {
                         </div>
                     ))}
                 </div>
+            )}
+            {historyIssue?.issueNo && (
+                <MaterialIssueSuccessModal
+                    batch={historyIssue}
+                    wo={wo}
+                    startViewing
+                    title="Material Issue"
+                    onClose={() => setHistoryIssue(null)}
+                    onPrint={() => printMaterialIssueNote(historyIssue, wo, selectedCompany, user?.name)}
+                />
             )}
         </div>
     );

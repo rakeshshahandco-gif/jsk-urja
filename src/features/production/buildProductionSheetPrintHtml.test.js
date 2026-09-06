@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
     buildProductionSheetPrintHtml,
     buildSupplementaryWorkOrderPrintHtml,
+    buildLateMaterialIssueNoteHtml,
     isSectionWorkOrderForPrint,
     isSupplementaryWorkOrderForPrint,
 } from './buildProductionSheetPrintHtml.js';
@@ -137,13 +138,14 @@ describe('Print Supplementary Work Order HTML — read-only generator', () => {
         ],
     };
 
-    it('prints SUP heading, links, component qty, start-from, and signature — not a normal WO', () => {
+    it('prints missing-material instruction without process stages', () => {
         const html = buildSupplementaryWorkOrderPrintHtml({
-            wo: supWo,
+            wo: { ...supWo, materialIssueNo: 'MI-WO-2026-2027-00002-S2-001' },
             companyName: 'JSK URJA',
             sourceSectionWo: sourceSection,
         });
         assert.match(html, /SUPPLEMENTARY WORK ORDER/);
+        assert.match(html, /Purpose: Add late-received missing components to existing production/);
         assert.equal(html.includes('SECTION PRODUCTION SHEET'), false);
         assert.match(html, /WO-2026-2027-00002-S2-SUP1/);
         assert.match(html, /WO-2026-2027-00002/);
@@ -151,29 +153,47 @@ describe('Print Supplementary Work Order HTML — read-only generator', () => {
         assert.match(html, /DAUGHTER BOARD/);
         assert.match(html, /MB10F/);
         assert.match(html, />40</);
-        assert.match(html, /TH Mounting/);
         assert.match(html, /Pending material received later/);
-        assert.match(html, /Remaining To Resolve/);
-        assert.match(html, /Prepared By/);
+        assert.match(html, /MI-WO-2026-2027-00002-S2-001/);
+        assert.match(html, /Store \/ Issued By/);
+        assert.match(html, /Received By/);
+        assert.match(html, /Production Supervisor/);
         assert.match(html, /Production In-Charge/);
-        assert.match(html, /does not create separate Finished Goods/);
-        assert.match(html, /Not Applicable — completed in original WO/);
-        assert.match(html, /In Progress/);
+        assert.match(html, /Signature \/ Date/);
+        assert.match(html, /Qty Issued/);
+        assert.equal(html.includes('Process Details'), false);
+        assert.equal(html.includes('Start From Stage'), false);
+        assert.equal(html.includes('TH Mounting'), false);
         assert.equal(html.includes('Production Sheet'), false);
     });
+});
 
-    it('does not treat allocated qty as completed in the traceability block', () => {
-        const html = buildSupplementaryWorkOrderPrintHtml({
-            wo: supWo,
-            companyName: 'JSK',
-            sourceSectionWo: sourceSection,
+describe('Late Material Issue Note print is read-only', () => {
+    it('renders heading and issued lines without any write API', () => {
+        const html = buildLateMaterialIssueNoteHtml({
+            companyName: 'JSK URJA',
+            wo: daughterBoard,
+            batch: {
+                issueNo: 'MI-WO-2026-2027-00011-S2-001',
+                issueDate: '2026-09-04',
+                financialYear: '2026-2027',
+                parentWoNumber: 'WO-2026-2027-00011',
+                sectionWoNumber: 'WO-2026-2027-00011-S2',
+                sectionName: 'DAUGHTER BOARD',
+                status: 'Posted',
+                remarks: 'Received together',
+                lines: [
+                    { itemCode: 'A', itemName: 'Comp A', requiredQty: 10, qtyIssued: 10, remainingAfter: 0 },
+                    { itemCode: 'B', itemName: 'Comp B', requiredQty: 40, qtyIssued: 40, remainingAfter: 0 },
+                ],
+            },
         });
-        assert.match(html, /Supplementary Allocated Qty/);
-        assert.match(html, /Supplementary Completed Qty/);
-        const completedIdx = html.indexOf('Supplementary Completed Qty');
-        const tableStart = html.indexOf('<tr>', completedIdx);
-        const firstDataRow = html.slice(tableStart, html.indexOf('</table>', tableStart));
-        assert.match(firstDataRow, />40</);
-        assert.match(firstDataRow, />0</);
+        assert.match(html, /MATERIAL ISSUE NOTE/);
+        assert.match(html, />Sr\.</);
+        assert.match(html, /MI-WO-2026-2027-00011-S2-001/);
+        assert.match(html, /printing does not change inventory/);
+        assert.match(html, /Qty Issued/);
+        assert.equal(html.includes('fetch('), false);
+        assert.equal(html.includes('/api/'), false);
     });
 });
