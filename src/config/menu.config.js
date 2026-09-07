@@ -115,16 +115,9 @@ export const menuConfig = [
                 permission: 'data_extractor.extractor.view',
                 children: [
                     {
-                        id: 'data-extractor-simple-lead',
-                        title: 'Simple Lead Search',
-                        path: PATHS.DATA_EXTRACTOR.SIMPLE_LEAD_SEARCH,
-                        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
-                        permission: 'data_extractor.assisted_capture.start',
-                    },
-                    {
                         id: 'data-extractor-quick',
-                        title: 'Quick Search',
-                        path: PATHS.DATA_EXTRACTOR.QUICK_SEARCH,
+                        title: 'Search & Extract',
+                        path: PATHS.DATA_EXTRACTOR.SIMPLE_LEAD_SEARCH,
                         roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
                         permission: 'data_extractor.extractor.search',
                     },
@@ -172,8 +165,8 @@ export const menuConfig = [
                     },
                     {
                         id: 'data-extractor-home',
-                        title: 'Market Finder',
-                        path: PATHS.DATA_EXTRACTOR.KEYWORD_SEARCH,
+                        title: 'Data Extractor',
+                        path: PATHS.DATA_EXTRACTOR.SIMPLE_LEAD_SEARCH,
                         roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
                         permission: 'data_extractor.extractor.view',
                     },

@@ -9,7 +9,7 @@ const BUSY_SESSION_STATUSES = Object.freeze(['opening', 'capturing', 'agent_assi
 
 const SESSION_UI_LABELS = Object.freeze({
     created: 'Created',
-    queued: 'Queued — waiting for agent',
+    queued: 'Waiting for discovery service',
     agent_assigned: 'Agent assigned',
     opening: 'Opening Google',
     awaiting_user: 'Google Ready',
@@ -63,11 +63,17 @@ export async function touchAgentPresence(companyId, agentTokenId, agentInstanceI
     };
 }
 
+const DISPLAY_LABELS = Object.freeze({
+    ready: 'Discovery Agent: Ready',
+    busy: 'Discovery Agent: Busy',
+    offline: 'Discovery Agent: Offline',
+    error: 'Discovery Agent: Error',
+});
+
 /**
  * Company-scoped agent status for Simple Lead Search UI.
- * - offline: no active token lastUsedAt within 45s
- * - busy: session in opening | capturing | agent_assigned
- * - connected: otherwise
+ * Ready = active token lastUsedAt within 45s and not in a busy session.
+ * Stale presence must not remain falsely Ready.
  */
 export async function getAgentStatusForCompany(companyId, { sessionId } = {}) {
     requireObjectId(companyId, 'Company');
@@ -94,7 +100,7 @@ export async function getAgentStatusForCompany(companyId, { sessionId } = {}) {
 
     let status = 'offline';
     if (activeToken) {
-        status = busySession ? 'busy' : 'connected';
+        status = busySession ? 'busy' : 'ready';
     }
 
     let sessionLabel = null;
@@ -102,18 +108,25 @@ export async function getAgentStatusForCompany(companyId, { sessionId } = {}) {
     if (sessionId) {
         requireObjectId(sessionId, 'Assisted capture session');
         const session = await AssistedCaptureSession.findOne({ _id: sessionId, companyId })
-            .select('_id status')
+            .select('_id status failCode')
             .lean();
         if (session) {
             sessionStatus = session.status;
             sessionLabel = SESSION_UI_LABELS[session.status] || session.status;
+            if (status === 'offline' && session.status === 'failed' && session.failCode) {
+                status = 'error';
+            }
         }
     }
 
+    const displayStatus = status.toUpperCase();
     return {
         status,
-        online: status !== 'offline',
+        displayStatus,
+        displayLabel: DISPLAY_LABELS[status] || DISPLAY_LABELS.offline,
+        online: status === 'ready' || status === 'busy',
         busy: status === 'busy',
+        connected: status === 'ready' || status === 'busy',
         lastUsedAt: activeToken?.lastUsedAt || null,
         agentTokenId: activeToken ? String(activeToken._id) : null,
         activeBusySessionId: busySession ? String(busySession._id) : null,

@@ -50,6 +50,10 @@ import {
     persistSessionExportArtifacts,
     getSessionExportDownloadUrl,
 } from '../services/dataExtractor/searchCampaign/simpleLeadSearch/simpleLeadSearch.exportS3.service.js';
+import {
+    previewCrmLeadFromCapture,
+    createCrmLeadFromCapture,
+} from '../services/dataExtractor/searchCampaign/simpleLeadSearch/simpleLeadSearch.createCrmLead.service.js';
 
 function sendSafeError(res, err) {
     const status = Number(err?.statusCode) || (err?.name === 'ValidationError' ? 400 : 500);
@@ -380,6 +384,44 @@ export const liveProcessingActivity = withSafeErrors(async (req, res) => {
         query: req.query || {},
     });
     res.send(new ApiResponse(200, data, 'Live processing activity'));
+});
+
+export const previewCapturedCrmLead = withSafeErrors(async (req, res) => {
+    const data = await previewCrmLeadFromCapture({
+        companyId: requireCompany(req),
+        user: req.user,
+        sessionId: req.params.sessionId,
+        captureId: req.params.captureId,
+        genuinenessId: req.query?.genuinenessId,
+        qualificationId: req.query?.qualificationId,
+        enrichmentId: req.query?.enrichmentId,
+    });
+    res.send(new ApiResponse(200, data, 'Create Lead preview'));
+});
+
+export const createCapturedCrmLead = withSafeErrors(async (req, res) => {
+    try {
+        const data = await createCrmLeadFromCapture({
+            companyId: requireCompany(req),
+            user: req.user,
+            sessionId: req.params.sessionId,
+            captureId: req.params.captureId,
+            genuinenessId: req.body?.genuinenessId,
+            qualificationId: req.body?.qualificationId,
+            enrichmentId: req.body?.enrichmentId,
+            body: req.body || {},
+        });
+        res.status(201).send(new ApiResponse(201, data, data.message || 'LEAD CREATED SUCCESSFULLY'));
+    } catch (err) {
+        if (err?.statusCode === 409) {
+            return res.status(409).send(new ApiResponse(409, {
+                created: false,
+                blocked: true,
+                message: err.message,
+            }, err.message));
+        }
+        throw err;
+    }
 });
 
 export const campaignCapturedData = withSafeErrors(async (req, res) => {

@@ -80,7 +80,6 @@ function mapCaptureQualificationStatus(decision, failed = false) {
 function campaignHints(campaign = {}) {
     const product = campaign.targetIndustry
         || (Array.isArray(campaign.targetProducts) && campaign.targetProducts[0])
-        || campaign.name
         || '';
     const cityNorm = normalizeCampaignCity(campaign.city || '');
     return {

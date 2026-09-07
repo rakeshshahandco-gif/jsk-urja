@@ -1,0 +1,8 @@
+node_modules/
+profiles/
+.env
+.env.local
+*.log
+backup/
+.env.production.local
+.env.*.local

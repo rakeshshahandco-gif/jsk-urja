@@ -1025,6 +1025,7 @@ export async function stopAutoProcessing({ companyId, user, sessionId, body = {}
     const session = await loadOwnedSession(cid, sessionId);
     const ap = ensureAp(session);
     const stopJobs = parseBool(body.stopJobs, true);
+    const alreadyStopped = ap.status === 'stopped' && ap.enabled === false;
 
     ap.status = 'stopped';
     ap.currentStage = 'done';
@@ -1053,7 +1054,13 @@ export async function stopAutoProcessing({ companyId, user, sessionId, body = {}
 
     await refreshCounts(session);
     await session.save();
-    return { autoProcessing: progressView(session.toObject()) };
+    return {
+        autoProcessing: progressView(session.toObject()),
+        alreadyStopped,
+        message: alreadyStopped
+            ? 'All processing is already stopped.'
+            : 'Automatic processing stopped. Completed work is preserved.',
+    };
 }
 
 export async function requestFlushAutoProcessing({ companyId, user, sessionId }) {

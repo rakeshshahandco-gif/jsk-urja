@@ -44,6 +44,13 @@ const rawCaptureSchema = new mongoose.Schema(
         qualificationStatus: { type: String, enum: RAW_CAPTURE_QUALIFICATION_STATUSES, default: 'not_started' },
         duplicateStatus: { type: String, enum: RAW_CAPTURE_DUPLICATE_STATUSES, default: 'unchecked' },
         promotedExtractedLeadId: { type: mongoose.Schema.Types.ObjectId, default: null },
+        crmStatus: {
+            type: String,
+            enum: ['not_in_crm', 'lead_created', 'existing_lead', 'existing_customer'],
+            default: 'not_in_crm',
+        },
+        crmLeadId: { type: mongoose.Schema.Types.ObjectId, ref: 'Lead', default: null },
+        crmCustomerId: { type: mongoose.Schema.Types.ObjectId, default: null },
         archivedAt: { type: Date, default: null },
         archivedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
         updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },

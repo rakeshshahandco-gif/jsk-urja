@@ -219,6 +219,8 @@ router.post('/social/x/extract', checkAnyPermission('data_extractor.assisted_cap
 router.post('/social/x/test-public-url', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.xTestPublicUrl);
 router.get('/simple-lead-search/sessions/:sessionId/live-activity', checkPermission('data_extractor.assisted_capture.view'), simpleLeadSearchController.liveProcessingActivity);
 router.get('/simple-lead-search/sessions/:sessionId/captured-data', checkPermission('data_extractor.raw_capture.view'), simpleLeadSearchController.campaignCapturedData);
+router.get('/simple-lead-search/sessions/:sessionId/captured-data/:captureId/crm-lead-preview', checkPermission('data_extractor.raw_capture.view'), simpleLeadSearchController.previewCapturedCrmLead);
+router.post('/simple-lead-search/sessions/:sessionId/captured-data/:captureId/create-crm-lead', checkPermission('data_extractor.assisted_capture.start'), simpleLeadSearchController.createCapturedCrmLead);
 router.get('/simple-lead-search/sessions/:sessionId/export-all-current', checkPermission('data_extractor.raw_capture.view'), simpleLeadSearchController.exportAllCurrentData);
 router.post('/simple-lead-search/sessions/:sessionId/export-artifacts', checkPermission('data_extractor.raw_capture.view'), simpleLeadSearchController.persistExportArtifacts);
 router.get('/simple-lead-search/sessions/:sessionId/export-artifacts/download', checkPermission('data_extractor.raw_capture.view'), simpleLeadSearchController.downloadExportArtifact);

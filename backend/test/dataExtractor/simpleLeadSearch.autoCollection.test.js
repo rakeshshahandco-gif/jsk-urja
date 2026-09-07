@@ -19,6 +19,9 @@ import {
     tickAutoCollection,
     readSettings,
     progressView,
+    isPageOutcomeFail,
+    parsePageKindFromMessage,
+    MAX_UNSUPPORTED_PAGE_RETRIES,
 } from '../../src/services/dataExtractor/searchCampaign/simpleLeadSearch/simpleLeadSearch.autoCollection.service.js';
 
 const MONGO_URI = process.env.SC_MONGO_URI || process.env.MONGODB_URL || 'mongodb://127.0.0.1:27017/crm_test';
@@ -49,13 +52,22 @@ describe('SLS Auto Collection helpers', () => {
         assert.equal(d.maxSafetyPagesPerQuery, 30);
     });
 
-    it('supports optional Fixed Target mode (25–500 raw)', () => {
+    it('supports optional Manual Limit without snapping to 25/50/100', () => {
         const s = readSettings({ collectionMode: 'fixed_target', requestedCaptureTarget: 250 });
         assert.equal(s.collectionMode, 'fixed_target');
         assert.equal(s.requestedCaptureTarget, 250);
-        const inferred = readSettings({ requestedCaptureTarget: 100 });
-        assert.equal(inferred.collectionMode, 'fixed_target');
-        assert.equal(inferred.requestedCaptureTarget, 100);
+        const manual150 = readSettings({ collectionMode: 'manual', requestedCaptureTarget: 150 });
+        assert.equal(manual150.collectionMode, 'fixed_target');
+        assert.equal(manual150.requestedCaptureTarget, 150);
+        const leftover100 = readSettings({ requestedCaptureTarget: 100 });
+        assert.equal(leftover100.collectionMode, 'unlimited');
+        assert.equal(leftover100.requestedCaptureTarget, 0);
+        const missingMode = readSettings({});
+        assert.equal(missingMode.collectionMode, 'unlimited');
+        assert.equal(missingMode.requestedCaptureTarget, 0);
+        const manualWithoutTarget = readSettings({ collectionMode: 'manual' });
+        assert.equal(manualWithoutTarget.collectionMode, 'unlimited');
+        assert.equal(manualWithoutTarget.requestedCaptureTarget, 0);
     });
 
     it('never enables unique-company stop rules from body', () => {
@@ -106,6 +118,52 @@ describe('SLS Auto Collection helpers', () => {
         assert.equal(view.pagesInWorkerCycle, 5);
         assert.equal(view.queriesCompleted, 0);
         assert.equal(view.totalApprovedQueries, 8);
+    });
+
+    it('detects Page kind: unsupported as a page-outcome fail, including ignored-fail leftover', () => {
+        assert.equal(parsePageKindFromMessage('Page kind: unsupported'), 'unsupported');
+        assert.equal(parsePageKindFromMessage('Page kind: captcha'), 'captcha');
+        assert.equal(isPageOutcomeFail({
+            failCode: 'UNSUPPORTED_LAYOUT',
+            failMessage: 'Page kind: unsupported',
+        }), true);
+        assert.equal(isPageOutcomeFail({
+            autoCollection: {
+                lastErrorCode: 'agent_fail_ignored_after_accepted_ingest',
+                lastErrorMessage: 'Page kind: unsupported',
+            },
+        }), true);
+        assert.equal(isPageOutcomeFail({
+            autoCollection: {
+                lastErrorCode: 'unsupported_page_retry',
+                lastErrorMessage: 'Waiting on provider / retrying page 12 (attempt 1/2).',
+            },
+        }), false);
+        assert.equal(isPageOutcomeFail({
+            failCode: 'ASSISTED_SESSION_FAILED',
+            failMessage: 'bookkeeping',
+        }), false);
+    });
+
+    it('progressView exposes query progress label and retry owner status', () => {
+        const view = progressView({
+            status: 'awaiting_user', googlePageIndex: 12, acceptedCount: 110,
+            autoCollection: {
+                status: 'running', phase: 'await_capture', collectionMode: 'unlimited',
+                lastQueryIndex: 1, queriesCompleted: 0, totalApprovedQueries: 14,
+                pauseReason: 'unsupported_page_retry', providerState: 'Retry',
+                discoveryStatus: 'running', lastDiscoveryAt: new Date(),
+                lastNewResultAt: new Date('2026-09-06T12:15:52.000Z'),
+                lastPageAdvancementAt: new Date('2026-09-06T12:15:52.000Z'),
+                summary: {},
+            },
+        }, { queryIndex: 1, queryTotal: 14, googlePage: 12, totalCampaignUniqueRecords: 110 });
+        assert.equal(view.queriesCompleted, 0);
+        assert.equal(view.pendingQueries, 13);
+        assert.match(view.queryProgressLabel, /Query 1\/14 — Page 12/);
+        assert.equal(view.providerState, 'Retry');
+        assert.equal(view.discoveryDisplayStatus, 'Waiting on provider / retrying');
+        assert.match(view.uiLabel, /Waiting on provider/);
     });
 
     it('progressView labels manual pause', () => {
@@ -187,6 +245,11 @@ describe('SLS Auto Collection orchestration', () => {
         assert.equal(stopped.autoCollection.discoveryStatus, 'stopped');
         assert.ok(stopped.autoCollection.ownerStoppedAt);
         assert.equal(stopped.preserved.rawCaptures, true);
+        assert.equal(await Lead.countDocuments({ companyId }), leadsBefore);
+        const again = await stopAutoCollection({ companyId, user, sessionId });
+        assert.equal(again.alreadyStopped, true);
+        assert.match(String(again.message || ''), /already stopped/i);
+        assert.equal(again.preserved.rawCaptures, true);
         assert.equal(await Lead.countDocuments({ companyId }), leadsBefore);
     });
 
@@ -336,5 +399,113 @@ describe('SLS Auto Collection orchestration', () => {
         assert.notEqual(ticked.autoCollection.status, 'completed');
         assert.notEqual(ticked.autoCollection.discoveryStatus, 'target_reached');
         await stopAutoCollection({ companyId, user, sessionId });
+    });
+
+    it('Page kind: captcha pauses for human verification instead of retrying forever', async () => {
+        await AssistedCaptureSession.updateOne({ _id: sessionId }, {
+            $set: {
+                status: 'awaiting_user',
+                acceptedCount: 110,
+                googlePageIndex: 12,
+                failCode: 'UNSUPPORTED_LAYOUT',
+                failMessage: 'Page kind: captcha',
+                pendingCaptureStatus: 'none',
+                'autoCollection.status': 'running',
+                'autoCollection.enabled': true,
+                'autoCollection.phase': 'await_capture',
+                'autoCollection.collectionMode': 'unlimited',
+                'autoCollection.lastErrorCode': 'UNSUPPORTED_LAYOUT',
+                'autoCollection.lastErrorMessage': 'Page kind: captcha',
+                'autoCollection.discoveryStatus': 'running',
+                'autoCollection.ownerStoppedAt': null,
+                'autoCollection.stopRequested': false,
+                'autoCollection.summary.stopReason': '',
+                'autoCollection.nextActionAt': new Date(Date.now() - 1000),
+                'autoCollection.tickLockUntil': null,
+            },
+            $unset: { failedAt: 1 },
+        });
+        const ticked = await tickAutoCollection({ companyId, user, sessionId });
+        assert.equal(ticked.autoCollection.status, 'paused_manual');
+        assert.equal(ticked.autoCollection.providerState, 'Human Verification');
+        assert.match(String(ticked.autoCollection.lastErrorMessage || ''), /Human verification required/i);
+        assert.equal(Number(ticked.autoCollection?.rawRecordsCaptured || ticked.session?.acceptedCount || 0) >= 110, true);
+    });
+
+    it('mid-run Page kind: unsupported with accepted>0 retries then does not stay on the same page forever', async () => {
+        await AssistedCaptureSession.updateOne({ _id: sessionId }, {
+            $set: {
+                status: 'awaiting_user',
+                acceptedCount: 110,
+                googlePageIndex: 12,
+                failCode: 'UNSUPPORTED_LAYOUT',
+                failMessage: 'Page kind: unsupported',
+                pendingCaptureStatus: 'none',
+                'autoCollection.status': 'running',
+                'autoCollection.enabled': true,
+                'autoCollection.phase': 'await_capture',
+                'autoCollection.collectionMode': 'unlimited',
+                'autoCollection.pageCollectionMode': 'until_no_more',
+                'autoCollection.requestedCaptureTarget': 0,
+                'autoCollection.rawRecordsCaptured': 110,
+                'autoCollection.lastSuccessfullyCapturedPage': 11,
+                'autoCollection.pagesCapturedThisQuery': 11,
+                'autoCollection.pagesProcessedTotal': 11,
+                'autoCollection.queriesProcessedTotal': 0,
+                'autoCollection.queriesCompleted': 0,
+                'autoCollection.totalApprovedQueries': 14,
+                'autoCollection.lastQueryIndex': 1,
+                'autoCollection.unsupportedRetryCount': 0,
+                'autoCollection.unsupportedPageKey': '',
+                'autoCollection.lastErrorCode': 'agent_fail_ignored_after_accepted_ingest',
+                'autoCollection.lastErrorMessage': 'Page kind: unsupported',
+                'autoCollection.discoveryStatus': 'running',
+                'autoCollection.ownerStoppedAt': null,
+                'autoCollection.stopRequested': false,
+                'autoCollection.summary.stopReason': '',
+                'autoCollection.nextActionAt': new Date(Date.now() - 1000),
+                'autoCollection.tickLockUntil': null,
+                'autoCollection.lastDiscoveryAt': new Date(Date.now() - 180000),
+            },
+            $unset: { failedAt: 1 },
+        });
+        const first = await tickAutoCollection({ companyId, user, sessionId });
+        assert.equal(first.autoCollection.status, 'running');
+        assert.notEqual(first.autoCollection.status, 'completed');
+        assert.equal(Number(first.autoCollection.queriesCompleted || 0), 0);
+        assert.ok(Number(first.session?.acceptedCount || first.autoCollection?.rawRecordsCaptured || 0) >= 110);
+        assert.equal(first.autoCollection.providerState, 'Retry');
+        assert.match(String(first.autoCollection.lastErrorMessage || ''), /Waiting on provider|retrying/i);
+
+        await AssistedCaptureSession.updateOne({ _id: sessionId }, {
+            $set: {
+                status: 'awaiting_user',
+                acceptedCount: 110,
+                googlePageIndex: 12,
+                failCode: 'UNSUPPORTED_LAYOUT',
+                failMessage: 'Page kind: unsupported',
+                pendingCaptureStatus: 'none',
+                'autoCollection.status': 'running',
+                'autoCollection.enabled': true,
+                'autoCollection.phase': 'await_capture',
+                'autoCollection.unsupportedRetryCount': MAX_UNSUPPORTED_PAGE_RETRIES,
+                'autoCollection.unsupportedPageKey': `${(await AssistedCaptureSession.findById(sessionId).select('queryId').lean())?.queryId}:12`,
+                'autoCollection.lastErrorCode': 'UNSUPPORTED_LAYOUT',
+                'autoCollection.lastErrorMessage': 'Page kind: unsupported',
+                'autoCollection.ownerStoppedAt': null,
+                'autoCollection.stopRequested': false,
+                'autoCollection.nextActionAt': new Date(Date.now() - 1000),
+                'autoCollection.tickLockUntil': null,
+            },
+        });
+        const advanced = await tickAutoCollection({ companyId, user, sessionId });
+        const completed = Number(advanced.autoCollection?.queriesCompleted || 0);
+        const phase = String(advanced.autoCollection?.phase || '');
+        const lastQuery = Number(advanced.autoCollection?.lastQueryIndex || 0);
+        assert.ok(
+            completed >= 1 || lastQuery >= 2 || ['next_query', 'await_query_ready', 'complete_query'].includes(phase),
+            `expected query advancement, got completed=${completed} lastQuery=${lastQuery} phase=${phase}`,
+        );
+        assert.ok(Number(advanced.autoCollection?.rawRecordsCaptured || advanced.session?.acceptedCount || 0) >= 110);
     });
 });

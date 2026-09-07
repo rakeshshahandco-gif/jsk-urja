@@ -141,11 +141,45 @@ export function isIndependentlyVerifiedDecision(gen) {
     return decision === 'verified_genuine' || decision === 'likely_genuine';
 }
 
+function manufacturerTypeConfirmed(qualification = {}, enrichment = {}) {
+    const match = String(qualification.businessTypeMatch || '');
+    if (match !== 'yes') return false;
+    const detected = [
+        qualification.detectedBusinessType,
+        qualification.businessType,
+        ...(Array.isArray(qualification.detectedBusinessTypes) ? qualification.detectedBusinessTypes : []),
+        enrichment.businessType,
+        enrichment.manufacturerEvidence,
+        qualification.manufacturerEvidence,
+    ].map((s) => String(s || '')).join(' ');
+    return /manufacturer|oem|odm|factory/i.test(detected);
+}
+
 /**
- * Shared verified-only eligibility for:
- * Verified Data tab, Latest Verified Results, Verified KPI, Final Verified Excel.
- * Only individual COMPANY entities. Directory/marketplace/association/category
- * pages stay discovery sources and do not count as unique verified companies.
+ * Industry + requested business-type gate for Verified Relevant.
+ * Genuineness alone is never enough.
+ */
+export function isIndustryRelevantForVerifiedProspect(qualification = {}, enrichment = {}) {
+    const strength = String(qualification?.productMatchStrength || '');
+    if (!strength) return false;
+    if (/unrelated|job\/course|directory only|weak keyword/i.test(strength)) return false;
+    if (!/strong product match/i.test(strength)) return false;
+    if (qualification.systemDecision === 'rejected') return false;
+    if (qualification.businessType === 'directory_marketplace') return false;
+
+    const requested = Array.isArray(qualification.requestedBusinessTypes)
+        ? qualification.requestedBusinessTypes
+        : (qualification.requestedBusinessType ? [qualification.requestedBusinessType] : []);
+    const manufacturerRequested = requested.some((t) => /manufacturer/i.test(String(t)));
+    if (manufacturerRequested) return manufacturerTypeConfirmed(qualification, enrichment);
+    return qualification.businessTypeMatch !== 'no';
+}
+
+/**
+ * Shared verified-relevant eligibility for:
+ * Verified Relevant tab, Latest Verified Results, Verified KPI, Final Verified Excel.
+ * Requires genuine business AND strong industry match AND requested type support.
+ * Directory/marketplace/association/category pages stay discovery sources.
  */
 export function isEligibleForFinalVerified(genuineness, enrichment = null, qualification = null) {
     if (!genuineness) return false;
@@ -159,8 +193,9 @@ export function isEligibleForFinalVerified(genuineness, enrichment = null, quali
     }
 
     const decision = String(genuineness.systemDecision || genuineness.genuinenessDecision || '');
-    if (decision === 'verified_genuine' || decision === 'likely_genuine') return true;
-    return false;
+    const genuine = decision === 'verified_genuine' || decision === 'likely_genuine';
+    if (!genuine) return false;
+    return isIndustryRelevantForVerifiedProspect(qualification || {}, enrichment || {});
 }
 
 export function displayVerificationStatus(gen, { isDirectory = false } = {}) {
@@ -487,6 +522,8 @@ function mapCanonicalCompany(group, index) {
     }
     const merged = mergeContactsForDuplicateGroup(enrichments);
     const cs = merged.contactSummary || {};
+    const quals = group.map((a) => a.qualification).filter(Boolean);
+    const bestQual = quals.slice().sort((a, b) => (Number(b.relevanceScore) || 0) - (Number(a.relevanceScore) || 0))[0] || {};
     const isDirectory = group.some((a) => a.isDirectory)
         || String(bestGen?.systemDecision || '') === 'directory_or_marketplace_only';
     const status = displayVerificationStatus(bestGen, { isDirectory });
@@ -582,7 +619,13 @@ function mapCanonicalCompany(group, index) {
         conflictingEvidence: bestGen?.conflictingEvidence || [],
         city: primaryEn.city || '',
         state: primaryEn.state || '',
-        businessType: primaryEn.businessType || '',
+        businessType: bestQual.detectedBusinessType || bestQual.businessType || primaryEn.businessType || '',
+        productMatchStrength: bestQual.productMatchStrength || '',
+        businessTypeMatch: bestQual.businessTypeMatch || '',
+        locationMatch: bestQual.locationMatch || '',
+        locationClassification: bestQual.locationClassification || '',
+        relevanceScore: bestQual.relevanceScore ?? null,
+        manufacturerEvidence: primaryEn.manufacturerEvidence || bestQual.manufacturerEvidence || '',
         updatedAt: bestGen?.updatedAt || null,
         createdAt: bestGen?.createdAt || null,
     };

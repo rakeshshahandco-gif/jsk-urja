@@ -102,17 +102,17 @@ function contactFoundLabel(enrich) {
 function locationLabel(qual) {
     if (!qual) return '';
     const match = String(qual.locationMatch || '');
-    const state = String(qual.selectedState || qual.state || '').trim();
-    if (match === 'match') return state ? `${state} match` : 'Location match';
-    if (match === 'mismatch') return 'Location mismatch';
-    if (match === 'unknown' || match === 'partial') return 'Location not confirmed';
+    if (match === 'match') return 'Location match';
+    if (match === 'mismatch') return 'Outside target';
+    if (match === 'partial') return 'Serves target';
+    if (match === 'unknown') return 'Location not confirmed';
     return '';
 }
 
 function qualifyResultLabel(qual) {
     if (!qual) return '';
     const dec = String(qual.systemDecision || '');
-    if (REJECTED_QUAL.has(dec)) return 'Not relevant';
+    if (REJECTED_QUAL.has(dec) && !String(qual.decisionReason || '').includes('Location Mismatch')) return 'Not relevant';
     const bt = String(qual.businessType || qual.matchedBusinessType || '').replace(/_/g, ' ');
     const loc = locationLabel(qual);
     const prod = String(qual.productMatchStrength || '');

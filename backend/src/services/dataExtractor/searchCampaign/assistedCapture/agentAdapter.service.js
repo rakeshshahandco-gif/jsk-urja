@@ -9,7 +9,11 @@ import { submitAssistedCaptureEvent } from './event.service.js';
 import { assertSessionTokenHeader, hashSessionToken, issueSessionToken } from './sessionToken.util.js';
 
 const CHINA_ASSISTED_RECLAIM_SOURCES = Object.freeze(['1688', 'baidu', 'sogou', 'so360']);
-const RECLAIMABLE_STATUSES = Object.freeze(['manual_action_required', 'opening', 'awaiting_user']);
+const RECLAIMABLE_STATUSES = Object.freeze(['manual_action_required', 'opening', 'awaiting_user', 'agent_assigned']);
+/** Queued campaigns wait for the discovery service instead of failing in 30s. */
+const QUEUE_TIMEOUT_MS = 15 * 60 * 1000;
+/** Stale in-flight sessions may be reclaimed after agent crash/restart. */
+const STALE_HEARTBEAT_MS = 90 * 1000;
 
 function requireObjectId(id, label) {
     if (!id || !mongoose.isValidObjectId(id)) throw new ApiError(404, `${label} not found`);
@@ -43,8 +47,7 @@ export async function validateAgentSessionToken({ companyId, session, tokenHeade
  * Returns {_id, status, searchUrlHost} only (no token).
  */
 export async function pollQueuedSessionId(companyId) {
-    const queueTimeoutMs = 30 * 1000;
-    const cutoff = new Date(Date.now() - queueTimeoutMs);
+    const cutoff = new Date(Date.now() - QUEUE_TIMEOUT_MS);
     await AssistedCaptureSession.updateMany(
         {
             companyId,
@@ -56,7 +59,7 @@ export async function pollQueuedSessionId(companyId) {
                 status: 'failed',
                 failedAt: new Date(),
                 failCode: 'QUEUE_TIMEOUT',
-                failMessage: 'No Discovery Agent claimed this session within 30 seconds. Confirm the agent is running (listen mode) against http://127.0.0.1:5100, then click Retry.',
+                failMessage: 'No discovery service claimed this session within 15 minutes. Confirm the Discovery Agent is Ready, then click Retry.',
             },
         },
     );
@@ -89,10 +92,15 @@ function pollSessionSummary(session) {
  * without creating a new campaign or queued child session.
  */
 export async function pollReclaimableAssistedSession(companyId) {
+    const staleCutoff = new Date(Date.now() - STALE_HEARTBEAT_MS);
     const session = await AssistedCaptureSession.findOne({
         companyId,
         status: { $in: RECLAIMABLE_STATUSES },
-        source: { $in: CHINA_ASSISTED_RECLAIM_SOURCES },
+        $or: [
+            { source: { $in: CHINA_ASSISTED_RECLAIM_SOURCES } },
+            { lastHeartbeatAt: { $lt: staleCutoff } },
+            { lastHeartbeatAt: null, updatedAt: { $lt: staleCutoff } },
+        ],
     })
         .sort({ updatedAt: -1 })
         .select('_id status searchUrl source')
@@ -107,23 +115,33 @@ export async function pollQueuedAssistedCapture({ companyId }) {
 }
 
 async function reclaimAssistedCaptureSession({ companyId, sessionId, agentInstanceId }) {
-    const session = await AssistedCaptureSession.findOne({
-        companyId,
-        _id: sessionId,
-        status: { $in: RECLAIMABLE_STATUSES },
-        source: { $in: CHINA_ASSISTED_RECLAIM_SOURCES },
-    });
-    if (!session) return null;
-
     const now = new Date();
     const issued = issueSessionToken(now, SESSION_ALLOWED_TTL_MINUTES_MAX);
-    session.agentId = agentInstanceId;
-    session.tokenHash = issued.hash;
-    session.tokenExpiresAt = issued.expiresAt;
-    session.tokenDeliveredAt = now;
-    session.sessionExpiresAt = new Date(now.getTime() + SESSION_ALLOWED_TTL_MINUTES_MAX * 60 * 1000);
-    session.lastHeartbeatAt = now;
-    await session.save();
+    const staleCutoff = new Date(now.getTime() - STALE_HEARTBEAT_MS);
+    const $set = {
+        agentId: agentInstanceId,
+        tokenHash: issued.hash,
+        tokenExpiresAt: issued.expiresAt,
+        tokenDeliveredAt: now,
+        sessionExpiresAt: new Date(now.getTime() + SESSION_ALLOWED_TTL_MINUTES_MAX * 60 * 1000),
+        lastHeartbeatAt: now,
+    };
+
+    const session = await AssistedCaptureSession.findOneAndUpdate(
+        {
+            companyId,
+            _id: sessionId,
+            status: { $in: RECLAIMABLE_STATUSES },
+            $or: [
+                { source: { $in: CHINA_ASSISTED_RECLAIM_SOURCES } },
+                { lastHeartbeatAt: { $lt: staleCutoff } },
+                { lastHeartbeatAt: null, updatedAt: { $lt: staleCutoff } },
+            ],
+        },
+        { $set },
+        { new: true },
+    );
+    if (!session) return null;
     return { session: sanitizeSession(session), sessionToken: issued.plain, reclaimed: true };
 }
 
@@ -137,7 +155,11 @@ export async function claimAssistedCaptureSession({ companyId, sessionId, agentI
         filter._id = sessionId;
     }
 
-    const session = await AssistedCaptureSession.findOne(filter).sort({ createdAt: 1 });
+    const session = await AssistedCaptureSession.findOneAndUpdate(
+        filter,
+        { $set: { agentId: safeAgentId, status: 'agent_assigned' } },
+        { sort: { createdAt: 1 }, new: true },
+    );
     if (!session) {
         if (sessionId) {
             const reclaimed = await reclaimAssistedCaptureSession({
@@ -150,9 +172,6 @@ export async function claimAssistedCaptureSession({ companyId, sessionId, agentI
         throw new ApiError(404, 'No queued assisted capture session found');
     }
 
-    session.agentId = safeAgentId;
-    session.status = 'agent_assigned';
-
     let sessionToken = null;
     if (!session.tokenDeliveredAt) {
         const job = await DiscoveryAgentJob.findOne({ _id: session.discoveryAgentJobId, companyId });
@@ -163,6 +182,7 @@ export async function claimAssistedCaptureSession({ companyId, sessionId, agentI
 
         session.tokenDeliveredAt = new Date();
         sessionToken = tokenPlain;
+        await session.save();
 
         if (job) {
             await DiscoveryAgentJob.findOneAndUpdate(
@@ -171,8 +191,6 @@ export async function claimAssistedCaptureSession({ companyId, sessionId, agentI
             );
         }
     }
-
-    await session.save();
 
     return sessionToken
         ? { session: sanitizeSession(session), sessionToken }
@@ -298,6 +316,42 @@ export async function completeAssistedByAgent({ companyId, sessionId, agentInsta
 export async function failAssistedByAgent({ companyId, sessionId, agentInstanceId, token, code, message }) {
     const session = await loadClaimedSessionForAgent({ companyId, sessionId, agentInstanceId });
     await validateAgentSessionToken({ companyId, session, tokenHeaderValue: token });
+
+    const failCodeIn = String(code || 'AGENT_FAILED').slice(0, 80);
+    const failMessageIn = String(message || 'Assisted capture failed').replace(/[\r\n]+/g, ' ').slice(0, 500);
+    const pageKindMatch = failMessageIn.match(/Page kind:\s*([a-z0-9_]+)/i);
+    const pageKind = pageKindMatch ? String(pageKindMatch[1]).toLowerCase() : '';
+    const isPageOutcome = ['UNSUPPORTED_LAYOUT', 'NO_ORGANIC_RESULTS', 'NO_PARSER_RESULTS'].includes(failCodeIn)
+        || /Page kind:/i.test(failMessageIn);
+
+    // Page-kind / empty-parser outcomes must not be ignored just because earlier pages accepted records.
+    // Ignoring them left campaigns looping on the same Google page after a successful ingest.
+    if (isPageOutcome) {
+        const human = ['consent', 'captcha', 'login'].includes(pageKind);
+        const updated = await AssistedCaptureSession.findOneAndUpdate(
+            { _id: session._id, companyId, status: { $nin: ['completed', 'cancelled', 'expired'] } },
+            {
+                $set: {
+                    status: human ? 'manual_action_required' : 'awaiting_user',
+                    failCode: failCodeIn,
+                    failMessage: failMessageIn,
+                    manualActionMessage: human
+                        ? `Human verification required (${pageKind}). Resolve in the Google window.`
+                        : (session.manualActionMessage || ''),
+                    pendingCaptureStatus: 'none',
+                    pendingCaptureAckedAt: null,
+                    lastHeartbeatAt: new Date(),
+                    'autoCollection.lastErrorCode': failCodeIn,
+                    'autoCollection.lastErrorMessage': failMessageIn,
+                    'autoCollection.discoveryStatus': human ? 'paused' : 'running',
+                    'autoCollection.providerState': human ? 'Human Verification' : 'Retry',
+                    'autoCollection.pauseReason': human ? 'provider_block' : 'unsupported_page_retry',
+                },
+            },
+            { new: true },
+        );
+        return { session: sanitizeSession(updated || session), ignoredFail: false, pageOutcome: true };
+    }
 
     // Do not fail a session that already accepted capture events — bookkeeping/agent errors are non-fatal.
     const accepted = Number(session.acceptedCount || 0);

@@ -85,7 +85,42 @@ const SAFE_FAIL_REASON = Object.freeze({
  * Failed runs must never show a blank Last Processing Error.
  * Discovery failures live on autoCollection / session, not autoProcessing.
  */
+export function isOwnerStoppedSearch(session, autoCollection) {
+    const ac = autoCollection || session?.autoCollection || {};
+    return Boolean(ac.ownerStoppedAt)
+        || ac.stopRequested === true
+        || String(ac.summary?.stopReason || '') === 'owner_stop'
+        || String(session?.status || '') === 'cancelled';
+}
+
+export function isOwnerStopCopy(text) {
+    return /stopped by (owner|user)|already stopped|STOPPED BY USER/i.test(String(text || ''));
+}
+
+export function isAlreadyStoppedMessage(text) {
+    return /already stopped|STOPPED BY USER|will not resume/i.test(String(text || ''));
+}
+
+export function alreadyStoppedUserMessage() {
+    return 'Search is already stopped.';
+}
+
+export function allProcessingAlreadyStoppedMessage() {
+    return 'All processing is already stopped.';
+}
+
+export function searchStoppedSuccessMessage() {
+    return 'Search stopped successfully. Collected results have been preserved.';
+}
+
 export function lastVisibleRunError({ autoProcessing, autoCollection, session, status } = {}) {
+    if (
+        isOwnerStoppedSearch(session, autoCollection)
+        || String(autoProcessing?.lastErrorCode || '') === 'owner_stop'
+        || String(autoCollection?.lastErrorCode || '') === 'owner_stop'
+    ) {
+        return '';
+    }
     const candidates = [
         autoProcessing?.lastErrorMessage,
         autoCollection?.lastErrorMessage,
@@ -93,7 +128,7 @@ export function lastVisibleRunError({ autoProcessing, autoCollection, session, s
         session?.safeFailureMessage,
         session?.manualActionMessage,
         autoCollection?.pauseReason,
-    ].map((s) => String(s || '').trim()).filter(Boolean);
+    ].map((s) => String(s || '').trim()).filter((s) => s && !isOwnerStopCopy(s));
     if (candidates[0]) return candidates[0];
     const failed = ['failed', 'FAILED'].includes(String(status || ''))
         || String(autoCollection?.status || '') === 'failed'
@@ -153,6 +188,48 @@ export function shouldKeepPollingForAutoProcessing(autoProcessing, ownerFullAuto
  * Mutually exclusive reconcile buckets from autoProcessing.counts.
  * @param {object|null|undefined} counts
  */
+export function formatQueryProgressLabel({
+    queriesCompleted = 0,
+    queryIndex = 1,
+    queryTotal = 0,
+    googlePage = 1,
+} = {}) {
+    const current = Number(queryIndex) || 1;
+    const total = Number(queryTotal) || 0;
+    const completed = Number(queriesCompleted) || 0;
+    const page = Number(googlePage) || 1;
+    const totalLabel = total || '—';
+    return `${completed} completed · Query ${current}/${totalLabel} — Page ${page}`;
+}
+
+export function pendingQueryCount({ queryIndex = 1, queryTotal = 0 } = {}) {
+    return Math.max(0, (Number(queryTotal) || 0) - (Number(queryIndex) || 1));
+}
+
+export function formatProviderState(autoCollection = {}, session = {}) {
+    const explicit = String(autoCollection?.providerState || '').trim();
+    if (explicit) return explicit;
+    if (session?.status === 'manual_action_required' || autoCollection?.status === 'paused_manual') {
+        return 'Human Verification';
+    }
+    if (autoCollection?.pauseReason === 'unsupported_page_retry' || autoCollection?.lastErrorCode === 'unsupported_page_retry') {
+        return 'Retry';
+    }
+    if (autoCollection?.status === 'running') return 'Running';
+    if (autoCollection?.discoveryStatus === 'no_more_results') return 'Exhausted';
+    return '';
+}
+
+export function formatDiscoveryOwnerStatus(autoCollection = {}, session = {}) {
+    const provider = formatProviderState(autoCollection, session);
+    if (provider === 'Retry' || autoCollection?.pauseReason === 'unsupported_page_retry') {
+        return 'Waiting on provider / retrying';
+    }
+    if (provider === 'Human Verification') return 'Human verification required';
+    if (provider === 'Provider temporarily unavailable') return 'Provider temporarily unavailable';
+    return String(autoCollection?.discoveryDisplayStatus || autoCollection?.discoveryStatus || autoCollection?.status || 'idle');
+}
+
 export function reconcileBucketsFromCounts(counts = {}) {
     const waiting = Number(counts.reconcileWaiting || 0);
     const processing = Number(counts.reconcileProcessing || 0);

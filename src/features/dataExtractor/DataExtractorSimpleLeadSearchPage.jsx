@@ -21,6 +21,16 @@ import {
     lastVisibleRunError,
     safeQueryTotal,
     shouldKeepPollingForAutoProcessing,
+    formatQueryProgressLabel,
+    pendingQueryCount,
+    formatDiscoveryOwnerStatus,
+    formatProviderState,
+    isOwnerStoppedSearch,
+    isAlreadyStoppedMessage,
+    isOwnerStopCopy,
+    alreadyStoppedUserMessage,
+    allProcessingAlreadyStoppedMessage,
+    searchStoppedSuccessMessage,
 } from './simpleLeadSearchUi.js';
 import SimpleLeadSearchCapturedDataPanel from './SimpleLeadSearchCapturedDataPanel.jsx';
 import SimpleLeadSearchLiveActivityPanel from './SimpleLeadSearchLiveActivityPanel.jsx';
@@ -153,10 +163,13 @@ function isChinaCountryInput(country) {
 
 function agentLabel(status) {
     if (!status) return { text: 'Checking agent...', color: '#64748b', online: false };
-    if (status.online || status.status === 'connected' || status.status === 'busy' || status.connected) {
-        return { text: 'Agent Connected', color: '#15803d', online: true };
+    const raw = String(status.displayStatus || status.status || '').toLowerCase();
+    if (raw === 'busy') return { text: 'Discovery Agent: Busy', color: '#b45309', online: true };
+    if (raw === 'error') return { text: 'Discovery Agent: Error', color: '#b91c1c', online: false };
+    if (status.online || raw === 'ready' || raw === 'connected' || status.connected) {
+        return { text: 'Discovery Agent: Ready', color: '#15803d', online: true };
     }
-    return { text: 'Agent Offline', color: '#b45309', online: false };
+    return { text: 'Discovery Agent: Offline', color: '#b45309', online: false };
 }
 
 function sessionBanner(session, uiLabel, manualMessage, opts = {}) {
@@ -176,6 +189,13 @@ function sessionBanner(session, uiLabel, manualMessage, opts = {}) {
                 ? 'Google Ready — Automatic Process starting…'
                 : 'Google Ready — Click Capture Visible Results',
             detail: 'Stay on this CRM page. Open the Google window only for scroll, consent, or CAPTCHA.',
+        };
+    }
+    if (status === 'queued') {
+        return {
+            tone: 'info',
+            title: 'Waiting for discovery service',
+            detail: 'Campaign is queued. It starts automatically when the Discovery Agent is Ready. You can leave this page.',
         };
     }
     if (OPENING.has(status)) {
@@ -245,6 +265,9 @@ function softSessionError(err) {
         return msg;
     }
     if (/campaign validation failed/i.test(msg)) return msg.slice(0, 500);
+    if (isAlreadyStoppedMessage(apiMsg || msg)) {
+        return alreadyStoppedUserMessage();
+    }
     if (/request failed with status code/i.test(msg)) {
         return apiMsg || 'Request failed';
     }
@@ -296,6 +319,25 @@ function downloadBlobFromAxios(response, fallbackName = 'simple-lead-search.xlsx
     return filename;
 }
 
+function isManualCollectionLimit(options) {
+    const mode = String(options?.collectionMode || '').toLowerCase();
+    const target = Number(options?.requestedCaptureTarget || 0);
+    return (mode === 'fixed_target' || mode === 'manual' || mode === 'manual_limit') && target > 0;
+}
+
+function collectionModeStartPayload(options) {
+    const manual = isManualCollectionLimit(options);
+    const target = manual ? Math.max(1, Math.round(Number(options.requestedCaptureTarget))) : 0;
+    return {
+        collectionMode: manual ? 'fixed_target' : 'unlimited',
+        requestedCaptureTarget: target,
+        captureTarget: target,
+    };
+}
+
+function collectionModeResetPatch() {
+    return { collectionMode: 'unlimited', requestedCaptureTarget: 0 };
+}
 
 function socialStatusLabel(social) {
     if (social?.url) return '';
@@ -333,6 +375,16 @@ function formatPhoneCell(phone) {
     return `${phone.normalized || phone.original}${conf}`;
 }
 
+function inferUiLocationScope(form) {
+    if (form.locationScope === 'worldwide' && !form.city?.trim() && !form.state?.trim() && !form.country?.trim()) {
+        return 'worldwide';
+    }
+    if (String(form.city || '').trim()) return 'city';
+    if (String(form.state || '').trim()) return 'state';
+    if (String(form.country || '').trim()) return 'country';
+    return 'worldwide';
+}
+
 export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = null, runMode = false } = {}) {
     const params = useParams();
     const navigate = useNavigate();
@@ -342,7 +394,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
         product: '',
         relatedKeywords: '',
         businessTypes: ['Manufacturer'],
-        locationScope: 'city',
+        locationScope: 'country',
         city: '',
         state: '',
         country: '',
@@ -397,7 +449,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
         pagesPerBatch: 10, maxSafetyPagesPerQuery: 30, pauseAfterEachBatch: false,
         stopAtUnique: '', stopOnNoNewUniquePages: false, autoEnrichAfter: false, autoQualifyAfterEnrich: false,
         autoVerifyAfterQualify: false,
-        requestedCaptureTarget: 100,
+        requestedCaptureTarget: 0,
     });
     const [autoProcessing, setAutoProcessing] = useState(null);
     const [liveActivity, setLiveActivity] = useState(null);
@@ -418,6 +470,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
     const [showAdminControls, setShowAdminControls] = useState(false);
     const [verifiedContactExpand, setVerifiedContactExpand] = useState(''); // `${rowId}:phone|email|whatsapp`
     const [showHowItWorks, setShowHowItWorks] = useState(false);
+    const [workflowHash, setWorkflowHash] = useState(() => (typeof window !== 'undefined' ? window.location.hash : ''));
     const [showBtPicker, setShowBtPicker] = useState(false);
     const verifiedSectionRef = useRef(null);
     const lastUpdatedRef = useRef(Date.now());
@@ -425,6 +478,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
     const autoBootPendingRef = useRef(false);
     const autoBootInFlightRef = useRef(false);
     const startInFlightRef = useRef(false);
+    const stopInFlightRef = useRef(false);
     const bootFullAutomaticProcessRef = useRef(null);
     const lastRowCountRef = useRef(0);
     const pollBusyRef = useRef(false);
@@ -457,22 +511,25 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
         setQueryPreview(null);
     };
 
-    const buildPreviewPayload = () => ({
-        product: form.product.trim(),
-        relatedKeywords: form.relatedKeywords.trim() || undefined,
-        businessTypes: form.businessTypes,
-        locationScope: form.locationScope,
-        city: form.city.trim() || undefined,
-        state: form.state.trim() || undefined,
-        country: form.country.trim() || undefined,
-        searchMarket: form.searchMarket,
-        selectedSources: form.selectedSources,
-        expandStateSearch: form.expandStateSearch,
-        expandCountrySearch: form.expandCountrySearch,
-        expandCities: form.expandCities,
-        expandStates: form.expandStates,
-        worldwide: form.locationScope === 'worldwide',
-    });
+    const buildPreviewPayload = () => {
+        const locationScope = inferUiLocationScope(form);
+        return {
+            product: form.product.trim(),
+            relatedKeywords: form.relatedKeywords.trim() || undefined,
+            businessTypes: form.businessTypes,
+            locationScope,
+            city: form.city.trim() || undefined,
+            state: form.state.trim() || undefined,
+            country: form.country.trim() || undefined,
+            searchMarket: form.searchMarket,
+            selectedSources: form.selectedSources,
+            expandStateSearch: form.expandStateSearch,
+            expandCountrySearch: form.expandCountrySearch,
+            expandCities: form.expandCities,
+            expandStates: form.expandStates,
+            worldwide: locationScope === 'worldwide',
+        };
+    };
 
     const onGenerateQueries = async () => {
         if (!form.product.trim()) {
@@ -524,8 +581,14 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
         if (data.autoProcessing !== undefined) setAutoProcessing(data.autoProcessing);
         if (data.campaignActive !== undefined) setCampaignActive(Boolean(data.campaignActive));
         if (data.sessionEnded && data.campaignActive === false && data.sessionEndedMessage) {
-            const sid = data.session?._id || '';
-            toastErrorOnce(`ended:${sid}`, data.sessionEndedMessage);
+            const ownerStopped = data.alreadyStopped
+                || isOwnerStoppedSearch(data.session, data.autoCollection)
+                || isAlreadyStoppedMessage(data.sessionEndedMessage)
+                || isOwnerStopCopy(data.sessionEndedMessage);
+            if (!ownerStopped) {
+                const sid = data.session?._id || '';
+                toastErrorOnce(`ended:${sid}`, data.sessionEndedMessage);
+            }
         }
         if (data.autoCollectionSessionId) {
             const newSid = data.autoCollectionSessionId;
@@ -665,6 +728,20 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
     }, [form.country]);
 
     useEffect(() => {
+        const apply = () => {
+            const hash = String(window.location.hash || '');
+            setWorkflowHash(hash);
+            const id = hash === '#verified' ? 'de-verified' : (hash === '#live' || hash === '#leads' ? 'de-live-results' : '');
+            if (id) {
+                window.setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+            }
+        };
+        apply();
+        window.addEventListener('hashchange', apply);
+        return () => window.removeEventListener('hashchange', apply);
+    }, []);
+
+    useEffect(() => {
         const sid = session?._id || result?.session?._id;
         if (!sid) return undefined;
         const keepForAp = shouldKeepPollingForAutoProcessing(autoProcessing, ownerFullAuto);
@@ -701,11 +778,15 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                 lastRowCountRef.current = data.recentRawCaptures.length;
             }
 
+            const ownerStoppedPoll = isOwnerStoppedSearch(data?.session, data?.autoCollection)
+                || st === 'cancelled';
+            if (ownerStoppedPoll) autoBootPendingRef.current = false;
             // One-click full auto: start Auto Collection + CP6→CP8 when Google Ready
             if (
                 ownerFullAuto
                 && autoBootPendingRef.current
                 && !autoBootInFlightRef.current
+                && !ownerStoppedPoll
                 && GOOGLE_READY.has(st)
                 && !INACTIVE.has(st)
                 && acSt !== 'running'
@@ -838,11 +919,12 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
             const enabledQueryTexts = (queryPreview?.queries || [])
                 .filter((q) => q.enabled !== false)
                 .map((q) => q.queryText);
+            const locationScope = inferUiLocationScope(form);
             const data = await dataExtractorApi.simpleLeadSearchStart({
                 product: form.product.trim(),
                 relatedKeywords: form.relatedKeywords.trim() || undefined,
                 businessTypes: form.businessTypes,
-                locationScope: form.locationScope,
+                locationScope,
                 city: form.city.trim() || undefined,
                 state: form.state.trim() || undefined,
                 country: form.country.trim() || undefined,
@@ -852,7 +934,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                 expandCountrySearch: form.expandCountrySearch,
                 expandCities: form.expandCities,
                 expandStates: form.expandStates,
-                worldwide: form.locationScope === 'worldwide',
+                worldwide: locationScope === 'worldwide',
                 enabledQueryTexts: enabledQueryTexts.length ? enabledQueryTexts : undefined,
                 financialYear: selectedFY,
                 idempotencyKey: `sls-ui-${Date.now()}`,
@@ -902,7 +984,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                 && data?.agentStatus?.agentOnline !== false
                 && data?.agentStatus?.connected !== false;
             if (!agentOnline) {
-                toast.error(`Source launch failed: ${sourceLabel} — Agent Offline`);
+                toast('Waiting for discovery service');
             } else {
                 toast.success(
                     `Started ${sourceLabel}. Discovery Agent opens the search in its browser. This CRM page is the run.`,
@@ -929,6 +1011,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
         captureCountRef.current = 0;
         lastRowCountRef.current = 0;
         wasCapturingRef.current = false;
+        setAutoCollectionOptions((o) => ({ ...o, ...collectionModeResetPatch() }));
     };
 
     const waitForCaptureSettle = async (sessionId, baselineUnique) => {
@@ -1125,15 +1208,30 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
     const onStopAutoProcessing = async () => {
         const sid = session?._id || result?.session?._id;
         if (!sid) return;
+        if (stopInFlightRef.current) return;
+        const apStopped = autoProcessing?.status === 'stopped' && autoProcessing?.enabled === false;
+        if (apStopped && isOwnerStoppedSearch(session || result?.session, autoCollection)) {
+            toast.success(allProcessingAlreadyStoppedMessage());
+            return;
+        }
+        stopInFlightRef.current = true;
         setBusy('pipeStop');
         try {
             const data = await dataExtractorApi.simpleLeadSearchAutoProcessingStop(sid, { stopJobs: true });
             setAutoProcessing(data.autoProcessing || null);
             setAutoProcessingOptions((o) => ({ ...o, enabled: false }));
-            toast.success('Automatic processing stopped. Completed work is preserved.');
+            toast.success(data?.alreadyStopped
+                ? allProcessingAlreadyStoppedMessage()
+                : 'Automatic processing stopped. Completed work is preserved.');
         } catch (err) {
-            toast.error(err?.response?.data?.message || err?.message || 'Stop failed');
+            const msg = err?.response?.data?.message || err?.message || '';
+            if (isAlreadyStoppedMessage(msg)) {
+                toast.success(allProcessingAlreadyStoppedMessage());
+            } else {
+                toast.error(msg || 'Stop failed');
+            }
         } finally {
+            stopInFlightRef.current = false;
             setBusy('');
         }
     };
@@ -1143,9 +1241,8 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
         if (!sessionId || autoBootInFlightRef.current) return false;
         autoBootInFlightRef.current = true;
         try {
-            const isFixedTarget = (autoCollectionOptions.collectionMode || 'unlimited') === 'fixed_target';
             const acBody = {
-                collectionMode: autoCollectionOptions.collectionMode || 'unlimited',
+                ...collectionModeStartPayload(autoCollectionOptions),
                 pageCollectionMode: autoCollectionOptions.pageCollectionMode || 'until_no_more',
                 maxPagesPerQuery: Number(autoCollectionOptions.maxPagesPerQuery) || 3,
                 pagesPerBatch: Number(autoCollectionOptions.pagesPerBatch) || 10,
@@ -1159,12 +1256,6 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                 delayMaxSec: Number(autoCollectionOptions.delayMaxSec) || 40,
                 stopAtUnique: 0,
                 stopOnNoNewUniquePages: false,
-                requestedCaptureTarget: isFixedTarget
-                    ? (Number(autoCollectionOptions.requestedCaptureTarget) || 100)
-                    : 0,
-                captureTarget: isFixedTarget
-                    ? (Number(autoCollectionOptions.requestedCaptureTarget) || 100)
-                    : 0,
                 autoEnrichAfter: false,
                 autoQualifyAfterEnrich: false,
                 autoVerifyAfterQualify: false,
@@ -1189,6 +1280,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                 toast.error(pipeErr?.response?.data?.message || pipeErr?.message || 'Auto Collection started; automatic processing enable failed');
             }
             autoBootPendingRef.current = false;
+            setAutoCollectionOptions((o) => ({ ...o, ...collectionModeResetPatch() }));
             toast.success('Automatic Process running — collect → enrich → qualify → verify');
             await refreshSession(pipeSid);
             refreshEnrichment(pipeSid);
@@ -1280,17 +1372,33 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
     const onStopAllProcessing = async () => {
         const sid = session?._id || result?.session?._id;
         if (!sid) return;
+        if (stopInFlightRef.current) return;
+        if (isOwnerStoppedSearch(session || result?.session, autoCollection)
+            && autoProcessing?.status === 'stopped') {
+            toast.success(allProcessingAlreadyStoppedMessage());
+            return;
+        }
+        stopInFlightRef.current = true;
         setBusy('pipeStop');
+        autoBootPendingRef.current = false;
         try {
             const data = await dataExtractorApi.simpleLeadSearchStop(sid);
             applyStatusPayload(data);
             if (data?.autoCollection) setAutoCollection(data.autoCollection);
-            toast.success('STOPPED BY USER. Collected results are preserved.');
+            toast.success(data?.alreadyStopped
+                ? allProcessingAlreadyStoppedMessage()
+                : 'Search stopped successfully. Collected results have been preserved.');
             await refreshSession(sid);
             await refreshResults(sid);
         } catch (err) {
-            toast.error(softSessionError(err));
+            const msg = softSessionError(err);
+            if (isAlreadyStoppedMessage(msg)) {
+                toast.success(allProcessingAlreadyStoppedMessage());
+            } else {
+                toast.error(msg);
+            }
         } finally {
+            stopInFlightRef.current = false;
             setBusy('');
         }
     };
@@ -1303,9 +1411,8 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
         }
         setBusy('autoStart');
         try {
-            const isFixedTarget = (autoCollectionOptions.collectionMode || 'unlimited') === 'fixed_target';
             const body = {
-                collectionMode: autoCollectionOptions.collectionMode || 'unlimited',
+                ...collectionModeStartPayload(autoCollectionOptions),
                 pageCollectionMode: autoCollectionOptions.pageCollectionMode || 'until_no_more',
                 maxPagesPerQuery: Number(autoCollectionOptions.maxPagesPerQuery) || 3,
                 pagesPerBatch: Number(autoCollectionOptions.pagesPerBatch) || 10,
@@ -1316,12 +1423,6 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                 delayMaxSec: Number(autoCollectionOptions.delayMaxSec) || 40,
                 stopAtUnique: 0,
                 stopOnNoNewUniquePages: false,
-                requestedCaptureTarget: isFixedTarget
-                    ? (Number(autoCollectionOptions.requestedCaptureTarget) || 100)
-                    : 0,
-                captureTarget: isFixedTarget
-                    ? (Number(autoCollectionOptions.requestedCaptureTarget) || 100)
-                    : 0,
                 autoEnrichAfter: !!autoCollectionOptions.autoEnrichAfter,
                 autoQualifyAfterEnrich: !!autoCollectionOptions.autoQualifyAfterEnrich,
                 autoVerifyAfterQualify: !!autoCollectionOptions.autoVerifyAfterQualify,
@@ -1329,6 +1430,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
             const data = await dataExtractorApi.simpleLeadSearchAutoCollectionStart(sid, body);
             applyStatusPayload(data);
             if (data?.autoCollection) setAutoCollection(data.autoCollection);
+            setAutoCollectionOptions((o) => ({ ...o, ...collectionModeResetPatch() }));
             toast.success(data?.message || 'Auto Collection started');
             await refreshSession(data?.session?._id || sid);
         } catch (err) {
@@ -1375,17 +1477,32 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
     const onStopAutoCollection = async () => {
         const sid = session?._id || result?.session?._id;
         if (!sid) return;
+        if (stopInFlightRef.current) return;
+        if (isOwnerStoppedSearch(session || result?.session, autoCollection)) {
+            toast.success(alreadyStoppedUserMessage());
+            return;
+        }
+        stopInFlightRef.current = true;
         setBusy('autoStop');
+        autoBootPendingRef.current = false;
         try {
             const data = await dataExtractorApi.simpleLeadSearchAutoCollectionStop(sid);
             applyStatusPayload(data);
             if (data?.autoCollection) setAutoCollection(data.autoCollection);
-            toast.success(data?.message || 'Auto Collection stopped');
+            toast.success(data?.alreadyStopped
+                ? alreadyStoppedUserMessage()
+                : searchStoppedSuccessMessage());
             await refreshSession(sid);
             await refreshResults(sid);
         } catch (err) {
-            toast.error(softSessionError(err));
+            const msg = softSessionError(err);
+            if (isAlreadyStoppedMessage(msg)) {
+                toast.success(alreadyStoppedUserMessage());
+            } else {
+                toast.error(msg);
+            }
         } finally {
+            stopInFlightRef.current = false;
             setBusy('');
         }
     };
@@ -1534,21 +1651,44 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
     const onStop = async () => {
         const activeSession = session || result?.session;
         if (!activeSession?._id) return;
+        if (stopInFlightRef.current) return;
+        if (isOwnerStoppedSearch(activeSession, autoCollection)) {
+            toast.success(alreadyStoppedUserMessage());
+            return;
+        }
+        stopInFlightRef.current = true;
         setBusy('stop');
         setCaptureCompletedFlash(false);
+        autoBootPendingRef.current = false;
+        setAutoCollection((prev) => ({
+            ...(prev || {}),
+            status: 'stopped',
+            discoveryStatus: 'stopped',
+            stopRequested: true,
+            ownerStoppedAt: prev?.ownerStoppedAt || new Date().toISOString(),
+        }));
+        setSession((prev) => (prev ? { ...prev, status: 'cancelled' } : prev));
         try {
             const data = await dataExtractorApi.simpleLeadSearchStop(activeSession._id);
             applyStatusPayload(data);
             if (data?.autoCollection) setAutoCollection(data.autoCollection);
-            toast.success('STOPPED BY USER. Collected results are preserved.');
+            toast.success(data?.alreadyStopped
+                ? alreadyStoppedUserMessage()
+                : searchStoppedSuccessMessage());
             await refreshSession(activeSession._id);
             await refreshResults(activeSession._id);
             refreshEnrichment(activeSession._id);
             refreshQualification(activeSession._id);
             refreshGenuineness(activeSession._id);
         } catch (err) {
-            toast.error(softSessionError(err));
+            const msg = softSessionError(err);
+            if (isAlreadyStoppedMessage(msg)) {
+                toast.success(alreadyStoppedUserMessage());
+            } else {
+                toast.error(msg);
+            }
         } finally {
+            stopInFlightRef.current = false;
             setBusy('');
         }
     };
@@ -1997,8 +2137,9 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
     const status = activeSession?.status || '';
     const inactive = INACTIVE.has(status);
     const isManual = status === 'manual_action_required';
-    const canCapture = !!activeSession && !inactive && CAPTURE_OK.has(status) && !busy;
-    const canStop = !!activeSession && !inactive && !busy;
+    const ownerStoppedUi = isOwnerStoppedSearch(activeSession, autoCollection) || status === 'cancelled';
+    const canCapture = !!activeSession && !inactive && !ownerStoppedUi && CAPTURE_OK.has(status) && !busy;
+    const canStop = !!activeSession && !inactive && !ownerStoppedUi && !busy && !stopInFlightRef.current;
     const canComplete = !!activeSession && !inactive && !busy;
     const canExport = !!activeSession && !busy && (rows.length > 0 || (captureStats?.uniqueResultCount || 0) > 0 || inactive);
     const autoStatus = autoCollection?.status || 'idle';
@@ -2014,7 +2155,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
         ? sessionBanner(bannerSession, sessionUiLabel || agentStatus?.sessionLabel, ownerErrorMessage || activeSession?.failMessage || activeSession?.manualActionMessage, {
             fullAuto: ownerFullAuto,
             campaignActive,
-            ownerStopped: Boolean(autoCollection?.ownerStoppedAt || autoCollection?.stopRequested || status === 'cancelled'),
+            ownerStopped: ownerStoppedUi,
         })
         : null;
 
@@ -2099,7 +2240,6 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
     let processTitle = 'Automatic Process';
     let pulseClass = styles.pulseGrey;
     let statusBadge = { text: 'Ready', cls: styles.badgeGrey };
-    const ownerStoppedUi = Boolean(autoCollection?.ownerStoppedAt || autoCollection?.stopRequested || status === 'cancelled');
     if (ownerStoppedUi) {
         processTitle = 'STOPPED BY USER';
         pulseClass = styles.pulseGrey;
@@ -2113,9 +2253,17 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
         pulseClass = styles.pulse;
         statusBadge = { text: 'Processing backlog CP6 → CP8', cls: styles.badgeGreen };
     } else if (processRunning) {
-        processTitle = 'Automatic Process Running';
-        pulseClass = styles.pulse;
-        statusBadge = { text: autoRunning ? 'Auto Collection Running' : 'Processing CP6 → CP8', cls: styles.badgeGreen };
+        const discoveryOwner = formatDiscoveryOwnerStatus(autoCollection, activeSession);
+        const waitingProvider = discoveryOwner === 'Waiting on provider / retrying'
+            || formatProviderState(autoCollection, activeSession) === 'Retry';
+        processTitle = waitingProvider ? 'Waiting on provider / retrying' : 'Automatic Process Running';
+        pulseClass = waitingProvider ? styles.pulseBlue : styles.pulse;
+        statusBadge = {
+            text: waitingProvider
+                ? 'Waiting on provider / retrying'
+                : (autoRunning ? 'Auto Collection Running' : 'Processing CP6 → CP8'),
+            cls: waitingProvider ? styles.badgeBlue : styles.badgeGreen,
+        };
     } else if (processPaused) {
         processTitle = 'Automatic Process Paused';
         pulseClass = styles.pulseBlue;
@@ -2128,6 +2276,10 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
         processTitle = 'Automatic Process Completed';
         pulseClass = styles.pulseGrey;
         statusBadge = { text: 'Completed', cls: styles.badgeGreen };
+    } else if (status === 'queued') {
+        processTitle = 'Waiting for discovery service';
+        pulseClass = styles.pulseBlue;
+        statusBadge = { text: 'Waiting for discovery service', cls: styles.badgeBlue };
     } else if (OPENING.has(status)) {
         const srcLabel = openingSourceLabel(activeSession);
         processTitle = `Opening ${srcLabel}`;
@@ -2254,6 +2406,12 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
     const secsAgo = Math.max(0, Math.round((Date.now() - (lastUpdatedRef.current || Date.now())) / 1000));
     const ALL_BUSINESS_TYPES = ['Manufacturer', 'OEM / ODM', 'Brand Owner', 'Provider', 'Supplier', 'Dealer', 'Distributor', 'Importer', 'Exporter', 'Wholesaler', 'Retailer', 'System Integrator', 'Service Provider', 'Contractor', 'Consultant', 'Marketplace Seller', 'Other'];
     const formLocked = !!result && !inactive;
+    const formManualLimit = isManualCollectionLimit(autoCollectionOptions);
+    const runningManualLimit = String(autoCollection?.collectionMode || '').toLowerCase() === 'fixed_target'
+        && Number(autoCollection?.requestedCaptureTarget || 0) > 0;
+    const runningModeLabel = runningManualLimit
+        ? `Manual Limit — ${Number(autoCollection.requestedCaptureTarget)}`
+        : 'Unlimited — Until Exhausted / Stopped';
     const emptyMessage = !result
         ? 'Ready to discover and verify business data.'
         : OPENING.has(status)
@@ -2293,7 +2451,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
             <div className={styles.header}>
                 <div className={styles.headerLeft}>
                     <div className={styles.titleRow}>
-                        <h2 className={styles.title}>Simple Lead Search</h2>
+                        <h2 className={styles.title}>Data Extractor</h2>
                         <button
                             type="button"
                             className={styles.infoBtn}
@@ -2350,9 +2508,9 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                             <li>CRM captures and processes results automatically.</li>
                             <li>Handle Google CAPTCHA/consent only when requested.</li>
                             <li>Review or export verified records.</li>
-                            <li>CRM Leads are never created automatically.</li>
+                            <li>Create a Lead from any live result while extraction continues.</li>
                         </ol>
-                        <div className={styles.modalLeadOff}>CRM Lead Creation stays permanently OFF for this workflow.</div>
+                        <div className={styles.modalLeadOff}>Leads are created only when you click Create Lead. Extraction keeps running.</div>
                         <button type="button" className={styles.modalClose} onClick={() => setShowHowItWorks(false)}>Got it</button>
                     </div>
                 </div>
@@ -2366,8 +2524,8 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                 ) : null}
                 <div className={styles.formGrid}>
                     <label className={styles.fieldWrap}>
-                        <span className={styles.label}>Keyword / Product *</span>
-                        <input className={styles.field} value={form.product} onChange={(e) => { onChange('product')(e); setQueryPreview(null); }} placeholder={isChinaCountryInput(form.country) ? '智能触摸开关,玻璃触摸开关' : 'e.g. LED Light'} autoComplete="off" disabled={formLocked} />
+                        <span className={styles.label}>Keyword *</span>
+                        <input className={styles.field} value={form.product} onChange={(e) => { onChange('product')(e); setQueryPreview(null); }} placeholder={isChinaCountryInput(form.country) ? '智能触摸开关,玻璃触摸开关' : 'e.g. LED Light Manufacturer'} autoComplete="off" disabled={formLocked} />
                     </label>
                     {isChinaCountryInput(form.country) ? (
                     <label className={styles.fieldWrap}>
@@ -2433,47 +2591,32 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                     </div>
                     ) : null}
                     <label className={styles.fieldWrap}>
-                        <span className={styles.label}>Location Scope</span>
-                        <select className={styles.select} value={form.locationScope} disabled={formLocked} onChange={(e) => { setForm((f) => ({ ...f, locationScope: e.target.value })); setQueryPreview(null); }}>
-                            <option value="city">City</option>
-                            <option value="state">State</option>
-                            <option value="country">Country</option>
-                            <option value="worldwide">Worldwide</option>
-                        </select>
+                        <span className={styles.label}>Country</span>
+                        <input className={styles.field} value={form.country} onChange={(e) => {
+                            const country = e.target.value;
+                            const cn = country.trim().toLowerCase();
+                            const isChina = cn === 'china' || cn === 'cn' || cn === 'prc';
+                            setForm((f) => ({
+                                ...f,
+                                country,
+                                locationScope: inferUiLocationScope({ ...f, country }),
+                                ...(isChina ? {
+                                    searchMarket: 'china_suppliers',
+                                    selectedSources: CHINA_DEFAULT_SOURCES,
+                                    businessTypes: CHINA_DEFAULT_BUSINESS_TYPES,
+                                } : {}),
+                            }));
+                            setQueryPreview(null);
+                        }} placeholder="e.g. India" autoComplete="off" disabled={formLocked} />
                     </label>
-                    {form.locationScope !== 'worldwide' && (
-                        <label className={styles.fieldWrap}>
-                            <span className={styles.label}>Country{(form.locationScope === 'state' || form.locationScope === 'country' || form.searchMarket === 'china_suppliers') ? ' *' : ''}</span>
-                            <input className={styles.field} value={form.country} onChange={(e) => {
-                                const country = e.target.value;
-                                const cn = country.trim().toLowerCase();
-                                const isChina = cn === 'china' || cn === 'cn' || cn === 'prc';
-                                setForm((f) => ({
-                                    ...f,
-                                    country,
-                                    ...(isChina ? {
-                                        searchMarket: 'china_suppliers',
-                                        selectedSources: CHINA_DEFAULT_SOURCES,
-                                        locationScope: f.city ? f.locationScope : 'country',
-                                        businessTypes: CHINA_DEFAULT_BUSINESS_TYPES,
-                                    } : {}),
-                                }));
-                                setQueryPreview(null);
-                            }} placeholder={form.searchMarket === 'china_suppliers' ? 'China' : 'e.g. India'} autoComplete="off" disabled={formLocked} />
-                        </label>
-                    )}
-                    {(form.locationScope === 'state' || form.locationScope === 'city') && (
-                        <label className={styles.fieldWrap}>
-                            <span className={styles.label}>State / Province{form.locationScope === 'state' ? ' *' : ''}</span>
-                            <input className={styles.field} value={form.state} onChange={(e) => { onChange('state')(e); setQueryPreview(null); }} placeholder="e.g. Maharashtra" autoComplete="off" disabled={formLocked} />
-                        </label>
-                    )}
-                    {form.locationScope === 'city' && (
-                        <label className={styles.fieldWrap}>
-                            <span className={styles.label}>City *</span>
-                            <input className={styles.field} value={form.city} onChange={(e) => { onChange('city')(e); setQueryPreview(null); }} placeholder="e.g. Mumbai" autoComplete="off" disabled={formLocked} />
-                        </label>
-                    )}
+                    <label className={styles.fieldWrap}>
+                        <span className={styles.label}>State</span>
+                        <input className={styles.field} value={form.state} onChange={(e) => { onChange('state')(e); setQueryPreview(null); }} placeholder="optional" autoComplete="off" disabled={formLocked} />
+                    </label>
+                    <label className={styles.fieldWrap}>
+                        <span className={styles.label}>City</span>
+                        <input className={styles.field} value={form.city} onChange={(e) => { onChange('city')(e); setQueryPreview(null); }} placeholder="optional" autoComplete="off" disabled={formLocked} />
+                    </label>
                 </div>
 
                 <button type="button" className={styles.advancedToggle} onClick={() => setShowAdvanced((v) => !v)}>
@@ -2539,46 +2682,62 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                                 <input className={styles.field} value={(form.expandStates || []).join(', ')} disabled={formLocked} onChange={(e) => { setForm((f) => ({ ...f, expandStates: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) })); setQueryPreview(null); }} />
                             </label>
                         )}
+                        <label className={styles.fieldWrap} style={{ marginTop: 10, marginBottom: 8 }}>
+                            <span className={styles.label}>Collection Mode</span>
+                            <select
+                                className={styles.select}
+                                value={formManualLimit ? 'fixed_target' : 'unlimited'}
+                                disabled={formLocked}
+                                onChange={(e) => {
+                                    const collectionMode = e.target.value;
+                                    setAutoCollectionOptions((o) => ({
+                                        ...o,
+                                        collectionMode,
+                                        requestedCaptureTarget: collectionMode === 'fixed_target'
+                                            ? (Number(o.requestedCaptureTarget) > 0 ? o.requestedCaptureTarget : '')
+                                            : 0,
+                                    }));
+                                }}
+                            >
+                                <option value="unlimited">Unlimited — Recommended / Default</option>
+                                <option value="fixed_target">Manual Limit</option>
+                            </select>
+                        </label>
+                        <p style={{ margin: '0 0 10px', fontSize: 12, color: '#475569' }}>
+                            The system continues through available queries and sources until no more results are available or you stop the campaign.
+                        </p>
+                        {formManualLimit || String(autoCollectionOptions.collectionMode) === 'fixed_target' ? (
+                            <label className={styles.fieldWrap} style={{ marginBottom: 8 }}>
+                                <span className={styles.label}>Maximum Results</span>
+                                <input
+                                    className={styles.field}
+                                    type="number"
+                                    min={1}
+                                    max={500}
+                                    placeholder="e.g. 200"
+                                    value={autoCollectionOptions.requestedCaptureTarget || ''}
+                                    disabled={formLocked}
+                                    onChange={(e) => setAutoCollectionOptions((o) => ({
+                                        ...o,
+                                        collectionMode: 'fixed_target',
+                                        requestedCaptureTarget: e.target.value,
+                                    }))}
+                                />
+                            </label>
+                        ) : null}
                     </div>
                 )}
 
-                <label className={styles.fieldWrap} style={{ marginBottom: 12, maxWidth: 360 }}>
-                    <span className={styles.label}>Collection Mode</span>
-                    <select
-                        className={styles.select}
-                        value={autoCollectionOptions.collectionMode || 'unlimited'}
-                        disabled={formLocked}
-                        onChange={(e) => setAutoCollectionOptions((o) => ({
-                            ...o,
-                            collectionMode: e.target.value,
-                            pageCollectionMode: e.target.value === 'unlimited' ? 'until_no_more' : o.pageCollectionMode,
-                        }))}
-                    >
-                        <option value="unlimited">Unlimited — Until No More Results</option>
-                        <option value="fixed_target">Fixed Target</option>
-                    </select>
-                </label>
-                {(autoCollectionOptions.collectionMode || 'unlimited') === 'unlimited' ? (
-                    <p className={styles.helperText} style={{ marginTop: -4, marginBottom: 12 }}>
-                        The campaign will continue until all available pages and approved queries are exhausted.
-                    </p>
-                ) : (
-                    <label className={styles.fieldWrap} style={{ marginBottom: 12, maxWidth: 280 }}>
-                        <span className={styles.label}>Capture Target (raw source results)</span>
-                        <select
-                            className={styles.select}
-                            value={Number(autoCollectionOptions.requestedCaptureTarget) || 100}
-                            disabled={formLocked}
-                            onChange={(e) => setAutoCollectionOptions((o) => ({ ...o, requestedCaptureTarget: Number(e.target.value) || 100 }))}
-                        >
-                            <option value={25}>25</option>
-                            <option value={50}>50</option>
-                            <option value={100}>100</option>
-                            <option value={250}>250</option>
-                            <option value={500}>500</option>
-                        </select>
-                    </label>
-                )}
+                <div className={styles.unlimitedMode}>
+                    <strong>Collection Mode: {formManualLimit
+                        ? `Manual Limit — ${Number(autoCollectionOptions.requestedCaptureTarget)}`
+                        : 'Unlimited — Until Exhausted / Stopped'}</strong>
+                    <div>
+                        {formManualLimit
+                            ? 'Campaign may stop when the requested total is reached.'
+                            : 'The system continues through available queries and sources until no more results are available or you stop the campaign.'}
+                    </div>
+                </div>
 
                 {isChinaCountryInput(form.country) ? (
                     <>
@@ -2619,7 +2778,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                 <button type="submit" className={styles.primaryBtn} disabled={!!busy || formLocked}>
                     <span className={styles.primaryBtnRow}>
                         <Rocket size={18} aria-hidden />
-                        {busy === 'start' ? 'Starting...' : 'Search & Start Automatic Process'}
+                        {busy === 'start' ? 'Starting...' : 'Start Extraction'}
                     </span>
                     <span className={styles.primaryHint}>Auto Collection and all checkpoints will run automatically.</span>
                 </button>
@@ -2639,11 +2798,9 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                     <span className={styles.stripIcon}><Layers size={14} aria-hidden /></span>
                     <div>
                         <div className={styles.stripLabel}>Collection Mode</div>
-                        <div className={styles.stripValue}>
-                            {(autoCollectionOptions.collectionMode || 'unlimited') === 'fixed_target'
-                                ? `Fixed Target (${Number(autoCollectionOptions.requestedCaptureTarget) || 100})`
-                                : 'Unlimited — Until No More Results'}
-                        </div>
+                        <div className={styles.stripValue}>{formManualLimit
+                            ? `Manual Limit — ${Number(autoCollectionOptions.requestedCaptureTarget)}`
+                            : 'Unlimited — Until Exhausted / Stopped'}</div>
                     </div>
                 </div>
                 <div className={styles.stripItem}>
@@ -2660,11 +2817,11 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                 </div>
                 <div className={`${styles.stripItem} ${styles.stripItemLeadOff}`}>
                     <span className={`${styles.stripIcon} ${styles.stripIconWarn}`}><Ban size={14} aria-hidden /></span>
-                    <div><div className={styles.stripLabel}>CRM Lead Creation</div><div className={`${styles.stripValue} ${styles.stripValueOff}`}>OFF</div></div>
+                    <div><div className={styles.stripLabel}>CRM Lead Creation</div><div className={styles.stripValue}>One-click from results</div></div>
                 </div>
             </div>
             <p className={styles.helperText} style={{ marginTop: 4, marginBottom: 12 }}>
-                Discovery continues Google pages and queries until the capture target is reached, no more source results are available, or you stop. Unique companies are counted separately and do not end discovery early.
+                Discovery continues Google pages and queries until no more source results are available or you stop. Unique companies are counted separately and do not end discovery early.
             </p>
 
             {processManual && (
@@ -2693,6 +2850,18 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                             <span className={`${styles.pulse} ${pulseClass}`} aria-hidden />
                             <h3 className={styles.liveTitle}>{processTitle}</h3>
                         </div>
+                        {ownerStoppedUi && (
+                            <div className={styles.manualBanner} role="status" style={{ marginBottom: 12 }}>
+                                <CheckCircle2 size={22} aria-hidden />
+                                <div>
+                                    <h3>Search Stopped</h3>
+                                    <p>
+                                        {capturedUnique} {capturedUnique === 1 ? 'company' : 'companies'} collected.
+                                        {' '}All collected results are preserved.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
                         {liveActivity?.headline ? (
                             <p className={styles.liveHeadline}>{liveActivity.headline}</p>
                         ) : null}
@@ -2757,20 +2926,26 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                         <div className={styles.metaGrid}>
                             <div><div className={styles.metaLabel}>Campaign</div><div className={styles.metaValue}>{campaignName}</div></div>
                             <div><div className={styles.metaLabel}>Collection Mode</div><div className={styles.metaValue}>
-                                {(autoCollection?.collectionMode || autoCollectionOptions.collectionMode || 'unlimited') === 'fixed_target'
-                                    ? `Fixed Target (${autoCollection?.requestedCaptureTarget || autoCollectionOptions.requestedCaptureTarget || 100})`
-                                    : 'Unlimited — Until No More Results'}
+                                {runningModeLabel}
                             </div></div>
                             <div><div className={styles.metaLabel}>Source Results Found</div><div className={styles.metaValue}>{autoCollection?.sourceResultsFound ?? session?.visibleResultCount ?? 0}</div></div>
                             <div><div className={styles.metaLabel}>Raw Records Captured</div><div className={styles.metaValue}>{autoCollection?.rawRecordsCaptured ?? session?.acceptedCount ?? 0}</div></div>
                             <div><div className={styles.metaLabel}>Unique Companies</div><div className={styles.metaValue}>{autoCollection?.uniqueCompanies ?? capturedUnique ?? 0}</div></div>
                             <div><div className={styles.metaLabel}>Current Query</div><div className={styles.metaValue}>{queryIndex} of {queryTotal || '—'}</div></div>
                             <div><div className={styles.metaLabel}>Query Progress</div><div className={styles.metaValue}>
-                                {Number(autoCollection?.queriesCompleted ?? 0)} / {Number(autoCollection?.totalApprovedQueries || queryTotal || 0) || '—'}
+                                {formatQueryProgressLabel({
+                                    queriesCompleted: autoCollection?.queriesCompleted,
+                                    queryIndex,
+                                    queryTotal: autoCollection?.totalApprovedQueries || queryTotal,
+                                    googlePage,
+                                })}
                             </div></div>
                             <div><div className={styles.metaLabel}>Current Google Page</div><div className={styles.metaValue}>{googlePage}</div></div>
-                            <div><div className={styles.metaLabel}>Discovery Status</div><div className={styles.metaValue}>{autoCollection?.discoveryStatus || autoCollection?.status || 'idle'}</div></div>
-                            <div><div className={styles.metaLabel}>Last Progress</div><div className={styles.metaValue}>{(autoCollection?.lastDiscoveryAt || lastProgressAt) ? new Date(autoCollection?.lastDiscoveryAt || lastProgressAt).toLocaleString() : '—'}</div></div>
+                            <div><div className={styles.metaLabel}>Pending Queries</div><div className={styles.metaValue}>{pendingQueryCount({ queryIndex, queryTotal: autoCollection?.totalApprovedQueries || queryTotal })}</div></div>
+                            <div><div className={styles.metaLabel}>Provider State</div><div className={styles.metaValue}>{formatProviderState(autoCollection, activeSession) || '—'}</div></div>
+                            <div><div className={styles.metaLabel}>Discovery Status</div><div className={styles.metaValue}>{formatDiscoveryOwnerStatus(autoCollection, activeSession)}</div></div>
+                            <div><div className={styles.metaLabel}>Last new result</div><div className={styles.metaValue}>{(autoCollection?.lastNewResultAt || autoCollection?.lastDiscoveryAt || lastProgressAt) ? new Date(autoCollection?.lastNewResultAt || autoCollection?.lastDiscoveryAt || lastProgressAt).toLocaleString() : '—'}</div></div>
+                            <div><div className={styles.metaLabel}>Last page advancement</div><div className={styles.metaValue}>{(autoCollection?.lastPageAdvancementAt || autoCollection?.lastDiscoveryAt) ? new Date(autoCollection?.lastPageAdvancementAt || autoCollection?.lastDiscoveryAt).toLocaleString() : '—'}</div></div>
                             <div><div className={styles.metaLabel}>Status</div><div><span className={`${styles.badge} ${statusBadge.cls}`}>{statusBadge.text}</span></div></div>
                             <div><div className={styles.metaLabel}>Processing Backlog</div><div className={styles.metaValue}>{processingBacklog}</div></div>
                             <div><div className={styles.metaLabel}>Stuck Processing</div><div className={styles.metaValue} style={{ color: stuckProcessing ? '#b45309' : undefined }}>{stuckProcessing}</div></div>
@@ -2846,7 +3021,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                             <div className={`${styles.kpi} ${styles.kpiDarkGreen}`}>
                                 <div className={styles.kpiTop}><CheckCircle2 size={14} className={styles.kpiIcon} aria-hidden /></div>
                                 <div className={styles.kpiCount}>{verifiedCount}</div>
-                                <div className={styles.kpiName}>Unique Verified</div>
+                                <div className={styles.kpiName}>Verified Relevant</div>
                                 <div className={styles.kpiSub}>
                                     {verifiedSourceAppearances
                                         ? `${verifiedSourceAppearances} appearances · ${duplicatesConsolidated} consolidated`
@@ -2944,18 +3119,38 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                                     <span>{manualActionCopy(activeSession).detail}</span>
                                 </button>
                             )}
-                            <button type="button" className={`${styles.ctrlBtn} ${styles.ctrlStopSearch}`} disabled={!canStop && !(autoActive || processRunning)} onClick={onStop}>
-                                Stop Search
+                            {!ownerStoppedUi && (
+                            <button type="button" className={`${styles.ctrlBtn} ${styles.ctrlStopSearch}`} disabled={!canStop && !(autoActive || processRunning) || !!busy} onClick={onStop}>
+                                {busy === 'stop' ? 'Stopping...' : 'Stop Search'}
                                 <span>Stops this run completely. Collected results are kept.</span>
                             </button>
+                            )}
+                            {!ownerStoppedUi && (
                             <button type="button" className={`${styles.ctrlBtn} ${styles.ctrlStopAll}`} disabled={!!busy || !(session?._id || result?.session?._id) || inactive} onClick={onStopAllProcessing}>
-                                Stop All Processing
+                                {busy === 'pipeStop' ? 'Stopping...' : 'Stop All Processing'}
                                 <span>Stops collection and all future processing safely.</span>
                             </button>
+                            )}
+                            {!ownerStoppedUi && (
                             <button type="button" className={`${styles.ctrlBtn} ${styles.ctrlExport}`} disabled={!canStop && !canExport} onClick={onStopAndExport}>
                                 Stop &amp; Export Current Results
                                 <span>Stop and export data with current stage/status.</span>
                             </button>
+                            )}
+                            {ownerStoppedUi && (
+                            <button
+                                type="button"
+                                className={`${styles.ctrlBtn} ${styles.ctrlExport}`}
+                                disabled={capturedUnique < 1}
+                                onClick={() => {
+                                    const el = document.getElementById('sls-captured-results');
+                                    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                }}
+                            >
+                                View Results
+                                <span>Scroll to collected companies.</span>
+                            </button>
+                            )}
                             <button
                                 type="button"
                                 className={`${styles.ctrlBtn} ${styles.ctrlExport}`}
@@ -2979,10 +3174,10 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                                 <span>Always available while any records are captured.</span>
                             </button>
                             <button type="button" className={`${styles.ctrlBtn} ${styles.ctrlExportFinal}`} disabled={!!busy || !genuinenessRows.length} onClick={onExportVerified}>
-                                Export Final Verified Results
+                                Export Final Verified Relevant Results
                                 <span>Export verified and reviewed final records.</span>
                             </button>
-                            {inactive && (
+                            {(inactive || ownerStoppedUi) && (
                                 <button type="button" className={`${styles.ctrlBtn} ${styles.ctrlResume}`} onClick={onStartNew}>
                                     Start New Search
                                     <span>Begin another product / location search.</span>
@@ -3009,9 +3204,11 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
             )}
 
             {!!(session?._id || result?.session?._id) && capturedUnique > 0 && (
+                <div id="sls-captured-results">
                 <SimpleLeadSearchCapturedDataPanel
                     sessionId={session?._id || result?.session?._id}
                     campaignName={campaignName}
+                    workflowFilter={workflowHash === '#leads' ? 'lead_created' : (workflowHash === '#verified' ? 'verified' : '')}
                     isChinaCampaign={
                         String(form.country || result?.searchProfile?.country || '').toLowerCase() === 'china'
                         || result?.searchProfile?.searchMarket === 'china_suppliers'
@@ -3051,13 +3248,14 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                         }
                     }}
                 />
+                </div>
             )}
 
             {result && (
-                <section className={styles.tableCard} ref={verifiedSectionRef} id="sls-latest-verified">
+                <section className={styles.tableCard} ref={verifiedSectionRef} id="de-verified">
                     <div className={styles.tableHead}>
                         <h3>
-                            Latest Verified Results (Live)
+                            Latest Verified Relevant Results (Live)
                             <span className={`${styles.badge} ${styles.badgeGreen}`}>{verifiedCount} unique</span>
                             {verifiedSourceAppearances > 0 && (
                                 <span className={`${styles.badge} ${styles.badgeGrey}`} style={{ marginLeft: 6 }}>
@@ -3217,7 +3415,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                                 }
                             }}
                         >
-                            View All Verified Results <ChevronRight size={16} aria-hidden />
+                            View All Verified Relevant Results <ChevronRight size={16} aria-hidden />
                         </button>
                     </div>
                 </section>
@@ -3267,43 +3465,46 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                                 background: '#fff',
                                 border: '1px solid #e0e7ff',
                             }}>
-                                <label style={labelStyle}>
+                                <label style={{ ...labelStyle, gridColumn: '1 / -1' }}>
                                     Collection Mode
                                     <select
-                                        value={autoCollectionOptions.collectionMode || 'unlimited'}
-                                        disabled={autoActive || formLocked}
-                                        onChange={(e) => setAutoCollectionOptions((o) => ({
-                                            ...o,
-                                            collectionMode: e.target.value,
-                                            pageCollectionMode: e.target.value === 'unlimited' ? 'until_no_more' : o.pageCollectionMode,
-                                        }))}
+                                        value={formManualLimit ? 'fixed_target' : (autoCollectionOptions.collectionMode || 'unlimited')}
+                                        disabled={autoActive}
+                                        onChange={(e) => {
+                                            const collectionMode = e.target.value;
+                                            setAutoCollectionOptions((o) => ({
+                                                ...o,
+                                                collectionMode,
+                                                requestedCaptureTarget: collectionMode === 'fixed_target'
+                                                    ? (Number(o.requestedCaptureTarget) > 0 ? o.requestedCaptureTarget : '')
+                                                    : 0,
+                                            }));
+                                        }}
                                         style={fieldStyle}
                                     >
-                                        <option value="unlimited">Unlimited — Until No More Results</option>
-                                        <option value="fixed_target">Fixed Target</option>
+                                        <option value="unlimited">Unlimited — Recommended / Default</option>
+                                        <option value="fixed_target">Manual Limit</option>
                                     </select>
                                 </label>
-                                {(autoCollectionOptions.collectionMode || 'unlimited') === 'unlimited' ? (
-                                    <div style={{ gridColumn: '1 / -1', fontSize: 12, color: '#3730a3' }}>
-                                        The campaign will continue until all available pages and approved queries are exhausted.
-                                    </div>
-                                ) : (
-                                <label style={labelStyle}>
-                                    Capture Target (raw source results)
-                                    <select
-                                        value={Number(autoCollectionOptions.requestedCaptureTarget) || 100}
-                                        disabled={autoActive || formLocked}
-                                        onChange={(e) => setAutoCollectionOptions((o) => ({ ...o, requestedCaptureTarget: Number(e.target.value) || 100 }))}
-                                        style={fieldStyle}
-                                    >
-                                        <option value={25}>25</option>
-                                        <option value={50}>50</option>
-                                        <option value={100}>100</option>
-                                        <option value={250}>250</option>
-                                        <option value={500}>500</option>
-                                    </select>
-                                </label>
-                                )}
+                                {(formManualLimit || String(autoCollectionOptions.collectionMode) === 'fixed_target') ? (
+                                    <label style={labelStyle}>
+                                        Maximum Results
+                                        <input
+                                            type="number"
+                                            min={1}
+                                            max={500}
+                                            placeholder="e.g. 200"
+                                            value={autoCollectionOptions.requestedCaptureTarget || ''}
+                                            disabled={autoActive}
+                                            onChange={(e) => setAutoCollectionOptions((o) => ({
+                                                ...o,
+                                                collectionMode: 'fixed_target',
+                                                requestedCaptureTarget: e.target.value,
+                                            }))}
+                                            style={fieldStyle}
+                                        />
+                                    </label>
+                                ) : null}
                                 <label style={labelStyle}>
                                     Mode
                                     <select

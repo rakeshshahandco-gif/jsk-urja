@@ -15,6 +15,15 @@ import {
     lastVisibleRunError,
     safeQueryTotal,
     shouldKeepPollingForAutoProcessing,
+    formatQueryProgressLabel,
+    pendingQueryCount,
+    formatDiscoveryOwnerStatus,
+    formatProviderState,
+    isOwnerStoppedSearch,
+    isAlreadyStoppedMessage,
+    alreadyStoppedUserMessage,
+    allProcessingAlreadyStoppedMessage,
+    searchStoppedSuccessMessage,
 } from './simpleLeadSearchUi.js';
 
 describe('Simple Lead Search UI null-safety', () => {
@@ -141,6 +150,39 @@ describe('Simple Lead Search UI null-safety', () => {
             autoCollection: { status: 'running' },
             session: { status: 'awaiting_user' },
             status: 'awaiting_user',
+        }), '');
+    });
+
+    it('formats query progress so in-progress query 1 is not shown as 0/14 only', () => {
+        assert.equal(
+            formatQueryProgressLabel({ queriesCompleted: 0, queryIndex: 1, queryTotal: 14, googlePage: 12 }),
+            '0 completed · Query 1/14 — Page 12',
+        );
+        assert.equal(pendingQueryCount({ queryIndex: 1, queryTotal: 14 }), 13);
+        assert.equal(formatProviderState({ providerState: 'Retry' }), 'Retry');
+        assert.equal(
+            formatDiscoveryOwnerStatus({ pauseReason: 'unsupported_page_retry', status: 'running', discoveryStatus: 'running' }),
+            'Waiting on provider / retrying',
+        );
+        assert.equal(
+            formatDiscoveryOwnerStatus({ providerState: 'Human Verification' }, { status: 'manual_action_required' }),
+            'Human verification required',
+        );
+    });
+
+    it('treats owner Stop as terminal, not a failed request', () => {
+        assert.equal(isOwnerStoppedSearch({ status: 'cancelled' }, { status: 'stopped' }), true);
+        assert.equal(isOwnerStoppedSearch({ status: 'awaiting_user' }, { ownerStoppedAt: '2026-09-06' }), true);
+        assert.equal(isOwnerStoppedSearch({ status: 'awaiting_user' }, { status: 'running' }), false);
+        assert.equal(isAlreadyStoppedMessage('STOPPED BY USER. This search will not resume.'), true);
+        assert.equal(alreadyStoppedUserMessage(), 'Search is already stopped.');
+        assert.equal(allProcessingAlreadyStoppedMessage(), 'All processing is already stopped.');
+        assert.match(searchStoppedSuccessMessage(), /preserved/i);
+        assert.equal(lastVisibleRunError({
+            autoProcessing: { lastErrorCode: 'owner_stop', lastErrorMessage: 'Stopped by owner. Completed work is preserved.' },
+            autoCollection: { lastErrorCode: 'owner_stop', ownerStoppedAt: '2026-09-06', status: 'stopped' },
+            session: { status: 'cancelled' },
+            status: 'cancelled',
         }), '');
     });
 });

@@ -19,9 +19,49 @@ const STRONG_PRODUCT = [
     'zigbee', 'z-wave', 'matter protocol', 'ble automation', 'wifi automation',
     'smart curtain', 'smart sensor', 'home gateway', 'automation controller',
     'smart door lock', 'smart thermostat', 'knx home', 'homekit',
-    'dali', 'knx', 'tuya', 'matter', 'lighting automation',
+    'dali lighting', 'dali driver', 'lighting automation',
     'smart homes', 'automation installation', 'automation project',
+    'led lighting', 'led light', 'led lights', 'led luminaire', 'led fixture',
+    'led fixtures', 'led downlight', 'led panel', 'panel light', 'street light',
+    'flood light', 'architectural lighting', 'commercial lighting',
+    'industrial lighting', 'led manufacturer', 'lighting manufacturer', 'lighting oem',
 ];
+
+const GENERIC_INDUSTRY_TOKENS = new Set([
+    'led', 'light', 'lights', 'lighting', 'manufacturer', 'manufacturers',
+    'company', 'india', 'mumbai', 'thane', 'vasai', 'virar', 'kalyan',
+    'nalasopara', 'and', 'the', 'for', 'with', 'from',
+]);
+
+function campaignIndustryPhrases(campaign = {}) {
+    const out = [];
+    const seen = new Set();
+    const push = (s) => {
+        const n = norm(s);
+        if (!n || n.length < 6 || GENERIC_INDUSTRY_TOKENS.has(n) || seen.has(n)) return;
+        seen.add(n);
+        out.push(n);
+    };
+    push(campaign.product);
+    push(campaign.targetIndustry);
+    for (const p of campaign.targetProducts || []) push(p);
+    const hay = `${campaign.product || ''} ${campaign.targetIndustry || ''}`;
+    if (/\bled\b/.test(norm(hay)) || /light/.test(norm(hay))) {
+        for (const phrase of [
+            'led lighting', 'led light', 'led luminaire', 'led fixture',
+            'led manufacturer', 'lighting manufacturer',
+        ]) push(phrase);
+    }
+    return out;
+}
+
+function productEvidenceCorpus(enrichment = {}) {
+    return [
+        ...(enrichment.productsServices || []),
+        enrichment.manufacturerEvidence || '',
+        enrichment.businessType || '',
+    ].join(' \n ');
+}
 
 const POSSIBLE_PRODUCT = [
     'home automation',
@@ -217,29 +257,21 @@ export function qualifyWithRules(input = {}) {
 
     const rejectHits = includesAny(companyEvidenceText, REJECT_STRONG);
     const industrialHits = includesAny(companyEvidenceText, INDUSTRIAL_ONLY);
-    const campaignProductTerms = [...new Set([
-        campaign.product,
-        campaign.targetIndustry,
-        campaign.name,
-        ...(Array.isArray(campaign.targetProducts) ? campaign.targetProducts : []),
-    ].flatMap((s) => {
-        const n = norm(s);
-        if (!n || n.length < 3) return [];
-        const parts = n.split(' ').filter((w) => w.length > 2 && !['and', 'the', 'for', 'with'].includes(w));
-        return [n, ...parts];
-    }))];
+    const campaignProductTerms = campaignIndustryPhrases(campaign);
+    const productCorpus = productEvidenceCorpus(enrichment);
+    const industryCorpus = productCorpus.trim() ? productCorpus : officialEvidenceText;
     const strongOfficial = [...new Set([
-        ...includesAny(officialEvidenceText, STRONG_PRODUCT),
-        ...includesAny(officialEvidenceText, campaignProductTerms),
+        ...includesAny(industryCorpus, STRONG_PRODUCT),
+        ...includesAny(industryCorpus, campaignProductTerms),
     ])];
     const strongGoogle = [...new Set([
         ...includesAny(googleOnlyText, STRONG_PRODUCT),
         ...includesAny(googleOnlyText, campaignProductTerms),
     ])];
-    const strongHits = [...new Set([...strongOfficial, ...includesAny(companyEvidenceText, STRONG_PRODUCT), ...includesAny(companyEvidenceText, campaignProductTerms)])];
+    const strongHits = [...new Set([...strongOfficial, ...includesAny(industryCorpus, STRONG_PRODUCT)])];
     const possibleHits = [...new Set([
-        ...includesAny(companyEvidenceText, POSSIBLE_PRODUCT),
-        ...includesAny(companyEvidenceText, campaignProductTerms),
+        ...includesAny(industryCorpus, POSSIBLE_PRODUCT),
+        ...includesAny(industryCorpus, campaignProductTerms),
     ])];
     const locationInfo = scoreLocation(campaign, enrichment);
     const {
@@ -279,15 +311,24 @@ export function qualifyWithRules(input = {}) {
         let relevanceScore = Number(result.relevanceScore) || 0;
         let decisionReason = result.decisionReason || '';
         if (manufacturerRequested) {
-            if (bt.match === 'yes') relevanceScore = Math.min(100, Math.max(relevanceScore, 72));
-            if (bt.match === 'possibly') relevanceScore = Math.min(relevanceScore, 58);
-            if (bt.match === 'no') {
-                relevanceScore = Math.min(relevanceScore, 28);
-                if (systemDecision === 'strong_match') {
-                    systemDecision = result.businessType === 'directory_marketplace'
-                        ? 'human_review_required'
-                        : 'possible_match';
-                    decisionReason = `${decisionReason} | ${bt.reason}`;
+            const unrelated = /unrelated/i.test(String(result.productMatchStrength || ''));
+            if (!unrelated) {
+                if (bt.match === 'yes') relevanceScore = Math.min(100, Math.max(relevanceScore, 72));
+                if (bt.match === 'possibly') {
+                    relevanceScore = Math.min(relevanceScore, 58);
+                    if (systemDecision === 'strong_match') {
+                        systemDecision = 'human_review_required';
+                        decisionReason = `${decisionReason} | manufacturer evidence unclear`;
+                    }
+                }
+                if (bt.match === 'no') {
+                    relevanceScore = Math.min(relevanceScore, 28);
+                    if (systemDecision === 'strong_match') {
+                        systemDecision = result.businessType === 'directory_marketplace'
+                            ? 'human_review_required'
+                            : 'possible_match';
+                        decisionReason = `${decisionReason} | ${bt.reason}`;
+                    }
                 }
             }
         }
@@ -449,28 +490,6 @@ export function qualifyWithRules(input = {}) {
     );
     if (strictLocationMismatch) {
         unmatchedOrConflictingEvidence.push('location_mismatch');
-        const selectedLabel = mode === LOCATION_MATCH_MODES.STRICT_STATE
-            ? (campaign.state || 'selected state')
-            : mode === LOCATION_MATCH_MODES.STRICT_COUNTRY
-                ? (campaign.country || 'selected country')
-                : (campaign.city || 'selected city');
-        return finalize({
-            systemDecision: 'rejected',
-            relevanceScore: Math.min(relevanceScore, 55),
-            confidence: 'high',
-            decisionReason: `Location Mismatch — ${locationClassification}. Confirmed: ${(confirmedCities || []).concat(confirmedStates || []).filter(Boolean).join(', ') || 'other location'}. Requested ${selectedLabel} office not confirmed.`,
-            matchedKeywords,
-            unmatchedOrConflictingEvidence,
-            productsMatched,
-            businessType,
-            locationMatch: 'mismatch',
-            ...contact,
-            sourceEvidence,
-            ...locationExtras,
-            productMatchStrength: strongOfficial.length
-                ? classifyProductMatchStrength({ strongHits: strongOfficial, possibleHits, companyEvidenceOnlyHits: strongOfficial.length })
-                : productMatchStrength,
-        });
     }
 
     const nameOnly = norm(enrichment.companyName || captures[0]?.title || '');
@@ -539,22 +558,6 @@ export function qualifyWithRules(input = {}) {
         systemDecision = 'human_review_required';
         confidence = 'low';
         decisionReason = 'Unable to qualify — missing evidence';
-    }
-
-    if (mode === LOCATION_MATCH_MODES.STRICT_CITY && norm(campaign.city)) {
-        if (systemDecision === 'strong_match' && locationMatch !== 'match') {
-            if (locationMatch === 'partial' && servesSelectedCity) {
-                systemDecision = 'possible_match';
-                confidence = 'medium';
-                decisionReason = `${decisionReason} | Serves ${campaign.city} — no local office confirmed`;
-                unmatchedOrConflictingEvidence.push('serves_city_no_office');
-            } else if (locationMatch === 'unknown') {
-                systemDecision = 'human_review_required';
-                confidence = 'low';
-                decisionReason = `${decisionReason} | ${locationClassification} for required city ${campaign.city}`;
-                unmatchedOrConflictingEvidence.push('location_not_confirmed');
-            }
-        }
     }
 
     if ((businessType === 'distributor' || businessType === 'dealer' || businessType === 'system_integrator')

@@ -7,6 +7,15 @@ function collapse(value = '') {
     return String(value || '').replace(/\s+/g, ' ').trim();
 }
 
+function productCoreForTypePhrases(product = '') {
+    const cleaned = collapse(product)
+        .toLowerCase()
+        .replace(/\b(manufacturers?|suppliers?|dealers?|distributors?|wholesalers?|exporters?|factories|factory|oem)\b/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    return cleaned || collapse(product).toLowerCase();
+}
+
 function norm(value = '') {
     return collapse(value).toLowerCase();
 }
@@ -377,7 +386,7 @@ export function businessTypeMatchRank(match = '') {
  * Exclusions are appended by the query builder.
  */
 export function buildManufacturerSearchPhrases({ product = '', location = '' } = {}) {
-    const productLower = collapse(product).toLowerCase();
+    const productLower = productCoreForTypePhrases(product);
     if (!productLower) return [];
     const quoted = quoteIfMultiword(productLower);
     const loc = collapse(location);
@@ -396,7 +405,7 @@ export function buildManufacturerSearchPhrases({ product = '', location = '' } =
  * Manufacturer variants stay in buildManufacturerSearchPhrases.
  */
 export function buildTypeSearchPhrases({ product = '', location = '', businessType = '' } = {}) {
-    const productLower = collapse(product).toLowerCase();
+    const productLower = productCoreForTypePhrases(product);
     if (!productLower) return [];
     const quoted = quoteIfMultiword(productLower);
     const loc = collapse(location);
@@ -416,7 +425,7 @@ export function buildTypeSearchPhrases({ product = '', location = '', businessTy
 }
 
 export function buildCombinedManufacturerExporterPhrase({ product = '', location = '' } = {}) {
-    const productLower = collapse(product).toLowerCase();
+    const productLower = productCoreForTypePhrases(product);
     if (!productLower) return [];
     const quoted = quoteIfMultiword(productLower);
     const loc = collapse(location);

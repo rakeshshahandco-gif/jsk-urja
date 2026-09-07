@@ -1,0 +1,23 @@
+{
+  "name": "jsk-esarthi-discovery-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local Windows Discovery Agent for JSK E-SARTHI (visible Chromium). Does not run on Render.",
+  "bin": {
+    "jsk-discovery-agent": "./src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "connect": "node src/index.js connect",
+    "run-job": "node src/index.js run-job",
+    "listen": "node src/index.js listen",
+    "start:worker": "node src/index.js listen"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "playwright": "^1.49.0"
+  }
+}

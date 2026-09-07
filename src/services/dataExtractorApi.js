@@ -223,6 +223,21 @@ export const dataExtractorApi = {
         });
         return unwrap(res);
     },
+    simpleLeadSearchCrmLeadPreview: async (sessionId, captureId, params = {}) => {
+        const res = await api.get(
+            `/data-extractor/simple-lead-search/sessions/${sessionId}/captured-data/${captureId}/crm-lead-preview`,
+            { params, timeout: 30000 },
+        );
+        return unwrap(res);
+    },
+    simpleLeadSearchCreateCrmLead: async (sessionId, captureId, body = {}) => {
+        const res = await api.post(
+            `/data-extractor/simple-lead-search/sessions/${sessionId}/captured-data/${captureId}/create-crm-lead`,
+            body,
+            { timeout: 60000 },
+        );
+        return unwrap(res);
+    },
     simpleLeadSearchExportAllCurrent: async (sessionId) => {
         const res = await api.get(`/data-extractor/simple-lead-search/sessions/${sessionId}/export-all-current`, {
             responseType: 'blob',

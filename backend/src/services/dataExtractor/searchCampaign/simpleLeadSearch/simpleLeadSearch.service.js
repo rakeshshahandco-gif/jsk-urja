@@ -19,7 +19,7 @@ import { ensureSimpleLeadSearchCampaign } from '../searchCampaign.service.js';
 import { ensureSimpleLeadSearchQuery } from '../searchQuery/searchQuery.service.js';
 import { SearchQuery } from '../../../../models/searchQuery.model.js';
 import { SearchCampaign } from '../../../../models/searchCampaign.model.js';
-import { buildCampaignName, buildSimpleQueries, normalizeDisplay, normalizeBusinessTypes, parseRelatedKeywords, parseLocationExpandList, inferLocationScope, validateLocationForScope, suggestMajorCitiesForState, BUSINESS_TYPE_OPTIONS, DEFAULT_BUSINESS_TYPES, SEARCH_MARKETS, INDIA_GLOBAL_SOURCE_OPTIONS, CHINA_SOURCE_OPTIONS, isChinaCountry, parseProductModels, sourceHintFromPlatform } from './queryBuilder.util.js';
+import { buildCampaignName, buildSimpleQueries, normalizeDisplay, normalizeBusinessTypes, parseRelatedKeywords, parseLocationExpandList, inferLocationScope, validateLocationForScope, suggestMajorCitiesForState, BUSINESS_TYPE_OPTIONS, DEFAULT_BUSINESS_TYPES, SEARCH_MARKETS, INDIA_GLOBAL_SOURCE_OPTIONS, CHINA_SOURCE_OPTIONS, isChinaCountry, isIndiaCountry, suggestIndiaProductSynonyms, INDIA_PRIORITY_CITIES, parseProductModels, sourceHintFromPlatform } from './queryBuilder.util.js';
 import { attachStageA, summarizeStageA } from './stageAPreFilter.util.js';
 import { buildUnverifiedRawCaptureWorkbook } from './simpleLeadSearch.export.service.js';
 
@@ -64,7 +64,7 @@ function parseBool(raw, fallback = false) {
 
 function parseSearchBody(body = {}) {
     const product = normalizeDisplay(body?.product || body?.targetIndustry || '');
-    const city = body?.city != null ? normalizeDisplay(body.city) : '';
+    let city = body?.city != null ? normalizeDisplay(body.city) : '';
     const state = body?.state != null ? normalizeDisplay(body.state) : '';
     let country = body?.country != null ? normalizeDisplay(body.country) : '';
     const excludeKeywords = Array.isArray(body?.excludeKeywords) ? body.excludeKeywords : [];
@@ -97,9 +97,23 @@ function parseSearchBody(body = {}) {
     }
     const expandStateSearch = parseBool(body?.expandStateSearch, false);
     const expandCountrySearch = parseBool(body?.expandCountrySearch, false);
-    const expandCities = parseLocationExpandList(body?.expandCities ?? body?.selectedCities);
+    let expandCities = parseLocationExpandList(body?.expandCities ?? body?.selectedCities);
+    const cityParts = parseLocationExpandList(city);
+    if (cityParts.length > 1) {
+        city = cityParts[0];
+        for (const part of cityParts) {
+            if (!expandCities.some((c) => String(c).toLowerCase() === part.toLowerCase())) {
+                expandCities.push(part);
+            }
+        }
+    }
     const expandStatesRaw = body?.expandStates ?? body?.selectedStates;
     const expandStates = parseLocationExpandList(expandStatesRaw);
+    let relatedForScope = relatedKeywords;
+    if (isIndiaCountry(country) && !city && locationScope === 'country') {
+        if (!expandCities.length) expandCities = [...INDIA_PRIORITY_CITIES];
+        if (!relatedForScope.length) relatedForScope = suggestIndiaProductSynonyms(product);
+    }
     if (expandCountrySearch && expandStatesRaw != null && String(expandStatesRaw).trim() !== '' && !expandStates.length) {
         throw new ApiError(400, 'Selected states could not be read. Use comma-separated names such as Guangdong, Zhejiang, Jiangsu, Fujian.');
     }
@@ -108,7 +122,7 @@ function parseSearchBody(body = {}) {
         : [];
     const useScopedBuilder = hasBusinessTypesField
         || Boolean(body?.locationScope)
-        || relatedKeywords.length > 0
+        || relatedForScope.length > 0
         || Boolean(searchMarket);
 
     return {
@@ -117,7 +131,7 @@ function parseSearchBody(body = {}) {
         state,
         country,
         excludeKeywords,
-        relatedKeywords,
+        relatedKeywords: relatedForScope,
         businessTypes,
         hasBusinessTypesField,
         searchMarket: searchMarket || 'india_global_web',
@@ -797,7 +811,10 @@ export async function stopSimpleLeadSearch({ companyId, user, sessionId }) {
         autoCollection: stopped.autoCollection,
         campaignProgress: stopped.campaignProgress,
         sessionEnded: true,
-        sessionEndedMessage: stopped.sessionEndedMessage || 'STOPPED BY USER. Start a new search.',
+        alreadyStopped: Boolean(stopped.alreadyStopped),
+        sessionEndedMessage: stopped.alreadyStopped
+            ? 'Search is already stopped.'
+            : (stopped.sessionEndedMessage || 'STOPPED BY USER. Start a new search.'),
         message: stopped.message,
         preserved: stopped.preserved || {
             rawCaptures: true,

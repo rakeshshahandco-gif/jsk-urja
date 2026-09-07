@@ -578,8 +578,8 @@ export async function getGenuinenessDetail({ companyId, user, sessionId, genuine
         genuineness,
         qualification,
         enrichment,
-        createCrmLeadEnabled: false,
-        createCrmLeadNote: 'Create CRM Lead is disabled until a separate controlled Lead-creation checkpoint is approved',
+        createCrmLeadEnabled: true,
+        createCrmLeadNote: 'Create Lead uses the existing CRM Lead Master. Extraction is not paused.',
     };
 }
 
@@ -657,12 +657,6 @@ export async function updateOwnerReview({ companyId, user, sessionId, genuinenes
     };
 }
 
-/**
- * Future-ready stub — intentionally disabled. CRM Lead creation from genuineness
- * verification requires a separate, explicitly approved checkpoint.
- */
-export async function createCrmLead() {
-    throw new ApiError(403, 'CRM Lead creation is disabled until a separate controlled Lead-creation checkpoint is approved');
-}
+export { createCrmLeadFromCapture as createCrmLead } from '../simpleLeadSearch/simpleLeadSearch.createCrmLead.service.js';
 
 export { processJob, evaluateGenuineness };

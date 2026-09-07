@@ -4,7 +4,7 @@ import styles from './DataExtractorSimpleLeadSearchPage.module.css';
 const FILTERS = [
     { id: 'all', label: 'All' },
     { id: 'processing', label: 'Processing' },
-    { id: 'verified', label: 'Verified' },
+    { id: 'verified', label: 'Verified Relevant' },
     { id: 'review', label: 'Review' },
     { id: 'rejected', label: 'Rejected' },
     { id: 'failed', label: 'Failed' },

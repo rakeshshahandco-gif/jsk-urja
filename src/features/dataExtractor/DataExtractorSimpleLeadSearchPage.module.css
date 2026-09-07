@@ -1246,3 +1246,107 @@
   font-size: 12px;
   margin-right: 8px;
 }
+
+.summaryCards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin: 0 0 14px;
+}
+.summaryCard {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 10px 12px;
+}
+.summaryCard span {
+  display: block;
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 600;
+}
+.summaryCard strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 20px;
+  color: #0f172a;
+}
+.extLink {
+  color: #1d4ed8;
+  font-weight: 650;
+  text-decoration: none;
+}
+.extLink:hover { text-decoration: underline; }
+.drawerBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.35);
+  z-index: 80;
+  display: flex;
+  justify-content: flex-end;
+}
+.companyDrawer {
+  width: min(480px, 100vw);
+  height: 100%;
+  background: #fff;
+  overflow: auto;
+  padding: 18px 18px 28px;
+  box-shadow: -8px 0 24px rgba(15, 23, 42, 0.12);
+}
+.drawerHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+.drawerTitle {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+}
+.drawerSection { margin: 16px 0; }
+.drawerSection h4 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; }
+.drawerSub { margin: 10px 0 6px; font-size: 13px; }
+.drawerDl { display: grid; grid-template-columns: 140px 1fr; gap: 6px 10px; margin: 0; font-size: 13px; }
+.drawerDl dt { color: #64748b; }
+.drawerDl dd { margin: 0; word-break: break-word; }
+.drawerActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 16px;
+  position: sticky;
+  bottom: 0;
+  background: #fff;
+  padding-top: 10px;
+}
+.evidenceList { margin: 0; padding-left: 18px; font-size: 13px; }
+.aiTip { font-size: 11px; color: #64748b; margin: 0 0 8px; }
+.leadModal {
+  width: min(520px, 96vw);
+  max-height: 92vh;
+  overflow: auto;
+  margin: auto;
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.2);
+}
+.dupBanner {
+  border: 1px solid #fcd34d;
+  background: #fffbeb;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 12px 0;
+}
+.unlimitedMode {
+  border: 1px solid #dbeafe;
+  background: #eff6ff;
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #1e3a8a;
+}

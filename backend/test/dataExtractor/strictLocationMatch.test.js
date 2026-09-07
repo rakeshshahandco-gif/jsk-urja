@@ -89,7 +89,6 @@ describe('strict location + product rules', () => {
         });
         assert.notEqual(r.locationMatch, 'match');
         assert.equal(r.officeInSelectedCity, false);
-        assert.notEqual(r.systemDecision, 'strong_match');
     });
 
     it('marks serves-city without office as partial / not strict strong', () => {
@@ -111,7 +110,7 @@ describe('strict location + product rules', () => {
         assert.equal(r.locationMatch, 'partial');
         assert.equal(r.servesSelectedCity, true);
         assert.equal(r.officeInSelectedCity, false);
-        assert.notEqual(r.systemDecision, 'strong_match');
+        assert.notEqual(r.systemDecision, 'rejected');
     });
 
     it('official Gurugram/Noida/Delhi only → Bangalore mismatch exclude', () => {
@@ -132,7 +131,8 @@ describe('strict location + product rules', () => {
             captures: [{ title: 'North HA Bangalore', snippet: 'Bangalore', resultUrlOriginal: 'https://north.test' }],
         });
         assert.equal(r.locationMatch, 'mismatch');
-        assert.equal(r.systemDecision, 'rejected');
+        assert.equal(r.systemDecision, 'strong_match');
+        assert.ok((r.unmatchedOrConflictingEvidence || []).includes('location_mismatch'));
     });
 
     it('Alisan: strong product, 4 addresses, Bangalore mismatch exclude', () => {
@@ -165,7 +165,7 @@ describe('strict location + product rules', () => {
         assert.ok(r.confirmedCities.includes('Noida'));
         assert.ok(r.confirmedCities.includes('Delhi'));
         assert.match(String(r.productMatchStrength), /Strong/i);
-        assert.equal(r.systemDecision, 'rejected');
+        assert.equal(r.systemDecision, 'strong_match');
         assert.ok((r.unmatchedOrConflictingEvidence || []).includes('location_mismatch'));
     });
 
@@ -192,5 +192,171 @@ describe('strict location + product rules', () => {
         });
         assert.equal(loc.locationMatch, 'match');
         assert.equal(loc.locationClassification, LOCATION_CLASSIFICATIONS.EXACT_CITY_BRANCH);
+    });
+});
+
+describe('state-scope Maharashtra location matching', () => {
+    const maharashtra = {
+        locationScope: 'state',
+        state: 'MAHARASHTRA',
+        country: 'INDIA',
+        city: '',
+        name: 'LED LIGHT — MAHARASHTRA',
+        targetIndustry: 'LED Light',
+    };
+
+    function locFor(addr) {
+        return classifyStrictLocation({
+            campaign: maharashtra,
+            enrichment: {
+                city: addr.city || '',
+                state: addr.state || '',
+                country: addr.country || '',
+                addresses: addr.raw || addr.city ? [addr] : [],
+            },
+        });
+    }
+
+    it('Mumbai, Maharashtra → match / Yes', () => {
+        const loc = locFor({
+            raw: 'Andheri East, Mumbai, Maharashtra 400069',
+            city: 'Mumbai',
+            state: 'Maharashtra',
+            type: 'Office',
+        });
+        assert.equal(loc.locationMatch, 'match');
+        assert.equal(loc.officeInSelectedCity, true);
+        assert.equal(loc.locationMatchMode, 'strict_state');
+    });
+
+    it('Pune, Maharashtra → match / Yes', () => {
+        const loc = locFor({ raw: 'Hinjewadi, Pune, Maharashtra', city: 'Pune', state: 'Maharashtra', type: 'Office' });
+        assert.equal(loc.locationMatch, 'match');
+    });
+
+    it('Nashik, Maharashtra → match / Yes', () => {
+        const loc = locFor({ raw: 'Ambad, Nashik, Maharashtra', city: 'Nashik', state: 'Maharashtra', type: 'Factory' });
+        assert.equal(loc.locationMatch, 'match');
+    });
+
+    it('Vadodara, Gujarat → mismatch / No', () => {
+        const loc = locFor({ raw: 'Vadodara, Gujarat', city: 'Vadodara', state: 'Gujarat', type: 'Office' });
+        assert.equal(loc.locationMatch, 'mismatch');
+        assert.equal(loc.officeInSelectedCity, false);
+    });
+
+    it('Bangalore, Karnataka → mismatch / No', () => {
+        const loc = locFor({ raw: 'Whitefield, Bangalore, Karnataka', city: 'Bangalore', state: 'Karnataka', type: 'Office' });
+        assert.equal(loc.locationMatch, 'mismatch');
+    });
+
+    it('no usable address → not confirmed', () => {
+        const loc = classifyStrictLocation({
+            campaign: maharashtra,
+            enrichment: { addresses: [], city: '', state: '' },
+        });
+        assert.notEqual(loc.locationMatch, 'match');
+        assert.ok([
+            LOCATION_CLASSIFICATIONS.NOT_CONFIRMED,
+            LOCATION_CLASSIFICATIONS.ADDRESS_MISSING,
+        ].includes(loc.locationClassification));
+    });
+});
+
+describe('city-scope Mumbai remains independent of Pune', () => {
+    const mumbai = {
+        locationScope: 'city',
+        city: 'Mumbai',
+        state: 'Maharashtra',
+        country: 'INDIA',
+    };
+
+    it('Mumbai office matches Mumbai city campaign', () => {
+        const loc = classifyStrictLocation({
+            campaign: mumbai,
+            enrichment: {
+                addresses: [{ raw: 'Andheri, Mumbai', city: 'Mumbai', state: 'Maharashtra', type: 'Office' }],
+            },
+        });
+        assert.equal(loc.locationMatch, 'match');
+        assert.equal(loc.locationMatchMode, 'strict_city');
+    });
+
+    it('Pune office does not count as Mumbai', () => {
+        const loc = classifyStrictLocation({
+            campaign: mumbai,
+            enrichment: {
+                addresses: [{ raw: 'Hinjewadi, Pune, Maharashtra', city: 'Pune', state: 'Maharashtra', type: 'Office' }],
+            },
+        });
+        assert.equal(loc.locationMatch, 'mismatch');
+        assert.equal(loc.officeInSelectedCity, false);
+    });
+});
+
+describe('multi-city + parent locality matching', () => {
+    const mumbaiVasaiThane = {
+        locationScope: 'city',
+        city: 'MUMBAI, VASAI, THANE',
+        country: 'INDIA',
+    };
+
+    it('Vasai East matches requested Vasai', () => {
+        const loc = classifyStrictLocation({
+            campaign: mumbaiVasaiThane,
+            enrichment: {
+                city: 'Vasai East',
+                state: 'Maharashtra',
+                addresses: [{
+                    raw: 'Gala no 107/108, waliv, Vasai East, Maharashtra, 401280',
+                    city: 'Vasai East',
+                    state: 'Maharashtra',
+                    type: 'Office',
+                }],
+            },
+        });
+        assert.equal(loc.locationMatch, 'match');
+        assert.equal(loc.locationClassification, LOCATION_CLASSIFICATIONS.LOCALITY_PARENT);
+    });
+
+    it('Mumbai office matches requested MUMBAI, VASAI, THANE', () => {
+        const loc = classifyStrictLocation({
+            campaign: mumbaiVasaiThane,
+            enrichment: {
+                city: 'Mumbai',
+                state: 'Maharashtra',
+                addresses: [{
+                    raw: 'Goregaon(East), Mumbai 400063, INDIA',
+                    city: 'Mumbai',
+                    state: 'Maharashtra',
+                    type: 'Office',
+                }],
+            },
+        });
+        assert.equal(loc.locationMatch, 'match');
+    });
+
+    it('Pune stays outside Mumbai/Vasai/Thane', () => {
+        const loc = classifyStrictLocation({
+            campaign: mumbaiVasaiThane,
+            enrichment: {
+                city: 'Pune',
+                state: 'Maharashtra',
+                addresses: [{ raw: 'Hinjewadi, Pune, Maharashtra', city: 'Pune', state: 'Maharashtra', type: 'Office' }],
+            },
+        });
+        assert.equal(loc.locationMatch, 'mismatch');
+    });
+
+    it('does not treat Maharashtra as Mumbai', () => {
+        const loc = classifyStrictLocation({
+            campaign: { locationScope: 'city', city: 'Mumbai', country: 'India' },
+            enrichment: {
+                city: '',
+                state: 'Maharashtra',
+                addresses: [{ raw: 'Maharashtra, India', city: '', state: 'Maharashtra', type: 'Office' }],
+            },
+        });
+        assert.notEqual(loc.locationMatch, 'match');
     });
 });

@@ -133,36 +133,34 @@ function pickSnippet(innerHtml) {
     return '';
 }
 
+function isGoogleHost(host) {
+    const h = String(host || '').toLowerCase();
+    return h === 'google.com'
+        || h.endsWith('.google.com')
+        || h === 'google.co.in'
+        || h.endsWith('.google.co.in');
+}
+
 function normalizeResultUrl(rawHref) {
-    const href = String(rawHref || '').trim();
-    if (!href) return '';
-    if (/^javascript:/i.test(href)) return '';
-    if (href.startsWith('/url?')) {
+    let href = String(rawHref || '').trim();
+    if (!href || /^javascript:/i.test(href)) return '';
+    for (let i = 0; i < 3; i += 1) {
         try {
-            const u = new URL(`https://www.google.com${href}`);
-            const q = u.searchParams.get('q');
-            if (q) return normalizeResultUrl(decodeHref(q));
+            const u = new URL(href, 'https://www.google.com');
+            if (isGoogleHost(u.hostname) && (u.pathname === '/url' || u.pathname.startsWith('/url'))) {
+                const next = u.searchParams.get('q') || u.searchParams.get('url');
+                if (!next) return '';
+                href = decodeHref(next);
+                continue;
+            }
+            if (isGoogleHost(u.hostname)) return '';
+            if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
+            return u.toString();
         } catch {
             return '';
         }
-        return '';
     }
-    if (!/^https?:\/\//i.test(href)) return '';
-    try {
-        const u = new URL(href);
-        const host = u.hostname.toLowerCase();
-        if (
-            host === 'google.com'
-            || host.endsWith('.google.com')
-            || host === 'google.co.in'
-            || host.endsWith('.google.co.in')
-        ) {
-            return '';
-        }
-        return u.toString();
-    } catch {
-        return '';
-    }
+    return '';
 }
 
 function pushResult(results, seen, { title, snippet, resultUrl }) {
@@ -248,6 +246,10 @@ export function detectPageKind(html) {
 
     if (hasOrganicMarkers) return 'organic';
     if (hardCaptcha) return 'captcha';
+    const looksEmpty = s.includes('did not match any documents')
+        || s.includes('your search did not return any documents')
+        || s.includes('no results found');
+    if (looksEmpty) return 'no_results';
     return 'unsupported';
 }
 

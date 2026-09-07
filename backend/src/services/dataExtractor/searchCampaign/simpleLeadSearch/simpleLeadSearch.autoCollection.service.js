@@ -28,10 +28,37 @@ const LIVE_SESSION = [
     'ready_to_capture', 'capturing', 'manual_action_required',
 ];
 export const CAPTURE_TARGET_OPTIONS = Object.freeze([25, 50, 100, 250, 500]);
-const DEFAULT_FIXED_CAPTURE_TARGET = 100;
+const MANUAL_CAPTURE_TARGET_MAX = 500;
 const DEFAULT_COLLECTION_MODE = 'unlimited';
 /** Pages processed per worker cycle before persisting and auto-continuing (not a campaign total). */
 const DEFAULT_WORKER_CYCLE_PAGES = 30;
+export const UNSUPPORTED_PAGE_CODES = Object.freeze(['UNSUPPORTED_LAYOUT', 'NO_ORGANIC_RESULTS', 'NO_PARSER_RESULTS']);
+export const HUMAN_PAGE_KINDS = Object.freeze(['consent', 'captcha', 'login']);
+export const MAX_UNSUPPORTED_PAGE_RETRIES = 2;
+export const DISCOVERY_STALL_MS = 120000;
+
+export function parsePageKindFromMessage(message = '') {
+    const m = String(message || '').match(/Page kind:\s*([a-z0-9_]+)/i);
+    return m ? String(m[1]).toLowerCase() : '';
+}
+
+export function isPageOutcomeFail(sessionOrFields = {}) {
+    const ac = sessionOrFields.autoCollection || {};
+    const liveCode = String(sessionOrFields.failCode || '');
+    const liveMsg = String(sessionOrFields.failMessage || '');
+    const acCode = String(sessionOrFields.lastErrorCode || ac.lastErrorCode || '');
+    const acMsg = String(sessionOrFields.lastErrorMessage || ac.lastErrorMessage || '');
+    if (UNSUPPORTED_PAGE_CODES.includes(liveCode) || /Page kind:/i.test(liveMsg)) return true;
+    if (acCode === 'agent_fail_ignored_after_accepted_ingest' && /Page kind:|unsupported_layout|no organic/i.test(acMsg)) {
+        return true;
+    }
+    if (UNSUPPORTED_PAGE_CODES.includes(acCode) && /Page kind:/i.test(acMsg)) return true;
+    return false;
+}
+
+function unsupportedPageKeyOf(session) {
+    return `${session?.queryId || ''}:${Number(session?.googlePageIndex || 0)}`;
+}
 
 function requireCompanyId(companyId) {
     if (!companyId || !mongoose.isValidObjectId(companyId)) throw new ApiError(400, 'Company context required');
@@ -86,31 +113,25 @@ function defaultAuto() {
             finalCampaignUnique: 0, stopReason: '',
         },
         lastErrorCode: '', lastErrorMessage: '',
+        unsupportedRetryCount: 0, unsupportedPageKey: '',
+        lastPageAdvancementAt: null, lastNewResultAt: null, providerState: '',
         startedAt: null, stoppedAt: null, startedBy: null, stoppedBy: null,
         rootSessionId: null, campaignId: null,
     };
 }
 function normalizeCaptureTarget(value) {
     const n = Number(value);
-    if (!Number.isFinite(n) || n <= 0) return DEFAULT_FIXED_CAPTURE_TARGET;
-    if (CAPTURE_TARGET_OPTIONS.includes(n)) return n;
-    let best = DEFAULT_FIXED_CAPTURE_TARGET;
-    let bestDist = Infinity;
-    for (const opt of CAPTURE_TARGET_OPTIONS) {
-        const d = Math.abs(opt - n);
-        if (d < bestDist) { best = opt; bestDist = d; }
-    }
-    return best;
+    if (!Number.isFinite(n) || n <= 0) return 0;
+    return Math.min(MANUAL_CAPTURE_TARGET_MAX, Math.max(1, Math.round(n)));
 }
 function normalizeCollectionMode(body = {}) {
     const raw = String(body.collectionMode || body.captureMode || '').toLowerCase().trim();
     if (raw === 'unlimited' || raw === 'until_no_more' || raw === 'until_no_more_results') return 'unlimited';
-    if (raw === 'fixed_target' || raw === 'fixed' || raw === 'target') return 'fixed_target';
-    // Infer from explicit positive target only when mode omitted
-    const targetHint = Number(body.requestedCaptureTarget ?? body.captureTarget ?? body.target ?? 0);
-    if (Number.isFinite(targetHint) && targetHint > 0 && (body.requestedCaptureTarget != null || body.captureTarget != null || body.target != null)) {
+    if (raw === 'fixed_target' || raw === 'fixed' || raw === 'target' || raw === 'manual' || raw === 'manual_limit') {
         return 'fixed_target';
     }
+    // New campaigns / API bodies with missing mode are Unlimited.
+    // Do not infer a hidden 100 (or any leftover target) as a cap.
     return DEFAULT_COLLECTION_MODE;
 }
 /** Resolve mode from persisted autoCollection (legacy sessions may only have a target). */
@@ -138,10 +159,12 @@ function readSettings(body = {}) {
         DEFAULT_WORKER_CYCLE_PAGES,
     );
     const requestedCaptureTarget = collectionMode === 'fixed_target'
-        ? normalizeCaptureTarget(body.requestedCaptureTarget ?? body.captureTarget ?? body.target ?? DEFAULT_FIXED_CAPTURE_TARGET)
+        ? normalizeCaptureTarget(body.requestedCaptureTarget ?? body.captureTarget ?? body.target)
         : 0;
     return {
-        collectionMode,
+        collectionMode: collectionMode === 'fixed_target' && requestedCaptureTarget > 0
+            ? 'fixed_target'
+            : DEFAULT_COLLECTION_MODE,
         pageCollectionMode,
         maxPagesPerQuery: clampInt(body.maxPagesPerQuery, 1, 10, 3),
         pagesPerBatch,
@@ -261,8 +284,26 @@ function progressView(session, campaignProgress = null) {
         summary: ac.summary || {},
         lastErrorCode: ac.lastErrorCode || '',
         lastErrorMessage: ac.lastErrorMessage || '',
+        lastNewResultAt: ac.lastNewResultAt || session.lastCaptureAt || ac.lastDiscoveryAt || null,
+        lastPageAdvancementAt: ac.lastPageAdvancementAt || ac.lastDiscoveryAt || null,
+        providerState: ac.providerState
+            || (ac.status === 'paused_manual' || session.status === 'manual_action_required'
+                ? 'Human Verification'
+                : (ac.pauseReason === 'unsupported_page_retry'
+                    ? 'Retry'
+                    : (ac.status === 'running' ? 'Running' : ''))),
+        pendingQueries: Math.max(0, Number(ac.totalApprovedQueries || campaignProgress?.queryTotal || 0)
+            - Number(ac.lastQueryIndex || campaignProgress?.queryIndex || 1)),
+        queryProgressLabel: `Query ${Number(ac.lastQueryIndex || campaignProgress?.queryIndex || 1)}/${Number(ac.totalApprovedQueries || campaignProgress?.queryTotal || 0) || '—'} — Page ${Number(session.googlePageIndex || campaignProgress?.googlePage || 1)}`,
+        discoveryDisplayStatus: ac.providerState === 'Retry' || ac.pauseReason === 'unsupported_page_retry'
+            ? 'Waiting on provider / retrying'
+            : (ac.providerState === 'Human Verification' || ac.status === 'paused_manual'
+                ? 'Human verification required'
+                : (ac.discoveryStatus || ac.status || 'idle')),
         manualActionRequired: session.status === 'manual_action_required' || ac.status === 'paused_manual',
-        uiLabel: labelMap[ac.status] || 'Auto Collection Idle',
+        uiLabel: ac.providerState === 'Retry' || ac.pauseReason === 'unsupported_page_retry'
+            ? 'Waiting on provider / retrying'
+            : (labelMap[ac.status] || 'Auto Collection Idle'),
         captureTargetOptions: CAPTURE_TARGET_OPTIONS,
     };
 }
@@ -332,6 +373,24 @@ export async function ownerStopPersistentRun({ companyId, user, sessionId, reaso
     const cid = requireCompanyId(companyId);
     assertAssistedCaptureStart(user);
     const session = await loadOwnedSession(cid, sessionId);
+    if (isOwnerStopped(session) || session.status === 'cancelled') {
+        const campaignProgress = await buildCampaignProgress({
+            companyId: cid,
+            campaignId: session.campaignId,
+            session: session.toObject(),
+        });
+        return {
+            session: sanitizeSession(session.toObject()),
+            autoCollection: progressView(session.toObject(), campaignProgress),
+            campaignProgress,
+            sessionEnded: true,
+            alreadyStopped: true,
+            sessionEndedMessage: 'Search is already stopped.',
+            message: 'Search is already stopped.',
+            preserved: { rawCaptures: true, campaign: true, searchQuery: true, sessionHistory: true },
+            reason: 'already_stopped',
+        };
+    }
     const now = new Date();
     const rootId = session.autoCollection?.rootSessionId || session._id;
     const campaignId = session.campaignId;
@@ -588,8 +647,9 @@ async function pauseForManual(session, message) {
     session.autoCollection.nextActionAt = null;
     session.autoCollection.discoveryStatus = 'paused';
     session.autoCollection.pauseReason = 'provider_block';
+    session.autoCollection.providerState = 'Human Verification';
     session.autoCollection.lastErrorCode = 'manual_action_required';
-    session.autoCollection.lastErrorMessage = String(message || 'Manual action required in the Google window.').slice(0, 500);
+    session.autoCollection.lastErrorMessage = String(message || 'Human verification required').slice(0, 500);
     session.autoCollection.lastDiscoveryAt = new Date();
     await session.save();
 }
@@ -604,7 +664,8 @@ async function pauseForTechnical(session, { reason = 'technical_retry', message 
     session.autoCollection.discoveryStatus = 'paused';
     session.autoCollection.pauseReason = String(reason || 'technical_retry').slice(0, 80);
     session.autoCollection.lastErrorCode = String(reason || 'technical_retry').slice(0, 80);
-    session.autoCollection.lastErrorMessage = String(message || 'Paused for technical retry. Resume when ready.').slice(0, 500);
+    session.autoCollection.providerState = 'Provider temporarily unavailable';
+    session.autoCollection.lastErrorMessage = String(message || 'Provider temporarily unavailable. Resume when ready.').slice(0, 500);
     session.autoCollection.lastDiscoveryAt = new Date();
     await session.save();
 }
@@ -772,10 +833,92 @@ export async function continueAutoCollectionAfterManual({ companyId, user, sessi
         message: 'Continuing Auto Collection after manual action.',
     };
 }
+function isDiscoveryStalled(session) {
+    const ac = session?.autoCollection || {};
+    if (ac.status !== 'running') return false;
+    if (ac.nextActionAt && new Date(ac.nextActionAt).getTime() > Date.now()) return false;
+    const last = ac.lastDiscoveryAt || ac.lastPageAdvancementAt || session.lastCaptureAt;
+    if (!last) return false;
+    return (Date.now() - new Date(last).getTime()) > DISCOVERY_STALL_MS;
+}
+
+async function handleUnsupportedPageOutcome(session, user, cid) {
+    const ac = session.autoCollection || defaultAuto();
+    session.autoCollection = ac;
+    const msg = String(session.failMessage || ac.lastErrorMessage || '');
+    const kind = parsePageKindFromMessage(msg);
+
+    if (HUMAN_PAGE_KINDS.includes(kind) || session.status === 'manual_action_required') {
+        session.status = 'manual_action_required';
+        session.manualActionMessage = kind
+            ? `Human verification required (${kind}). Resolve in the Google window.`
+            : (session.manualActionMessage || 'Human verification required');
+        await pauseForManual(session, session.manualActionMessage);
+        return { handled: true, outcome: 'human_verification' };
+    }
+
+    const pageKey = unsupportedPageKeyOf(session);
+    if (ac.unsupportedPageKey !== pageKey) {
+        ac.unsupportedPageKey = pageKey;
+        ac.unsupportedRetryCount = 0;
+    }
+    const retries = Number(ac.unsupportedRetryCount || 0);
+    if (retries < MAX_UNSUPPORTED_PAGE_RETRIES) {
+        ac.unsupportedRetryCount = retries + 1;
+        ac.providerState = 'Retry';
+        ac.discoveryStatus = 'running';
+        ac.pauseReason = 'unsupported_page_retry';
+        ac.lastErrorCode = 'unsupported_page_retry';
+        ac.lastErrorMessage = `Waiting on provider / retrying page ${session.googlePageIndex || '?'} (attempt ${ac.unsupportedRetryCount}/${MAX_UNSUPPORTED_PAGE_RETRIES}).`;
+        session.status = 'awaiting_user';
+        session.failCode = '';
+        session.failMessage = '';
+        session.failedAt = undefined;
+        session.pendingCaptureStatus = 'none';
+        session.pendingCaptureAckedAt = null;
+        ac.phase = 'capture';
+        ac.status = 'running';
+        ac.enabled = true;
+        ac.nextActionAt = new Date(Date.now() + randomDelayMs(ac.delayMinSec || 8, Math.max(ac.delayMinSec || 8, Math.min(ac.delayMaxSec || 20, 20))));
+        ac.lastDiscoveryAt = new Date();
+        await session.save();
+        return { handled: true, outcome: 'retry' };
+    }
+
+    ac.unsupportedRetryCount = 0;
+    ac.unsupportedPageKey = '';
+    ac.providerState = 'Exhausted';
+    ac.pauseReason = '';
+    ac.lastErrorCode = 'unsupported_page_skipped';
+    ac.lastErrorMessage = `Query page ${session.googlePageIndex || ''} unsupported after retries. Advancing to the next query.`;
+    ac.phase = 'complete_query';
+    ac.discoveryStatus = 'running';
+    ac.status = 'running';
+    ac.enabled = true;
+    ac.nextActionAt = null;
+    session.status = 'awaiting_user';
+    session.failCode = '';
+    session.failMessage = '';
+    session.failedAt = undefined;
+    session.pendingCaptureStatus = 'none';
+    session.pendingCaptureAckedAt = null;
+    await session.save();
+    return runPhase(session, user, cid);
+}
+
 async function runPhase(session, user, cid) {
     if (await ownerStopAborted(session)) return {};
     const ac = session.autoCollection;
     const now = Date.now();
+
+    if (isPageOutcomeFail(session) && ac.status === 'running') {
+        return handleUnsupportedPageOutcome(session, user, cid);
+    }
+    if (isDiscoveryStalled(session) && !HUMAN_PAGE_KINDS.includes(parsePageKindFromMessage(ac.lastErrorMessage))) {
+        ac.lastErrorCode = ac.lastErrorCode || 'discovery_stalled';
+        ac.lastErrorMessage = ac.lastErrorMessage || `No page/query advancement for ${Math.round(DISCOVERY_STALL_MS / 1000)}s. Inspecting current page.`;
+        return handleUnsupportedPageOutcome(session, user, cid);
+    }
 
     if (ac.phase === 'await_cycle') {
         if (ac.nextActionAt && new Date(ac.nextActionAt).getTime() > now) {
@@ -872,6 +1015,9 @@ async function runPhase(session, user, cid) {
             || acceptedDelta > 0
             || (READY.has(session.status) && !['pending', 'acked'].includes(pending) && events > baseline);
 
+        if (!captureDone && isPageOutcomeFail(session)) {
+            return handleUnsupportedPageOutcome(session, user, cid);
+        }
         const failedIngest = await AssistedCaptureEvent.countDocuments({
             companyId: cid,
             sessionId: session._id,
@@ -930,6 +1076,12 @@ async function runPhase(session, user, cid) {
         ac.lastCursor = String(session.googlePageIndex || ac.lastSuccessfullyCapturedPage || '');
         ac.nextPageToken = String(Number(session.googlePageIndex || 0) + 1);
         ac.lastDiscoveryAt = new Date();
+        ac.lastNewResultAt = ac.lastDiscoveryAt;
+        ac.lastPageAdvancementAt = ac.lastDiscoveryAt;
+        ac.unsupportedRetryCount = 0;
+        ac.unsupportedPageKey = '';
+        ac.providerState = 'Running';
+        ac.pauseReason = '';
         ac.discoveryStatus = 'running';
         ac.rawRecordsCaptured = await acceptedSourceAppearances(session);
         ac.sourceResultsFound = Math.max(Number(ac.sourceResultsFound || 0), Number(session.visibleResultCount || 0));
@@ -1117,6 +1269,12 @@ async function runPhase(session, user, cid) {
             queriesCompleted: Number(snapshot.autoCollection?.queriesProcessedTotal || 0) + 1,
             lastQueryIndex: Number(snapshot.autoCollection?.queriesProcessedTotal || 0) + 2,
             lastDiscoveryAt: new Date(),
+            lastPageAdvancementAt: new Date(),
+            unsupportedRetryCount: 0,
+            unsupportedPageKey: '',
+            providerState: 'Running',
+            lastErrorCode: '',
+            lastErrorMessage: '',
             rootSessionId: snapshot.autoCollection?.rootSessionId || snapshot._id,
             campaignId: snapshot.campaignId,
         };
@@ -1191,6 +1349,7 @@ export async function tickAutoCollection({ companyId, user, sessionId }) {
         const canReclaim = accepted > 0
             && !targetMet
             && !isOwnerStopped(probe)
+            && !isPageOutcomeFail(probe)
             && (
                 probe.status === 'failed'
                 || probe.autoCollection?.status === 'failed'
@@ -1257,7 +1416,18 @@ export async function tickAutoCollection({ companyId, user, sessionId }) {
     let switchedSessionId = null;
     // Prefer CAPTCHA/manual pause over agent-offline (manual_action_required first)
     if (session.status === 'manual_action_required') {
-        await pauseForManual(session, session.manualActionMessage || 'Manual action required in the Google window.');
+        await pauseForManual(session, session.manualActionMessage || 'Human verification required');
+    } else if (isPageOutcomeFail(session) && !isOwnerStopped(session) && session.autoCollection?.status === 'running') {
+        try {
+            const outcome = await handleUnsupportedPageOutcome(session, user, cid);
+            if (outcome?.sessionId && String(outcome.sessionId) !== String(session._id)) {
+                switchedSessionId = String(outcome.sessionId);
+            }
+        } catch (err) {
+            session.autoCollection.lastErrorCode = 'tick_error';
+            session.autoCollection.lastErrorMessage = String(err?.message || 'Auto Collection step failed').slice(0, 500);
+            await session.save();
+        }
     } else if (ENDED.has(session.status)) {
         // If capture batch already succeeded, recover and keep discovering — do not stop on
         // stale bookkeeping / agent ASSISTED_SESSION_FAILED after accepted ingest.
@@ -1269,6 +1439,7 @@ export async function tickAutoCollection({ companyId, user, sessionId }) {
         const recoverableFail = !targetMet
             && accepted > 0
             && !isOwnerStopped(session)
+            && !isPageOutcomeFail(session)
             && (
                 session.status === 'failed'
                 || stopReason === 'session_failed'
@@ -1539,4 +1710,4 @@ export async function getAutoCollectionStatus({ companyId, user, sessionId }) {
     };
 }
 
-export { progressView, defaultAuto, readSettings, ACTIVE_AUTO };
+export { progressView, defaultAuto, readSettings, ACTIVE_AUTO, handleUnsupportedPageOutcome };

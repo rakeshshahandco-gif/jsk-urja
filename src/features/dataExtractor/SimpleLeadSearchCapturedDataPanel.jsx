@@ -1,7 +1,56 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { dataExtractorApi } from '@/services/dataExtractorApi';
 import styles from './DataExtractorSimpleLeadSearchPage.module.css';
+import SimpleLeadSearchCompanyDrawer from './SimpleLeadSearchCompanyDrawer.jsx';
+import SimpleLeadSearchCreateLeadModal from './SimpleLeadSearchCreateLeadModal.jsx';
+
+const AI_TIP = 'AI verification is based on matching public-source evidence and does not constitute legal certification.';
+const QUICK_FILTERS = [
+    { key: '', label: 'All' },
+    { key: 'verified', label: 'Verified Relevant' },
+    { key: 'high_confidence', label: 'High Confidence' },
+    { key: 'needs_review', label: 'Needs Review' },
+    { key: 'high_potential', label: 'High Business Potential' },
+    { key: 'website', label: 'Website Available' },
+    { key: 'mobile', label: 'Mobile Available' },
+    { key: 'email', label: 'Email Available' },
+    { key: 'facebook', label: 'Facebook Available' },
+    { key: 'instagram', label: 'Instagram Available' },
+    { key: 'lead_created', label: 'Lead Created' },
+    { key: 'not_yet_lead', label: 'Not Yet Lead' },
+    { key: 'existing_customer', label: 'Existing Customer' },
+];
+const SORT_OPTIONS = [
+    { key: 'businessPotential', label: 'Highest Business Potential' },
+    { key: 'confidence', label: 'AI Confidence' },
+    { key: 'completeness', label: 'Most Complete Data' },
+    { key: 'newest', label: 'Newest Found' },
+    { key: 'companyName', label: 'Company Name' },
+];
+
+function safeHttpUrl(raw) {
+    const s = String(raw || '').trim();
+    if (!s) return '';
+    try {
+        const u = new URL(/^https?:\/\//i.test(s) ? s : `https://${s}`);
+        if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
+        return u.href;
+    } catch {
+        return '';
+    }
+}
+
+function ExtLink({ href, children }) {
+    const safe = safeHttpUrl(href);
+    if (!safe) return <span>—</span>;
+    return (
+        <a href={safe} target="_blank" rel="noopener noreferrer" className={styles.extLink} onClick={(e) => e.stopPropagation()}>
+            {children || 'Open'}
+        </a>
+    );
+}
 
 const TABS = [
     { key: 'all', label: 'All Records' },
@@ -9,7 +58,7 @@ const TABS = [
     { key: 'processing', label: 'Processing' },
     { key: 'enriched', label: 'Enriched' },
     { key: 'qualified', label: 'Qualified' },
-    { key: 'verified', label: 'Verified' },
+    { key: 'verified', label: 'Verified Relevant' },
     { key: 'review_required', label: 'Review Required' },
     { key: 'rejected_skipped', label: 'Rejected / Skipped' },
     { key: 'failed', label: 'Failed' },
@@ -65,6 +114,7 @@ export default function SimpleLeadSearchCapturedDataPanel({
     isChinaCampaign = false,
     onRetrySelected,
     onRetryAllFailed,
+    workflowFilter = '',
 }) {
     const [tab, setTab] = useState('all');
     const [search, setSearch] = useState('');
@@ -86,10 +136,20 @@ export default function SimpleLeadSearchCapturedDataPanel({
     const [chineseTextOnly, setChineseTextOnly] = useState(false);
     const [manufacturerEvidence, setManufacturerEvidence] = useState(false);
     const [exactModel, setExactModel] = useState(false);
+    const [locationFilter, setLocationFilter] = useState('');
     const [hasPhone, setHasPhone] = useState(false);
     const [hasWeChat, setHasWeChat] = useState(false);
     const [recheckJob, setRecheckJob] = useState(null);
     const [recheckBusy, setRecheckBusy] = useState(false);
+    const [resultFilter, setResultFilter] = useState(workflowFilter || '');
+    const [countryFilter, setCountryFilter] = useState('');
+    const [sortKey, setSortKey] = useState('businessPotential');
+    const [leadRow, setLeadRow] = useState(null);
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        if (workflowFilter) setResultFilter(workflowFilter);
+    }, [workflowFilter]);
 
     const load = useCallback(async () => {
         if (!sessionId) return;
@@ -110,10 +170,13 @@ export default function SimpleLeadSearchCapturedDataPanel({
                 hasPhone: hasPhone ? '1' : undefined,
                 hasWeChat: hasWeChat ? '1' : undefined,
                 failedRetry: failedRetry ? '1' : undefined,
+                resultFilter: resultFilter || undefined,
+                locationFilter: locationFilter || undefined,
+                country: countryFilter || undefined,
                 page,
                 limit: limit === 'all' ? 'all' : limit,
-                sort: 'index',
-                sortDir: 'asc',
+                sort: sortKey || 'businessPotential',
+                sortDir: sortKey === 'companyName' ? 'asc' : 'desc',
             };
             const res = await dataExtractorApi.simpleLeadSearchCapturedData(sessionId, params);
             setData(res);
@@ -124,7 +187,7 @@ export default function SimpleLeadSearchCapturedDataPanel({
         } finally {
             setLoading(false);
         }
-    }, [sessionId, tab, search, businessType, city, stateFilter, relevance, genuineness, sourceFilter, chineseTextOnly, manufacturerEvidence, exactModel, hasPhone, hasWeChat, failedRetry, page, limit]);
+    }, [sessionId, tab, search, businessType, city, stateFilter, relevance, genuineness, sourceFilter, chineseTextOnly, manufacturerEvidence, exactModel, hasPhone, hasWeChat, failedRetry, resultFilter, locationFilter, countryFilter, sortKey, page, limit]);
 
     const refreshRecheckStatus = useCallback(async () => {
         if (!sessionId) return null;
@@ -187,7 +250,7 @@ export default function SimpleLeadSearchCapturedDataPanel({
 
     useEffect(() => {
         setPage(1);
-    }, [tab, search, businessType, city, stateFilter, relevance, genuineness, sourceFilter, chineseTextOnly, manufacturerEvidence, exactModel, hasPhone, hasWeChat, failedRetry, limit]);
+    }, [tab, search, businessType, city, stateFilter, relevance, genuineness, sourceFilter, chineseTextOnly, manufacturerEvidence, exactModel, hasPhone, hasWeChat, failedRetry, resultFilter, locationFilter, countryFilter, sortKey, limit]);
 
     const items = data?.items || [];
     const tabCounts = data?.tabCounts || {};
@@ -197,7 +260,26 @@ export default function SimpleLeadSearchCapturedDataPanel({
     const pagination = data?.pagination || {};
     const verifiedCounters = data?.verifiedCounters || data?.counters || null;
     const campaignTotal = Number(pagination.campaignTotal || tabCounts.all || 0);
+    const cards = data?.summaryCards || {};
     const detail = useMemo(() => items.find((r) => r._id === detailId) || null, [items, detailId]);
+    const openLead = (lead) => {
+        if (lead?._id) navigate(`/crm/leads/${lead._id}`);
+        else if (lead?.crmLeadId) navigate(`/crm/leads/${lead.crmLeadId}`);
+    };
+    const openCustomer = (cust) => {
+        if (cust?._id) navigate(`/customers/${cust._id}`);
+        else if (cust?.crmCustomerId) navigate(`/customers/${cust.crmCustomerId}`);
+    };
+    const crmAction = (r) => {
+        const st = r.crmStatusLabel || 'NOT IN CRM';
+        if (st === 'LEAD CREATED' || st === 'EXISTING LEAD') {
+            return <button type="button" className={styles.linkBtn} onClick={() => openLead(r)}>Open Existing Lead</button>;
+        }
+        if (st === 'EXISTING CUSTOMER') {
+            return <button type="button" className={styles.linkBtn} onClick={() => openCustomer(r)}>Open Customer</button>;
+        }
+        return <button type="button" className={styles.linkBtn} onClick={() => setLeadRow(r)}>Create Lead</button>;
+    };
     const isVerifiedTab = tab === 'verified';
     const locNorm = data?.locationNormalization || null;
     const recheckRunning = recheckJob?.status === 'processing' || recheckJob?.status === 'queued';
@@ -252,14 +334,14 @@ export default function SimpleLeadSearchCapturedDataPanel({
     if (!sessionId) return null;
 
     return (
-        <section className={styles.capturedPanel} aria-label="All captured data">
+        <section id="de-live-results" className={styles.capturedPanel} aria-label="All captured data">
             <div className={styles.capturedHead}>
                 <div>
                     <h3 className={styles.capturedTitle}>
-                        All Captured Data — {campaignTotal} Records
+                        LIVE RESULTS — {campaignTotal} Records
                     </h3>
-                    <p className={styles.capturedSub}>
-                        {campaignName || 'Current campaign'} · company + campaign scoped · updates while processing runs
+                    <p className={styles.capturedSub} title={AI_TIP}>
+                        {campaignName || 'Current campaign'} · updates while extraction is running · {AI_TIP}
                     </p>
                     {locNorm?.interpretedAs ? (
                         <p className={styles.capturedSub} style={{ marginTop: 4 }}>
@@ -299,10 +381,21 @@ export default function SimpleLeadSearchCapturedDataPanel({
                         disabled={exporting || !(tabCounts.verified > 0 || buckets.completed > 0 || tabCounts.review_required > 0)}
                         onClick={onExportVerified}
                     >
-                        Export Final Verified Results
-                        <span>Verified / likely genuine / approved review only</span>
+                        Export Final Verified Relevant Results
+                        <span>Genuine + industry match + requested business type, or owner approved</span>
                     </button>
                 </div>
+            </div>
+
+            <div className={styles.summaryCards}>
+                <div className={styles.summaryCard}><span>Raw Discovered</span><strong>{cards.rawDiscovered ?? cards.discovered ?? campaignTotal}</strong></div>
+                <div className={styles.summaryCard}><span>Unique Companies</span><strong>{cards.uniqueCompanies ?? '—'}</strong></div>
+                <div className={styles.summaryCard}><span>Genuine</span><strong>{cards.genuineCompanies ?? cards.genuine ?? '—'}</strong></div>
+                <div className={styles.summaryCard}><span>Relevant</span><strong>{cards.relevantCompanies ?? cards.relevant ?? '—'}</strong></div>
+                <div className={styles.summaryCard}><span>Verified Relevant</span><strong>{cards.verifiedRelevant ?? cards.aiVerified ?? tabCounts.verified ?? '—'}</strong></div>
+                <div className={styles.summaryCard}><span>Needs Review</span><strong>{cards.needsReview ?? tabCounts.review_required ?? '—'}</strong></div>
+                <div className={styles.summaryCard}><span>Unrelated</span><strong>{cards.unrelated ?? '—'}</strong></div>
+                <div className={styles.summaryCard}><span>Leads Created</span><strong>{cards.leadsCreated ?? 0}</strong></div>
             </div>
 
             {(recheckRunning || recheckJob?.status === 'completed' || recheckJob?.status === 'partial') && (
@@ -404,9 +497,32 @@ export default function SimpleLeadSearchCapturedDataPanel({
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                 />
-                <input className={styles.capturedInput} placeholder="Business type" value={businessType} onChange={(e) => setBusinessType(e.target.value)} />
+                <select className={styles.capturedSelect} value={businessType} onChange={(e) => setBusinessType(e.target.value)}>
+                    <option value="">All business types</option>
+                    <option value="manufacturer">Manufacturer</option>
+                    <option value="supplier">Supplier</option>
+                    <option value="dealer">Dealer</option>
+                    <option value="distributor">Distributor</option>
+                </select>
+                <select className={styles.capturedSelect} value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)}>
+                    <option value="">All locations</option>
+                    <option value="target">Target Location</option>
+                    <option value="outside">Outside Target</option>
+                    <option value="unknown">Location Unknown</option>
+                </select>
                 <input className={styles.capturedInput} placeholder="City" value={city} onChange={(e) => setCity(e.target.value)} />
                 <input className={styles.capturedInput} placeholder="State" value={stateFilter} onChange={(e) => setStateFilter(e.target.value)} />
+                <input className={styles.capturedInput} placeholder="Country" value={countryFilter} onChange={(e) => setCountryFilter(e.target.value)} />
+                <select className={styles.capturedSelect} value={resultFilter} onChange={(e) => setResultFilter(e.target.value)}>
+                    {QUICK_FILTERS.map((f) => (
+                        <option key={f.key || 'all'} value={f.key}>{f.label}</option>
+                    ))}
+                </select>
+                <select className={styles.capturedSelect} value={sortKey} onChange={(e) => setSortKey(e.target.value)}>
+                    {SORT_OPTIONS.map((s) => (
+                        <option key={s.key} value={s.key}>{s.label}</option>
+                    ))}
+                </select>
                 <input className={styles.capturedInput} placeholder="Relevance" value={relevance} onChange={(e) => setRelevance(e.target.value)} />
                 <input className={styles.capturedInput} placeholder="Genuineness" value={genuineness} onChange={(e) => setGenuineness(e.target.value)} />
                 {isChinaCampaign ? (
@@ -536,9 +652,15 @@ export default function SimpleLeadSearchCapturedDataPanel({
                                 <th>Primary Email</th>
                                 <th>All Emails</th>
                                 <th>Verification Status</th>
+                                <th>Genuine</th>
+                                <th>Industry Match</th>
+                                <th>Business Type</th>
+                                <th>Location Match</th>
                                 <th>Source Appearances</th>
                                 <th>Query Count</th>
                                 <th>Evidence Count</th>
+                                <th>CRM Status</th>
+                                <th>Action</th>
                                 <th></th>
                             </tr>
                         ) : (
@@ -566,6 +688,12 @@ export default function SimpleLeadSearchCapturedDataPanel({
                                 <th>Email</th>
                                 {isChinaCampaign ? <th>Status</th> : null}
                                 {isChinaCampaign ? <th>Conf.</th> : null}
+                                {isChinaCampaign ? null : <th>Social</th>}
+                                {isChinaCampaign ? null : <th title={AI_TIP}>Genuineness</th>}
+                                {isChinaCampaign ? null : <th>Industry Match</th>}
+                                {isChinaCampaign ? null : <th>Location</th>}
+                                {isChinaCampaign ? null : <th>Score</th>}
+                                {isChinaCampaign ? null : <th>CRM Status</th>}
                                 <th>Stage</th>
                                 <th>Status</th>
                                 <th>Failure / Skip Reason</th>
@@ -577,7 +705,7 @@ export default function SimpleLeadSearchCapturedDataPanel({
                     <tbody>
                         {!items.length && (
                             <tr>
-                                <td colSpan={isVerifiedTab ? 12 : (isChinaCampaign ? 19 : 13)} className={styles.capturedEmpty}>
+                                <td colSpan={isVerifiedTab ? 18 : (isChinaCampaign ? 19 : 13)} className={styles.capturedEmpty}>
                                     {loading ? 'Loading captured records…' : 'No records in this filter.'}
                                 </td>
                             </tr>
@@ -589,9 +717,13 @@ export default function SimpleLeadSearchCapturedDataPanel({
                                 return (
                                     <tr key={r._id}>
                                         <td>{r.index}</td>
-                                        <td title={r.companyName}>{dash(r.uniqueCompany || r.companyName)}</td>
+                                        <td title={r.companyName}>
+                                            <button type="button" className={styles.linkBtn} onClick={() => setDetailId(r._id)}>
+                                                {dash(r.uniqueCompany || r.companyName)}
+                                            </button>
+                                        </td>
                                         <td className={styles.capturedUrl} title={r.primaryWebsite || r.website}>
-                                            {dash(r.primaryWebsite || r.website || r.displayDomain)}
+                                            <ExtLink href={r.primaryWebsite || r.website}>{r.primaryWebsite || r.website || r.displayDomain || '—'}</ExtLink>
                                         </td>
                                         <td>{dash(r.primaryPhone || r.phone)}</td>
                                         <td>
@@ -608,12 +740,18 @@ export default function SimpleLeadSearchCapturedDataPanel({
                                                 {dash(r.verificationStatusLabel || r.genuinenessStatus)}
                                             </span>
                                         </td>
+                                        <td>{r.flags?.hasVerified ? 'VERIFIED' : dash(r.genuinenessStatus)}</td>
+                                        <td>{dash(r.industryMatchLabel || r.productMatchStrength)}</td>
+                                        <td>{dash(r.businessType)}</td>
+                                        <td>{dash(r.locationClassification || r.locationMatch)}</td>
                                         <td>{r.sourceAppearances ?? '—'}</td>
                                         <td>{r.queryCount ?? '—'}</td>
                                         <td>{r.evidenceCount ?? '—'}</td>
+                                        <td>{dash(r.crmStatusLabel)}</td>
+                                        <td>{crmAction(r)}</td>
                                         <td>
                                             <button type="button" className={styles.linkBtn} onClick={() => setDetailId(r._id === detailId ? '' : r._id)}>
-                                                {r._id === detailId ? 'Hide Evidence' : 'View Evidence'}
+                                                {r._id === detailId ? 'Hide' : 'View Company'}
                                             </button>
                                         </td>
                                     </tr>
@@ -636,22 +774,41 @@ export default function SimpleLeadSearchCapturedDataPanel({
                                         <td title={r.companyNameEnglish}>{dash(resultLang === 'zh' ? '' : (r.companyNameEnglish || ''))}</td>
                                     </>
                                 ) : (
-                                    <td title={r.title}>{dash(r.companyName || r.title)}</td>
+                                    <td title={r.title}>
+                                        <button type="button" className={styles.linkBtn} onClick={() => setDetailId(r._id)}>
+                                            {dash(r.companyName || r.title)}
+                                        </button>
+                                    </td>
                                 )}
                                 {isChinaCampaign ? <td>{dash((r.matchedModels || []).join(', ') || r.searchKeyword)}</td> : null}
                                 {isChinaCampaign ? <td>{dash(r.sourceName || r.source)}</td> : null}
                                 {isChinaCampaign ? <td>{dash(r.businessType)}</td> : null}
                                 <td className={styles.capturedUrl} title={r.website || r.sourceUrl}>
-                                    {dash(r.website || r.sourceUrl)}
+                                    <ExtLink href={r.website || r.sourceUrl}>{r.website || r.sourceUrl || '—'}</ExtLink>
                                 </td>
                                 {isChinaCampaign ? null : <td>{dash(r.businessType)}</td>}
                                 <td>{dash(r.city)}</td>
                                 {isChinaCampaign ? <td>{dash(r.province)}</td> : null}
                                 <td>{dash(r.phone)}</td>
                                 {isChinaCampaign ? <td>{dash(r.wechat || r.wechatPublic)}</td> : null}
-                                <td>{dash(r.email)}</td>
+                                <td>{r.email ? <a href={`mailto:${r.email}`}>{r.email}</a> : '—'}</td>
                                 {isChinaCampaign ? <td>{dash(r.chinaVerificationLabel || r.verificationStatusLabel)}</td> : null}
                                 {isChinaCampaign ? <td>{r.chinaConfidence === '' || r.chinaConfidence == null ? '—' : r.chinaConfidence}</td> : null}
+                                {isChinaCampaign ? null : (
+                                    <td>
+                                        {[
+                                            r.facebook ? <ExtLink key="fb" href={r.facebook}>FB</ExtLink> : null,
+                                            r.instagram ? <ExtLink key="ig" href={r.instagram}>IG</ExtLink> : null,
+                                            r.linkedin ? <ExtLink key="li" href={r.linkedin}>LI</ExtLink> : null,
+                                        ].filter(Boolean).reduce((acc, el, i) => (acc.length ? [...acc, ' ', el] : [el]), [])}
+                                        {!r.facebook && !r.instagram && !r.linkedin ? '—' : null}
+                                    </td>
+                                )}
+                                {isChinaCampaign ? null : <td title={AI_TIP}>{dash(r.aiStatus)}</td>}
+                                {isChinaCampaign ? null : <td>{dash(r.industryMatchLabel || r.productMatchStrength)}</td>}
+                                {isChinaCampaign ? null : <td>{dash(r.locationRelevanceLabel)}</td>}
+                                {isChinaCampaign ? null : <td>{r.businessPotentialScore != null && r.businessPotentialScore !== '' ? r.businessPotentialScore : '—'}</td>}
+                                {isChinaCampaign ? null : <td>{dash(r.crmStatusLabel)}</td>}
                                 <td>{dash(r.currentStage)}</td>
                                 <td>
                                     <span className={styles.capturedStatus}>{dash(r.exclusiveStatus)}</span>
@@ -669,9 +826,11 @@ export default function SimpleLeadSearchCapturedDataPanel({
                                         : (r.exclusiveStatus === 'failed' ? 'No (permanent / blocked)' : '—')}
                                 </td>
                                 <td>
-                                    <button type="button" className={styles.linkBtn} onClick={() => setDetailId(r._id === detailId ? '' : r._id)}>
-                                        {r._id === detailId ? 'Hide' : 'View Details'}
+                                    <button type="button" className={styles.linkBtn} onClick={() => setDetailId(r._id)}>
+                                        View Company
                                     </button>
+                                    {' '}
+                                    {crmAction(r)}
                                 </td>
                             </tr>
                         ))}
@@ -679,7 +838,7 @@ export default function SimpleLeadSearchCapturedDataPanel({
                 </table>
             </div>
 
-            {detail && (
+            {detail && isChinaCampaign ? (
                 <div className={styles.capturedDetail}>
                     <h4>{detail.companyName || detail.title}</h4>
                     {isVerifiedTab && Array.isArray(detail.evidence) && detail.evidence.length > 0 ? (
@@ -762,7 +921,47 @@ export default function SimpleLeadSearchCapturedDataPanel({
                         </div>
                     )}
                 </div>
-            )}
+            ) : null}
+
+            {detail && !isChinaCampaign ? (
+                <SimpleLeadSearchCompanyDrawer
+                    row={detail}
+                    processRunning={processRunning}
+                    onClose={() => setDetailId('')}
+                    onCreateLead={(r) => setLeadRow(r)}
+                    onOpenLead={openLead}
+                    onOpenCustomer={openCustomer}
+                    onMarkReviewed={async (r) => {
+                        if (!sessionId || !r.qualificationId) return;
+                        try {
+                            await dataExtractorApi.simpleLeadSearchQualificationReview(sessionId, r.qualificationId, {
+                                action: 'approve',
+                                ownerReviewNote: 'Owner marked reviewed / approved from Data Extractor drawer',
+                            });
+                            if (r.genuinenessId) {
+                                await dataExtractorApi.simpleLeadSearchGenuinenessReview(sessionId, r.genuinenessId, {
+                                    action: 'approve',
+                                    ownerReviewNote: 'Owner marked reviewed / approved from Data Extractor drawer',
+                                });
+                            }
+                            toast.success('Marked reviewed. AI labels are unchanged.');
+                            load();
+                        } catch (err) {
+                            toast.error(softErr(err));
+                        }
+                    }}
+                />
+            ) : null}
+            {leadRow ? (
+                <SimpleLeadSearchCreateLeadModal
+                    sessionId={sessionId}
+                    row={leadRow}
+                    onClose={() => setLeadRow(null)}
+                    onCreated={() => { setLeadRow(null); load(); }}
+                    onOpenLead={openLead}
+                    onOpenCustomer={openCustomer}
+                />
+            ) : null}
 
             {limit !== 'all' && Number(pagination.totalPages || 1) > 1 && (
                 <div className={styles.capturedPager}>

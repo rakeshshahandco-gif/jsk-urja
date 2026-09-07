@@ -495,4 +495,194 @@ describe('canonicalVerifiedCompany util', () => {
         });
         assert.equal(built.counters.uniqueVerifiedCompanies, 2);
     });
+
+    it('directory/category pages are excluded from Verified unique-company count by default', () => {
+        const url = 'https://www.indiamart.com/city/led-lights-in-mumbai.html';
+        const enId = oid(200);
+        const qId = oid(201);
+        const gId = oid(202);
+        const capId = oid(203);
+        const built = buildCanonicalVerifiedCompanies({
+            captures: [{
+                _id: capId,
+                title: 'LED Lights in Mumbai, Maharashtra',
+                resultUrlOriginal: url,
+                displayDomain: 'indiamart.com',
+                firstSeenAt: new Date(),
+            }],
+            enrichments: [{
+                _id: enId,
+                companyName: 'LED Lights in Mumbai, Maharashtra',
+                canonicalDomain: 'indiamart.com',
+                websiteUrl: url,
+                isDirectorySource: true,
+                enrichmentStatus: 'review_required',
+                phones: [],
+                emails: [],
+                whatsappNumbers: [],
+                rawCaptureIds: [capId],
+            }],
+            qualifications: [{ _id: qId, enrichmentId: enId, systemDecision: 'human_review_required', businessType: 'directory_marketplace' }],
+            genuinenessDocs: [{
+                _id: gId,
+                enrichmentId: enId,
+                qualificationId: qId,
+                companyName: 'LED Lights in Mumbai, Maharashtra',
+                canonicalDomain: 'indiamart.com',
+                websiteUrl: url,
+                systemDecision: 'directory_or_marketplace_only',
+                genuinenessScore: 30,
+                verificationStatus: 'directory_only',
+            }],
+            options: { verifiedOnly: true, limit: null },
+        });
+        assert.equal(built.counters.uniqueVerifiedCompanies, 0);
+        assert.equal(built.allCompanies.length, 0);
+    });
+
+    it('marketplace email aditya@tradeindia.com does not merge four first-party domains with different GSTINs', () => {
+        const firms = [
+            { n: 300, domain: 'a.com', name: 'Active LED', gstin: '27ABOFA2544C1ZN', phone: '8045800481' },
+            { n: 310, domain: 'b.com', name: 'Aditya Solarwave', gstin: '27AGBPG6058R1ZV', phone: '8380898096' },
+            { n: 320, domain: 'c.com', name: 'Allied Electricals', gstin: '27ACEPP9124C1ZP', phone: '9665544882' },
+            { n: 330, domain: 'd.com', name: 'DG Cree', gstin: '27CJRPS2205R1ZD', phone: '8045811681' },
+        ];
+        const captures = [];
+        const enrichments = [];
+        const qualifications = [];
+        const genuinenessDocs = [];
+        for (const f of firms) {
+            const enId = oid(f.n);
+            const qId = oid(f.n + 1);
+            const gId = oid(f.n + 2);
+            const capId = oid(f.n + 3);
+            captures.push({
+                _id: capId,
+                title: f.name,
+                resultUrlOriginal: `https://${f.domain}/`,
+                displayDomain: f.domain,
+                firstSeenAt: new Date(),
+            });
+            enrichments.push({
+                _id: enId,
+                companyName: f.name,
+                canonicalDomain: f.domain,
+                websiteUrl: `https://${f.domain}/`,
+                isDirectorySource: false,
+                enrichmentStatus: 'completed',
+                gstin: f.gstin,
+                phones: [{ original: f.phone, normalized: `+91${f.phone}` }],
+                emails: [{ value: 'aditya@tradeindia.com' }],
+                whatsappNumbers: [],
+                rawCaptureIds: [capId],
+            });
+            qualifications.push({ _id: qId, enrichmentId: enId, systemDecision: 'strong_match' });
+            genuinenessDocs.push({
+                _id: gId,
+                enrichmentId: enId,
+                qualificationId: qId,
+                companyName: f.name,
+                canonicalDomain: f.domain,
+                websiteUrl: `https://${f.domain}/`,
+                systemDecision: 'verified_genuine',
+                genuinenessScore: 80,
+                verificationStatus: 'verified',
+            });
+        }
+        const built = buildCanonicalVerifiedCompanies({
+            captures, enrichments, qualifications, genuinenessDocs,
+            options: { verifiedOnly: true, limit: null },
+        });
+        assert.equal(built.counters.uniqueVerifiedCompanies, 4);
+        const domains = new Set(built.allCompanies.map((c) => c.canonicalDomain));
+        assert.equal(domains.size, 4);
+        assert.ok(domains.has('a.com') && domains.has('b.com') && domains.has('c.com') && domains.has('d.com'));
+    });
+
+    it('directory-sourced shared phone does not merge two first-party domains', () => {
+        const mk = (id, domain, name, gstin) => {
+            const enId = oid(id);
+            const qId = oid(id + 1);
+            const gId = oid(id + 2);
+            const capId = oid(id + 3);
+            return {
+                captures: [{
+                    _id: capId, title: name, resultUrlOriginal: `https://${domain}/`,
+                    displayDomain: domain, firstSeenAt: new Date(),
+                }],
+                enrichments: [{
+                    _id: enId, companyName: name, canonicalDomain: domain,
+                    websiteUrl: `https://${domain}/`, isDirectorySource: false,
+                    enrichmentStatus: 'completed', gstin,
+                    phones: [{
+                        original: '02212345678',
+                        normalized: '+912212345678',
+                        sourceUrl: 'https://www.indiamart.com/company/listing',
+                    }],
+                    emails: [{ value: `info@${domain}` }],
+                    whatsappNumbers: [], rawCaptureIds: [capId],
+                }],
+                qualifications: [{ _id: qId, enrichmentId: enId, systemDecision: 'strong_match' }],
+                genuinenessDocs: [{
+                    _id: gId, enrichmentId: enId, qualificationId: qId, companyName: name,
+                    canonicalDomain: domain, websiteUrl: `https://${domain}/`,
+                    systemDecision: 'verified_genuine', genuinenessScore: 80, verificationStatus: 'verified',
+                }],
+            };
+        };
+        const a = mk(340, 'alpha-lights.example', 'Alpha Lights', '27AAAAA0000A1Z5');
+        const b = mk(350, 'beta-lamps.example', 'Beta Lamps', '27BBBBB0000B1Z8');
+        const built = buildCanonicalVerifiedCompanies({
+            captures: [...a.captures, ...b.captures],
+            enrichments: [...a.enrichments, ...b.enrichments],
+            qualifications: [...a.qualifications, ...b.qualifications],
+            genuinenessDocs: [...a.genuinenessDocs, ...b.genuinenessDocs],
+            options: { verifiedOnly: true, limit: null },
+        });
+        assert.equal(built.counters.uniqueVerifiedCompanies, 2);
+    });
+
+    it('canonicalCompanyName is preferred over a generic SEO Google title', () => {
+        const enId = oid(210);
+        const qId = oid(211);
+        const gId = oid(212);
+        const capId = oid(213);
+        const built = buildCanonicalVerifiedCompanies({
+            captures: [{
+                _id: capId,
+                title: 'LED Light Manufacturers in Maharashtra',
+                resultUrlOriginal: 'https://nirvanalighting.example.com/',
+                displayDomain: 'nirvanalighting.example.com',
+                firstSeenAt: new Date(),
+            }],
+            enrichments: [{
+                _id: enId,
+                companyName: 'LED Light Manufacturers in Maharashtra',
+                canonicalCompanyName: 'Nirvana Lighting',
+                canonicalDomain: 'nirvanalighting.example.com',
+                websiteUrl: 'https://nirvanalighting.example.com/',
+                isDirectorySource: false,
+                enrichmentStatus: 'completed',
+                phones: [{ original: '9876543210', normalized: '+919876543210' }],
+                emails: [],
+                whatsappNumbers: [],
+                rawCaptureIds: [capId],
+            }],
+            qualifications: [{ _id: qId, enrichmentId: enId, systemDecision: 'strong_match' }],
+            genuinenessDocs: [{
+                _id: gId,
+                enrichmentId: enId,
+                qualificationId: qId,
+                companyName: 'LED Light Manufacturers in Maharashtra',
+                canonicalDomain: 'nirvanalighting.example.com',
+                websiteUrl: 'https://nirvanalighting.example.com/',
+                systemDecision: 'verified_genuine',
+                genuinenessScore: 85,
+                verificationStatus: 'verified',
+            }],
+            options: { verifiedOnly: true, limit: null },
+        });
+        assert.equal(built.counters.uniqueVerifiedCompanies, 1);
+        assert.equal(built.allCompanies[0].companyName, 'Nirvana Lighting');
+    });
 });

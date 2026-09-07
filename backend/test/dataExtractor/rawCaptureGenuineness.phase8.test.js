@@ -281,7 +281,7 @@ describe('CP8 service + export', () => {
         assert.equal(reviewed.genuineness.ownerDecision, 'verified_genuine');
         assert.equal(reviewed.genuineness.systemDecision, systemBefore);
         assert.equal(reviewed.systemDecisionPreserved, systemBefore);
-        assert.equal(reviewed.createCrmLeadEnabled, false);
+        assert.equal(reviewed.createCrmLeadEnabled, false); // review payload flag only; create uses dedicated endpoint
         void r2;
     });
 
@@ -331,12 +331,11 @@ describe('CP8 service + export', () => {
         }
     });
 
-    it('createCrmLead is disabled and throws 403', async () => {
+    it('createCrmLead requires company and session context', async () => {
         await assert.rejects(
-            () => createCrmLead(),
+            () => createCrmLead({}),
             (err) => {
-                assert.equal(err.statusCode, 403);
-                assert.match(String(err.message), /disabled/i);
+                assert.ok(err.statusCode === 400 || err.statusCode === 404);
                 return true;
             },
         );

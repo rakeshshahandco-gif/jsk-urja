@@ -17,6 +17,7 @@ import { buildAllCurrentCapturedDataWorkbook } from './simpleLeadSearch.captured
 import { businessTypeMatchRank } from './simpleBusinessType.util.js';
 import {
     buildCanonicalVerifiedCompanies,
+    isEligibleForFinalVerified,
     isIndependentlyVerifiedDecision,
 } from '../rawCaptureGenuineness/canonicalVerifiedCompany.util.js';
 import {
@@ -25,11 +26,19 @@ import {
     STRICT_FINAL_BUCKETS,
     STRICT_FINAL_BUCKET_LABELS,
 } from './strictFinalBucket.util.js';
-import { normalizeCampaignCity, formatLocationMatchLabel, formatRequestedLocation, formatDetectedLocation } from '../rawCaptureQualification/locationMatch.util.js';
+import { normalizeCampaignCity, formatLocationMatchLabel, formatLocationRelevanceLabel, locationRelevanceKey, formatRequestedLocation, formatDetectedLocation } from '../rawCaptureQualification/locationMatch.util.js';
 import { RULE_ENGINE_VERSION } from '../rawCaptureQualification/constants.js';
 import { RawCaptureLocationRecheckJob } from '../../../../models/rawCaptureQualification.model.js';
 import { unpackChinaNotes, chinaSupplierStatusLabel } from './chinaBilingual.util.js';
 import { isLikelyChineseBusinessText } from '../chinaWebsiteCrawler/chinaPageExtract.util.js';
+import { Lead } from '../../../../models/lead.model.js';
+import Customer from '../../../../models/customer.model.js';
+import {
+    buildAiVerificationDisplay,
+    CRM_STATUS,
+    safeHttpUrl,
+    buildWhatsAppUrl,
+} from './aiVerificationDisplay.util.js';
 
 const ENRICH_DONE = ['completed', 'partial', 'review_required'];
 const QUALIFY_ELIGIBLE = ['strong_match', 'possible_match', 'human_review_required'];
@@ -151,6 +160,10 @@ function mapJoinedRow({ cap, enrich, qual, gen, queryTextById, queryMetaById, in
         && gen.verificationStatus !== 'failed'
         && isIndependentlyVerifiedDecision(gen),
     );
+    const isVerifiedRelevant = Boolean(
+        gen
+        && isEligibleForFinalVerified(gen, enrich || {}, qual || {}),
+    );
     const isDirectoryListing = Boolean(gen && isDirectoryGen);
     const isReview = exclusiveStatus === 'review_required'
         || gen?.systemDecision === 'human_review_required'
@@ -211,7 +224,15 @@ function mapJoinedRow({ cap, enrich, qual, gen, queryTextById, queryMetaById, in
         confirmedCities: Array.isArray(qual?.confirmedCities) ? qual.confirmedCities.join(', ') : '',
         locationMatch: qual?.locationMatch || '',
         locationMatchLabel: formatLocationMatchLabel(qual?.locationMatch || ''),
+        locationRelevance: locationRelevanceKey(qual?.locationMatch || ''),
+        locationRelevanceLabel: formatLocationRelevanceLabel({
+            locationMatch: qual?.locationMatch || '',
+            locationClassification: qual?.locationClassification || '',
+            locationHits: qual?.locationHits || [],
+            confirmedCities: qual?.confirmedCities || [],
+        }),
         locationClassification: qual?.locationClassification || '',
+        industryMatchLabel: qual?.productMatchStrength || '',
         locationEvidenceUrl: qual?.locationEvidenceUrl || '',
         officeInSelectedCity: Boolean(qual?.officeInSelectedCity),
         servesSelectedCity: Boolean(qual?.servesSelectedCity),
@@ -235,12 +256,27 @@ function mapJoinedRow({ cap, enrich, qual, gen, queryTextById, queryMetaById, in
         locationRecheckedAt: qual?.locationRecheckedAt || null,
         contactPerson: contact.name || '',
         phone: firstPhone(enrich?.phones) || bilingual?.phone || '',
+        mobile: firstPhone((enrich?.phones || []).filter((p) => p?.kind === 'mobile' || p?.kind === 'whatsapp'))
+            || firstPhone(enrich?.phones)
+            || bilingual?.phone
+            || '',
+        telephone: firstPhone((enrich?.phones || []).filter((p) => p?.kind === 'general' || p?.kind === 'toll_free')),
         whatsapp: firstPhone(enrich?.whatsappNumbers),
         wechatPublic: bilingual?.wechat || '',
         email: firstEmail(enrich?.emails) || bilingual?.email || '',
         facebook: socialUrl(enrich?.facebook),
         instagram: socialUrl(enrich?.instagram),
         linkedin: socialUrl(enrich?.linkedin),
+        youtube: socialUrl(enrich?.youtube),
+        googleBusinessUrl: /google|maps/i.test(String(enrich?.directoryPlatform || ''))
+            ? (enrich?.directoryProfileUrl || '')
+            : '',
+        gstin: enrich?.gstin || '',
+        pincode: addr.pinCode || '',
+        phoneSourceUrl: Array.isArray(enrich?.phones) && enrich.phones[0] ? (enrich.phones[0].sourceUrl || '') : '',
+        instagramMatch: enrich?.instagram?.matchConfidence || '',
+        manufacturerEvidence: gen?.manufacturerEvidence || enrich?.manufacturerEvidence || '',
+        conflictingEvidence: gen?.conflictingEvidence || enrich?.conflictingValues || [],
         productsServices: Array.isArray(enrich?.productsServices) ? enrich.productsServices.join('; ') : '',
         captureStatus: cap.inboxStatus || 'captured',
         enrichmentStatus: cap.enrichmentStatus || enrich?.enrichmentStatus || 'not_started',
@@ -264,10 +300,16 @@ function mapJoinedRow({ cap, enrich, qual, gen, queryTextById, queryMetaById, in
         enrichmentId: enrich?._id ? String(enrich._id) : '',
         qualificationId: qual?._id ? String(qual._id) : '',
         genuinenessId: gen?._id ? String(gen._id) : '',
+        ownerReviewStatus: qual?.ownerReviewStatus || gen?.ownerReviewStatus || '',
+        ownerReviewNote: qual?.ownerReviewNote || gen?.ownerReviewNote || '',
+        storedCrmStatus: cap.crmStatus || 'not_in_crm',
+        crmLeadId: cap.crmLeadId ? String(cap.crmLeadId) : '',
+        crmCustomerId: cap.crmCustomerId ? String(cap.crmCustomerId) : '',
         flags: {
             hasEnrichDone,
             hasQualified,
             hasVerified,
+            isVerifiedRelevant,
             isDirectoryListing,
             isReview,
             isFailed: exclusiveStatus === 'failed',
@@ -297,7 +339,133 @@ function mapJoinedRow({ cap, enrich, qual, gen, queryTextById, queryMetaById, in
     };
     const row = base;
     row.strictFinalBucket = classifyStrictFinalBucket(row);
+    Object.assign(row, buildAiVerificationDisplay(row));
+    row.website = safeHttpUrl(row.website) || row.website || '';
+    row.facebook = safeHttpUrl(row.facebook);
+    row.instagram = safeHttpUrl(row.instagram);
+    row.linkedin = safeHttpUrl(row.linkedin);
+    row.youtube = safeHttpUrl(row.youtube);
+    row.googleBusinessUrl = safeHttpUrl(row.googleBusinessUrl);
+    row.whatsappUrl = buildWhatsAppUrl(row.whatsapp || row.mobile || row.phone, {
+        labelled: Boolean(row.whatsapp),
+        country: row.country,
+    });
+    row.crmStatusLabel = mapStoredCrmLabel(row);
     return row;
+}
+
+function mapStoredCrmLabel(row = {}) {
+    if (row.storedCrmStatus === 'lead_created' || row.crmLeadId) return CRM_STATUS.LEAD_CREATED;
+    if (row.storedCrmStatus === 'existing_lead') return CRM_STATUS.EXISTING_LEAD;
+    if (row.storedCrmStatus === 'existing_customer' || row.crmCustomerId) return CRM_STATUS.EXISTING_CUSTOMER;
+    return CRM_STATUS.NOT_IN_CRM;
+}
+
+async function attachLiveCrmStatus(companyId, rows) {
+    const needLookup = rows.filter((r) => r.crmStatusLabel === CRM_STATUS.NOT_IN_CRM);
+    if (!needLookup.length) return;
+    const captureIds = needLookup.map((r) => r._id).filter((id) => mongoose.isValidObjectId(id));
+    const emails = [...new Set(needLookup.map((r) => String(r.email || '').trim().toLowerCase()).filter(Boolean))].slice(0, 200);
+    const tails = [...new Set(needLookup.map((r) => String(r.phone || r.mobile || '').replace(/\D/g, '').slice(-10)).filter((t) => t.length >= 8))].slice(0, 200);
+
+    const orLead = [];
+    if (captureIds.length) orLead.push({ 'extractorRef.rawCaptureId': { $in: captureIds } });
+    if (emails.length) orLead.push({ customerEmail: { $in: emails } });
+    if (tails.length) {
+        orLead.push({ customerMobile: { $regex: tails.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') } });
+    }
+
+    const [leads, customers] = await Promise.all([
+        orLead.length
+            ? Lead.find({ companyId, $or: orLead }).select('_id customerName customerEmail customerMobile extractorRef').limit(400).lean()
+            : [],
+        (emails.length || tails.length)
+            ? Customer.find({
+                companyId,
+                isDeleted: { $ne: true },
+                $or: [
+                    ...(emails.length ? [{ companyEmail: { $in: emails } }, { 'contactPersons.email': { $in: emails } }] : []),
+                    ...(tails.length ? [{ 'contactPersons.mobile': { $regex: tails.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') } }] : []),
+                ],
+            }).select('_id customerName companyEmail contactPersons').limit(400).lean()
+            : [],
+    ]);
+
+    const leadByCapture = new Map();
+    const leadByEmail = new Map();
+    const leadByTail = new Map();
+    for (const lead of leads) {
+        if (lead.extractorRef?.rawCaptureId) leadByCapture.set(String(lead.extractorRef.rawCaptureId), lead);
+        if (lead.customerEmail) leadByEmail.set(String(lead.customerEmail).toLowerCase(), lead);
+        const t = String(lead.customerMobile || '').replace(/\D/g, '').slice(-10);
+        if (t.length >= 8) leadByTail.set(t, lead);
+    }
+    const custByEmail = new Map();
+    const custByTail = new Map();
+    for (const c of customers) {
+        if (c.companyEmail) custByEmail.set(String(c.companyEmail).toLowerCase(), c);
+        for (const p of (c.contactPersons || [])) {
+            if (p.email) custByEmail.set(String(p.email).toLowerCase(), c);
+            const t = String(p.mobile || '').replace(/\D/g, '').slice(-10);
+            if (t.length >= 8) custByTail.set(t, c);
+        }
+    }
+
+    for (const row of needLookup) {
+        const lead = leadByCapture.get(row._id)
+            || (row.email && leadByEmail.get(String(row.email).toLowerCase()))
+            || leadByTail.get(String(row.phone || row.mobile || '').replace(/\D/g, '').slice(-10));
+        const customer = (row.email && custByEmail.get(String(row.email).toLowerCase()))
+            || custByTail.get(String(row.phone || row.mobile || '').replace(/\D/g, '').slice(-10));
+        if (customer) {
+            row.crmStatusLabel = CRM_STATUS.EXISTING_CUSTOMER;
+            row.crmCustomerId = String(customer._id);
+        } else if (lead) {
+            const fromThis = lead.extractorRef?.rawCaptureId && String(lead.extractorRef.rawCaptureId) === row._id;
+            row.crmStatusLabel = fromThis ? CRM_STATUS.LEAD_CREATED : CRM_STATUS.EXISTING_LEAD;
+            row.crmLeadId = String(lead._id);
+        }
+    }
+}
+
+function summaryCardsFromRows(rows) {
+    const uniqueDomains = new Set();
+    let enriched = 0;
+    let genuine = 0;
+    let relevant = 0;
+    let verifiedRelevant = 0;
+    let review = 0;
+    let unrelated = 0;
+    let highPotential = 0;
+    let leadsCreated = 0;
+    for (const r of rows) {
+        if (r.displayDomain) uniqueDomains.add(String(r.displayDomain).toLowerCase());
+        else if (r.companyName) uniqueDomains.add(String(r.companyName).toLowerCase());
+        if (r.flags?.hasEnrichDone) enriched += 1;
+        if (r.flags?.hasVerified) genuine += 1;
+        if (/strong product match|possible product match/i.test(String(r.productMatchStrength || ''))) relevant += 1;
+        if (r.flags?.isVerifiedRelevant || r.aiStatus === 'VERIFIED') verifiedRelevant += 1;
+        if (r.aiStatus === 'NEEDS REVIEW' || r.flags?.isReview) review += 1;
+        if (/unrelated/i.test(String(r.productMatchStrength || r.strictFinalBucket || ''))) unrelated += 1;
+        if (Number(r.businessPotentialScore) >= 75) highPotential += 1;
+        if (r.crmStatusLabel === CRM_STATUS.LEAD_CREATED) leadsCreated += 1;
+    }
+    return {
+        discovered: rows.length,
+        rawDiscovered: rows.length,
+        uniqueCompanies: uniqueDomains.size,
+        genuineCompanies: genuine,
+        genuine,
+        relevant,
+        relevantCompanies: relevant,
+        verifiedRelevant,
+        aiVerified: verifiedRelevant,
+        needsReview: review,
+        unrelated,
+        highPotential,
+        leadsCreated,
+        failedRetry: rows.filter((r) => r.exclusiveStatus === 'failed').length,
+    };
 }
 
 async function loadCampaignJoinedRows(companyId, campaignId) {
@@ -360,7 +528,7 @@ function countTabs(rows) {
         if (r.flags.hasEnrichDone) counts.enriched += 1;
         if (r.flags.hasQualified) counts.qualified += 1;
         // Source-appearance count kept for internal metrics; unique count applied later for verified tab
-        if (r.flags.hasVerified || r.exclusiveStatus === 'completed') {
+        if (r.flags.isVerifiedRelevant) {
             counts.verified += 1;
         }
         if (r.exclusiveStatus === 'review_required' || r.flags.isReview) counts.review_required += 1;
@@ -373,7 +541,7 @@ function countTabs(rows) {
 
 function mapCanonicalCompanyToVerifiedRow(company, index) {
     const cs = company.contactSummary || {};
-    return {
+    const row = {
         _id: String(company.genuinenessId || company.canonicalKey || index),
         index,
         isCanonicalCompany: true,
@@ -385,6 +553,12 @@ function mapCanonicalCompanyToVerifiedRow(company, index) {
         sourceUrl: company.primaryWebsite || company.websiteUrl || '',
         displayDomain: company.canonicalDomain || '',
         businessType: company.businessType || '',
+        productMatchStrength: company.productMatchStrength || '',
+        industryMatchLabel: company.productMatchStrength || '',
+        businessTypeMatch: company.businessTypeMatch || '',
+        locationMatch: company.locationMatch || '',
+        locationClassification: company.locationClassification || '',
+        manufacturerEvidence: company.manufacturerEvidence || '',
         searchKeyword: '',
         queryUsed: '',
         googlePageIndex: '',
@@ -407,7 +581,7 @@ function mapCanonicalCompanyToVerifiedRow(company, index) {
         captureStatus: 'canonical',
         enrichmentStatus: 'completed',
         qualificationStatus: '',
-        relevanceScore: '',
+        relevanceScore: company.relevanceScore ?? '',
         genuinenessStatus: company.systemDecision || '',
         genuinenessScore: company.genuinenessScore ?? '',
         verificationStatus: company.verificationStatus,
@@ -428,6 +602,9 @@ function mapCanonicalCompanyToVerifiedRow(company, index) {
         enrichmentId: company.enrichmentId ? String(company.enrichmentId) : '',
         qualificationId: company.qualificationId ? String(company.qualificationId) : '',
         genuinenessId: company.genuinenessId || '',
+        storedCrmStatus: 'not_in_crm',
+        crmLeadId: '',
+        crmCustomerId: '',
         canonicalKey: company.canonicalKey,
         contactSummary: cs,
         phones: company.phones || [],
@@ -437,6 +614,7 @@ function mapCanonicalCompanyToVerifiedRow(company, index) {
             hasEnrichDone: true,
             hasQualified: true,
             hasVerified: company.independentlyVerified,
+            isVerifiedRelevant: true,
             isDirectoryListing: company.isDirectoryListing,
             isReview: false,
             isFailed: false,
@@ -462,6 +640,13 @@ function mapCanonicalCompanyToVerifiedRow(company, index) {
             sourceAppearances: company.sourceAppearances,
         },
     };
+    Object.assign(row, buildAiVerificationDisplay(row));
+    row.website = safeHttpUrl(row.website) || row.website || '';
+    row.facebook = safeHttpUrl(row.facebook);
+    row.instagram = safeHttpUrl(row.instagram);
+    row.linkedin = safeHttpUrl(row.linkedin);
+    row.crmStatusLabel = CRM_STATUS.NOT_IN_CRM;
+    return row;
 }
 
 function exclusiveBuckets(rows) {
@@ -489,6 +674,7 @@ function applyFilters(rows, query = {}) {
     const state = String(query.state || '').trim().toLowerCase();
     const relevance = String(query.relevance || '').trim().toLowerCase();
     const genuineness = String(query.genuineness || '').trim().toLowerCase();
+    const locationFilter = String(query.locationFilter || query.locationRelevance || '').trim().toLowerCase();
     const sourceName = String(query.sourceName || query.source || '').trim().toLowerCase();
     const failedOnly = query.failedRetry === '1' || query.failedRetry === 'true';
     const chineseTextOnly = query.chineseTextOnly === '1' || query.chineseTextOnly === 'true';
@@ -497,6 +683,13 @@ function applyFilters(rows, query = {}) {
     const hasPhone = query.hasPhone === '1' || query.hasPhone === 'true';
     const hasWeChat = query.hasWeChat === '1' || query.hasWeChat === 'true';
     const destType = String(query.destinationType || '').trim().toUpperCase();
+    const country = String(query.country || '').trim().toLowerCase();
+    const resultFilter = String(query.resultFilter || query.quickFilter || '').trim().toLowerCase();
+    const hasWebsite = query.hasWebsite === '1' || query.hasWebsite === 'true';
+    const hasEmail = query.hasEmail === '1' || query.hasEmail === 'true';
+    const hasMobile = query.hasMobile === '1' || query.hasMobile === 'true';
+    const hasFacebook = query.hasFacebook === '1' || query.hasFacebook === 'true';
+    const hasInstagram = query.hasInstagram === '1' || query.hasInstagram === 'true';
 
     let out = rows;
     if (tab && tab !== 'all') {
@@ -505,7 +698,7 @@ function applyFilters(rows, query = {}) {
             if (tab === 'processing') return r.exclusiveStatus === 'processing';
             if (tab === 'enriched') return r.flags.hasEnrichDone;
             if (tab === 'qualified') return r.flags.hasQualified;
-            if (tab === 'verified') return r.flags.hasVerified && !r.flags.isDirectoryListing;
+            if (tab === 'verified') return r.flags.isVerifiedRelevant && !r.flags.isDirectoryListing;
             if (tab === 'review_required') return r.exclusiveStatus === 'review_required' || r.flags.isReview;
             if (tab === 'rejected_skipped') return r.exclusiveStatus === 'rejected_skipped';
             if (tab === 'failed') return r.exclusiveStatus === 'failed';
@@ -523,7 +716,17 @@ function applyFilters(rows, query = {}) {
             return hay.includes(search);
         });
     }
-    if (businessType) out = out.filter((r) => String(r.businessType || '').toLowerCase().includes(businessType));
+    if (businessType) {
+        const wanted = businessType.replace(/[_-]/g, ' ');
+        out = out.filter((r) => String(r.businessType || '').toLowerCase().replace(/[_-]/g, ' ').includes(wanted));
+    }
+    if (locationFilter === 'target' || locationFilter === 'target_location') {
+        out = out.filter((r) => r.locationRelevance === 'target' || r.locationMatch === 'match' || r.locationMatch === 'partial');
+    } else if (locationFilter === 'outside' || locationFilter === 'outside_target') {
+        out = out.filter((r) => r.locationRelevance === 'outside' || r.locationMatch === 'mismatch');
+    } else if (locationFilter === 'unknown' || locationFilter === 'location_unknown') {
+        out = out.filter((r) => r.locationRelevance === 'unknown' || !r.locationMatch || r.locationMatch === 'unknown');
+    }
     if (city) out = out.filter((r) => String(r.city || '').toLowerCase().includes(city));
     if (state) out = out.filter((r) => String(r.state || '').toLowerCase().includes(state));
     if (relevance) out = out.filter((r) => String(r.qualificationStatus || '').toLowerCase().includes(relevance));
@@ -555,13 +758,40 @@ function applyFilters(rows, query = {}) {
     if (hasWeChat) out = out.filter((r) => Boolean(r.wechat || r.wechatPublic));
     if (destType) out = out.filter((r) => String(r.destinationType || '').toUpperCase().includes(destType));
     if (failedOnly) out = out.filter((r) => r.exclusiveStatus === 'failed' && r.retryAvailable);
+    if (country) out = out.filter((r) => String(r.country || '').toLowerCase().includes(country));
+    if (hasWebsite) out = out.filter((r) => Boolean(r.website));
+    if (hasEmail) out = out.filter((r) => Boolean(r.email));
+    if (hasMobile || query.hasPhone === '1') out = out.filter((r) => Boolean(r.phone || r.mobile));
+    if (hasFacebook) out = out.filter((r) => Boolean(r.facebook));
+    if (hasInstagram) out = out.filter((r) => Boolean(r.instagram));
+    if (resultFilter === 'verified') out = out.filter((r) => r.aiStatus === 'VERIFIED');
+    if (resultFilter === 'high_confidence') out = out.filter((r) => r.aiStatus === 'HIGH CONFIDENCE');
+    if (resultFilter === 'needs_review') out = out.filter((r) => r.aiStatus === 'NEEDS REVIEW' || r.flags?.isReview);
+    if (resultFilter === 'high_potential') out = out.filter((r) => Number(r.businessPotentialScore) >= 75);
+    if (resultFilter === 'website') out = out.filter((r) => Boolean(r.website));
+    if (resultFilter === 'mobile') out = out.filter((r) => Boolean(r.phone || r.mobile));
+    if (resultFilter === 'email') out = out.filter((r) => Boolean(r.email));
+    if (resultFilter === 'facebook') out = out.filter((r) => Boolean(r.facebook));
+    if (resultFilter === 'instagram') out = out.filter((r) => Boolean(r.instagram));
+    if (resultFilter === 'lead_created') out = out.filter((r) => r.crmStatusLabel === CRM_STATUS.LEAD_CREATED);
+    if (resultFilter === 'not_yet_lead') out = out.filter((r) => r.crmStatusLabel === CRM_STATUS.NOT_IN_CRM);
+    if (resultFilter === 'existing_customer') out = out.filter((r) => r.crmStatusLabel === CRM_STATUS.EXISTING_CUSTOMER);
 
-    const sortKey = String(query.sort || 'capturedAt');
-    const sortDir = String(query.sortDir || 'asc').toLowerCase() === 'desc' ? -1 : 1;
+    const sortKey = String(query.sort || 'businessPotential');
+    const defaultDesc = ['businessPotential', 'businessPotentialScore', 'confidence', 'aiConfidence', 'completeness', 'newest', 'newestFound'].includes(sortKey);
+    const sortDir = String(query.sortDir || (defaultDesc ? 'desc' : 'asc')).toLowerCase() === 'desc' ? -1 : 1;
+    const valueOf = (r) => {
+        if (sortKey === 'businessPotential' || sortKey === 'businessPotentialScore') return Number(r.businessPotentialScore) || 0;
+        if (sortKey === 'confidence' || sortKey === 'aiConfidence') return Number(r.confidencePercent || r.genuinenessScore) || 0;
+        if (sortKey === 'completeness' || sortKey === 'mostComplete') return Number(r.contactCompletenessPercent) || 0;
+        if (sortKey === 'newest' || sortKey === 'newestFound') return new Date(r.capturedAt || 0).getTime();
+        if (sortKey === 'companyName') return String(r.companyName || r.title || '').toLowerCase();
+        return r[sortKey] ?? '';
+    };
     out = [...out].sort((a, b) => {
-        const av = a[sortKey] ?? '';
-        const bv = b[sortKey] ?? '';
-        if (av === bv) return (a.index - b.index) * sortDir;
+        const av = valueOf(a);
+        const bv = valueOf(b);
+        if (av === bv) return (a.index - b.index);
         if (av == null) return 1;
         if (bv == null) return -1;
         if (av < bv) return -1 * sortDir;
@@ -590,6 +820,8 @@ export async function listCampaignCapturedData({ companyId, user, sessionId, que
     const session = await loadOwnedSession(cid, sessionId);
     const campaign = await SearchCampaign.findOne({ _id: session.campaignId, companyId: cid }).lean();
     const { rows, stageMetrics, queryTextById } = await loadCampaignJoinedRows(cid, session.campaignId);
+    await attachLiveCrmStatus(cid, rows);
+    const summaryCards = summaryCardsFromRows(rows);
     const tabCounts = countTabs(rows);
     const buckets = exclusiveBuckets(rows);
     const strictFinalBuckets = countStrictFinalBuckets(rows);
@@ -631,9 +863,11 @@ export async function listCampaignCapturedData({ companyId, user, sessionId, que
             },
         });
         const pageItems = built.items.map((c, idx) => mapCanonicalCompanyToVerifiedRow(c, idx + 1));
+        await attachLiveCrmStatus(cid, pageItems);
         tabCounts.verified = built.counters.uniqueVerifiedCompanies;
         return {
             items: pageItems,
+            summaryCards,
             tabCounts,
             exclusiveBuckets: buckets,
             stageMetrics,
@@ -654,11 +888,15 @@ export async function listCampaignCapturedData({ companyId, user, sessionId, que
     }
 
     const filtered = applyFilters(rows, query);
-    const requestedManufacturer = (campaign?.businessTypes || []).some((t) => /manufacturer/i.test(String(t)));
-    if (requestedManufacturer && !query.sort) {
+    if (!query.sort) {
+        const requestedManufacturer = (campaign?.businessTypes || []).some((t) => /manufacturer/i.test(String(t)));
         filtered.sort((a, b) => {
-            const d = businessTypeMatchRank(a.businessTypeMatch) - businessTypeMatchRank(b.businessTypeMatch);
-            if (d) return d;
+            const pot = (Number(b.businessPotentialScore) || 0) - (Number(a.businessPotentialScore) || 0);
+            if (pot) return pot;
+            if (requestedManufacturer) {
+                const d = businessTypeMatchRank(a.businessTypeMatch) - businessTypeMatchRank(b.businessTypeMatch);
+                if (d) return d;
+            }
             return (Number(b.relevanceScore) || 0) - (Number(a.relevanceScore) || 0);
         });
     }
@@ -698,6 +936,7 @@ export async function listCampaignCapturedData({ companyId, user, sessionId, que
 
     return {
         items: pageItems,
+        summaryCards,
         tabCounts,
         exclusiveBuckets: buckets,
         strictFinalBuckets,
@@ -752,6 +991,7 @@ export async function exportAllCurrentCampaignData({ companyId, user, sessionId 
     const session = await loadOwnedSession(cid, sessionId);
     const campaign = await SearchCampaign.findOne({ _id: session.campaignId, companyId: cid }).lean();
     const { rows, stageMetrics, queries } = await loadCampaignJoinedRows(cid, session.campaignId);
+    await attachLiveCrmStatus(cid, rows);
     const tabCounts = countTabs(rows);
     const buckets = exclusiveBuckets(rows);
 
@@ -785,6 +1025,6 @@ export async function exportAllCurrentCampaignData({ companyId, user, sessionId 
             'Generated Queries',
         ],
         campaignId: String(session.campaignId),
-        note: 'CRM Lead creation remains OFF. Export includes all current-campaign captures with present stage/status.',
+        note: 'Export includes current-campaign captures with present stage/status. CRM Lead IDs are references only.',
     };
 }

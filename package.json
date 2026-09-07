@@ -13,6 +13,7 @@
     "dev:hot": "npm run dev:vite",
     "dev:build": "npm run build && npm run dev",
     "dev:safe": "node scripts/dev-preflight.cjs --ports 5000,4000 && node scripts/start-dev-local.cjs",
+    "discovery-agent": "node scripts/start-discovery-agent.cjs",
     "dev:stable-frontend": "node scripts/start-frontend-stable.cjs",
     "prebuild": "node scripts/render-ensure-devdeps.cjs",
     "build": "vite build",

@@ -15,9 +15,11 @@ export const LOCATION_CLASSIFICATIONS = Object.freeze({
     EXACT_CITY_OFFICE: 'Exact City Office Confirmed',
     EXACT_CITY_BRANCH: 'Exact City Branch Confirmed',
     EXACT_CITY_FACTORY: 'Exact City Factory Confirmed',
+    LOCALITY_PARENT: 'Locality / Parent-City Match',
     SERVES_NO_OFFICE: 'Serves Selected City — No Office Confirmed',
     NEARBY_CITY: 'Nearby City',
     DIFFERENT_CITY: 'Different City Confirmed',
+    OUTSIDE_TARGET: 'Outside Target',
     NOT_CONFIRMED: 'Location Not Confirmed',
     ADDRESS_MISSING: 'Address Missing',
     OWNER_APPROVED: 'Owner Approved Location',
@@ -30,9 +32,52 @@ const CITY_ALIASES = {
     banglore: ['bangalore', 'bengaluru', 'bengaluru urban', 'bangaluru', 'banglore'],
     gurugram: ['gurugram', 'gurgaon'],
     gurgaon: ['gurugram', 'gurgaon'],
-    mumbai: ['mumbai', 'bombay'],
+    mumbai: ['mumbai', 'bombay', 'greater mumbai', 'mumbai suburban'],
     delhi: ['delhi', 'new delhi', 'ncr'],
     'new delhi': ['delhi', 'new delhi'],
+    vasai: ['vasai', 'vasai virar', 'vasai-virar'],
+    thane: ['thane', 'thane city'],
+};
+
+/** Safe parent locality only — never maps a whole state to a city. */
+const PARENT_LOCALITY = {
+    'vasai east': 'vasai',
+    'vasai west': 'vasai',
+    'vasai virar': 'vasai',
+    'vasai-virar': 'vasai',
+    'vasai road': 'vasai',
+    'vasai e': 'vasai',
+    valiv: 'vasai',
+    waliv: 'vasai',
+    virar: 'vasai',
+    navghar: 'vasai',
+    goregaon: 'mumbai',
+    andheri: 'mumbai',
+    bandra: 'mumbai',
+    worli: 'mumbai',
+    chembur: 'mumbai',
+    dahisar: 'mumbai',
+    kandivali: 'mumbai',
+    borivali: 'mumbai',
+    malad: 'mumbai',
+    vikhroli: 'mumbai',
+    powai: 'mumbai',
+    dadar: 'mumbai',
+    kurla: 'mumbai',
+    sion: 'mumbai',
+    mulund: 'mumbai',
+    jogeshwari: 'mumbai',
+    santacruz: 'mumbai',
+    'vile parle': 'mumbai',
+    kalbadevi: 'mumbai',
+    'thane west': 'thane',
+    'thane east': 'thane',
+};
+
+const LOCALITIES_OF = {
+    vasai: ['vasai east', 'vasai west', 'vasai virar', 'vasai-virar', 'vasai road', 'valiv', 'waliv', 'virar', 'navghar'],
+    mumbai: ['goregaon', 'andheri', 'bandra', 'worli', 'chembur', 'dahisar', 'kandivali', 'borivali', 'malad', 'vikhroli', 'powai', 'dadar', 'kurla', 'sion', 'mulund', 'jogeshwari', 'santacruz', 'vile parle', 'kalbadevi', 'bombay'],
+    thane: ['thane west', 'thane east', 'thane city'],
 };
 
 function norm(s) {
@@ -115,14 +160,18 @@ function citiesForState(state) {
     return cities.map(norm);
 }
 
+function wordBoundaryHas(text, alias) {
+    const t = norm(text);
+    const a = norm(alias);
+    if (!t || !a) return false;
+    const esc = a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`\\b${esc}\\b`, 'i').test(t);
+}
+
 function textHasAlias(text, aliases) {
     const t = norm(text);
     if (!t) return false;
-    return (aliases || []).some((a) => {
-        if (!a) return false;
-        if (a.length <= 3) return new RegExp(`\\b${a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(t);
-        return t.includes(a);
-    });
+    return (aliases || []).some((a) => wordBoundaryHas(t, a));
 }
 
 function detectStateFromText(text) {
@@ -175,12 +224,55 @@ export function normalizeCampaignCity(raw) {
     };
 }
 
+const DROP_LOCATION_TOKENS = new Set([
+    ...INDIA_ALIASES,
+    ...Object.keys(STATE_ALIASES).map((k) => k.replace(/_/g, ' ')),
+    ...Object.values(STATE_ALIASES).flat(),
+]);
+
+/** Split "MUMBAI, VASAI, THANE" into independent target cities. */
+export function parseCampaignTargetCities(cityRaw = '') {
+    return String(cityRaw || '')
+        .split(/[,|/]+/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .filter((s) => !DROP_LOCATION_TOKENS.has(norm(s)));
+}
+
+/** Vasai East → vasai; Mumbai, Mumbai, Maharashtra → mumbai. */
+export function normalizePlaceKey(raw = '') {
+    let t = norm(raw).replace(/[.,;:()[\]{}]/g, ' ').replace(/-/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!t) return '';
+    if (PARENT_LOCALITY[t]) return PARENT_LOCALITY[t];
+    const tokens = [];
+    const seen = new Set();
+    for (const tok of t.split(' ')) {
+        if (!tok || seen.has(tok)) continue;
+        if (DROP_LOCATION_TOKENS.has(tok)) continue;
+        if (/^(east|west|north|south|road)$/.test(tok)) continue;
+        seen.add(tok);
+        tokens.push(tok);
+    }
+    t = tokens.join(' ');
+    if (PARENT_LOCALITY[t]) return PARENT_LOCALITY[t];
+    const extras = CITY_ALIASES[t];
+    if (extras?.[0]) return extras[0] === 'bengaluru' || extras[0] === 'bangalore' ? 'bangalore' : (PARENT_LOCALITY[t] || t);
+    return t;
+}
+
 export function cityAliasList(city) {
-    const normalized = normalizeCampaignCity(city);
-    const key = norm(normalized.canonical || city);
-    if (!key) return [];
-    const extras = CITY_ALIASES[key] || CITY_ALIASES[norm(city)] || [];
-    return [...new Set([key, norm(city), ...extras.map(norm)].filter(Boolean))];
+    const targets = parseCampaignTargetCities(city);
+    const seed = targets.length ? targets : (norm(city) ? [city] : []);
+    const out = new Set();
+    for (const item of seed) {
+        const key = normalizePlaceKey(item);
+        const raw = norm(item);
+        if (key) out.add(key);
+        if (raw) out.add(raw);
+        for (const extra of CITY_ALIASES[key] || CITY_ALIASES[raw] || []) out.add(norm(extra));
+        for (const child of LOCALITIES_OF[key] || []) out.add(norm(child));
+    }
+    return [...out].filter(Boolean);
 }
 
 export function resolveLocationMatchMode(campaign = {}) {
@@ -203,7 +295,13 @@ function addressHaystack(addr) {
 
 function cityMatchesText(text, aliases) {
     const t = norm(text);
-    return aliases.some((a) => a && t.includes(a));
+    if (!t) return false;
+    const placeKey = normalizePlaceKey(t);
+    return (aliases || []).some((a) => {
+        if (!a) return false;
+        if (placeKey && (placeKey === normalizePlaceKey(a) || placeKey === a)) return true;
+        return wordBoundaryHas(t, a);
+    });
 }
 
 function officeTypeBucket(type) {
@@ -487,29 +585,46 @@ export function classifyStrictLocation({
 
     // Reliable office evidence = addresses[] and structured enrichment city/state (not Google blob)
     const matchingAddrs = addresses.filter((a) => cityMatchesText(addressHaystack(a), aliases)
-        || cityMatchesText(a.city, aliases));
-    const structuredCityHit = cityMatchesText(enrichment.city, aliases);
+        || cityMatchesText(a.city, aliases)
+        || cityMatchesText(a.state, aliases));
+    const structuredCityHit = cityMatchesText(enrichment.city, aliases)
+        || cityMatchesText(enrichment.state, aliases);
     const serves = detectsServesCity(websiteServeText, aliases);
+    const targetKeys = parseCampaignTargetCities(selectedCity).map(normalizePlaceKey).filter(Boolean);
 
     if (matchingAddrs.length || structuredCityHit) {
         const best = matchingAddrs[0] || {
             type: 'Office',
             sourceUrl: enrichment.websiteUrl || '',
             city: enrichment.city,
+            state: enrichment.state,
+            raw: '',
         };
+        const evidenceCity = String(best.city || enrichment.city || best.state || '').trim();
+        const evidenceKey = normalizePlaceKey(evidenceCity || best.raw || '');
+        const evidenceNorm = norm(evidenceCity).replace(/-/g, ' ');
+        const parentMatch = Boolean(
+            evidenceKey
+            && targetKeys.includes(evidenceKey)
+            && (PARENT_LOCALITY[evidenceNorm] || PARENT_LOCALITY[norm(evidenceCity)]),
+        );
         const bucket = officeTypeBucket(best.type);
         let classification = LOCATION_CLASSIFICATIONS.EXACT_CITY_OFFICE;
-        if (bucket === 'branch') classification = LOCATION_CLASSIFICATIONS.EXACT_CITY_BRANCH;
-        if (bucket === 'factory') classification = LOCATION_CLASSIFICATIONS.EXACT_CITY_FACTORY;
+        if (parentMatch) classification = LOCATION_CLASSIFICATIONS.LOCALITY_PARENT;
+        else if (bucket === 'branch') classification = LOCATION_CLASSIFICATIONS.EXACT_CITY_BRANCH;
+        else if (bucket === 'factory') classification = LOCATION_CLASSIFICATIONS.EXACT_CITY_FACTORY;
+        const hitLabel = parentMatch && evidenceCity
+            ? `${evidenceCity} → ${evidenceKey}`
+            : (evidenceCity || aliases[0] || '');
         return {
             ...base,
             locationMatch: 'match',
             locationClassification: classification,
             officeInSelectedCity: true,
             servesSelectedCity: serves,
-            locationHits: aliases.filter((a) => cityMatchesText(addressHaystack(best) || enrichment.city, [a])),
+            locationHits: [hitLabel, ...aliases.filter((a) => cityMatchesText(addressHaystack(best) || evidenceCity, [a]))].filter(Boolean).slice(0, 6),
             locationEvidenceUrl: best.sourceUrl || enrichment.websiteUrl || '',
-            confirmedCities: confirmedCities.length ? confirmedCities : [selectedCity],
+            confirmedCities: confirmedCities.length ? confirmedCities : [evidenceCity || selectedCity].filter(Boolean),
         };
     }
 
@@ -567,6 +682,38 @@ export function formatLocationMatchLabel(locationMatch) {
     if (m === 'mismatch') return 'No';
     if (m === 'partial') return 'Partial';
     return 'Not Confirmed';
+}
+
+/** Staff-facing location badge. Independent of genuineness. */
+export function formatLocationRelevanceLabel({
+    locationMatch = '',
+    locationClassification = '',
+    locationHits = [],
+    confirmedCities = [],
+} = {}) {
+    const match = String(locationMatch || '');
+    const hit = String(locationHits[0] || '').trim();
+    const confirmed = String(confirmedCities[0] || '').trim();
+    if (match === 'match') {
+        const source = hit.includes('→') ? hit : (confirmed || hit);
+        const parent = source ? normalizePlaceKey(source.split('→')[0]) : '';
+        if (String(locationClassification) === LOCATION_CLASSIFICATIONS.LOCALITY_PARENT && source) {
+            const left = source.includes('→') ? source : `${source} → ${parent}`;
+            return `MATCH — ${left}`;
+        }
+        return `MATCH — ${confirmed || hit || 'target'}`;
+    }
+    if (match === 'partial') return 'NEARBY / SERVES TARGET';
+    if (match === 'mismatch') return `OUTSIDE TARGET${confirmed ? ` — ${confirmed}` : ''}`;
+    if (String(locationClassification) === LOCATION_CLASSIFICATIONS.ADDRESS_MISSING) return 'LOCATION NOT CONFIRMED';
+    return 'LOCATION NOT CONFIRMED';
+}
+
+export function locationRelevanceKey(locationMatch = '') {
+    const m = String(locationMatch || '');
+    if (m === 'match' || m === 'partial') return 'target';
+    if (m === 'mismatch') return 'outside';
+    return 'unknown';
 }
 
 export function formatRequestedLocation(campaign = {}) {

@@ -104,8 +104,16 @@ const JOB_STYLE_EXCLUSIONS = Object.freeze([
 ]);
 
 export const MAX_GENERATED_QUERIES = 24;
+/** Country=India city + synonym expansion (operational query cap, not a result-total cap). */
+export const MAX_INDIA_COUNTRY_QUERIES = 48;
 /** Higher cap for per-model China families (cities + Chinese + Baidu + 1688). */
 export const MAX_MODEL_CHINA_QUERIES = 110;
+
+/** Auto-expanded when Country=India and city is blank. */
+export const INDIA_PRIORITY_CITIES = Object.freeze([
+    'Mumbai', 'Delhi', 'Gurugram', 'Noida', 'Ahmedabad',
+    'Bengaluru', 'Chennai', 'Hyderabad', 'Pune', 'Kolkata', 'Surat',
+]);
 
 /** Auto-expanded when Country=China and city/state are blank. */
 export const CHINA_PRIORITY_CITIES = Object.freeze([
@@ -177,6 +185,28 @@ export function normalizeBusinessTypes(raw) {
         out.push(opt.id);
     }
     return out;
+}
+
+export function isIndiaCountry(value = '') {
+    const c = normalizeDisplay(value).toLowerCase();
+    return c === 'india' || c === 'in' || c === 'bharat';
+}
+
+/** Safe product-phrase variants for LED/lighting manufacturer searches. */
+export function suggestIndiaProductSynonyms(product = '') {
+    const p = normalizeDisplay(product);
+    const lower = p.toLowerCase();
+    if (!p) return [];
+    if (!/\bled\b/.test(lower) && !/light/.test(lower)) return [];
+    const candidates = [
+        'LED lighting manufacturer',
+        'LED luminaire manufacturer',
+        'LED fixture manufacturer',
+        'commercial LED lighting manufacturer',
+        'architectural lighting manufacturer',
+        'LED lighting OEM',
+    ];
+    return candidates.filter((s) => s.toLowerCase() !== lower);
 }
 
 export function parseRelatedKeywords(raw) {
@@ -1386,7 +1416,11 @@ export function buildSimpleQueries({
         worldwide: scope === 'worldwide',
     });
 
-    const productLower = productRaw.toLowerCase();
+    const productLower = productRaw
+        .toLowerCase()
+        .replace(/\b(manufacturers?|suppliers?|dealers?|distributors?|wholesalers?|exporters?|factories|factory|oem)\b/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim() || productRaw.toLowerCase();
     const chunks = [
         ...buildPrimaryBusinessTypeQueries({
             productLower,
@@ -1411,15 +1445,22 @@ export function buildSimpleQueries({
         }));
     }
 
-    if (scope === 'state' && Array.isArray(expandCities) && expandCities.length) {
-        chunks.push(...buildExpansionCityQueries({
-            productLower,
-            businessTypes: types,
-            expandCities,
-            locationScope: scope,
-            exSuffix,
-            sourcePlatform,
-        }));
+    if (Array.isArray(expandCities) && expandCities.length
+        && (scope === 'state' || scope === 'country' || scope === 'city')) {
+        const extraCities = expandCities
+            .map(normalizeDisplay)
+            .filter(Boolean)
+            .filter((c) => c.toLowerCase() !== cityN.toLowerCase());
+        if (extraCities.length) {
+            chunks.push(...buildExpansionCityQueries({
+                productLower,
+                businessTypes: types.slice(0, scope === 'country' ? 1 : 2),
+                expandCities: extraCities,
+                locationScope: scope,
+                exSuffix,
+                sourcePlatform,
+            }));
+        }
     }
 
     if (scope === 'country' && Array.isArray(expandStates) && expandStates.length) {
@@ -1447,7 +1488,10 @@ export function buildSimpleQueries({
 
     const out = [];
     const seen = new Set();
-    for (const q of chunks) pushQuery(out, seen, q);
+    const maxQ = (isIndiaCountry(countryN) && scope === 'country' && Array.isArray(expandCities) && expandCities.length)
+        ? MAX_INDIA_COUNTRY_QUERIES
+        : MAX_GENERATED_QUERIES;
+    for (const q of chunks) pushQuery(out, seen, q, maxQ);
     // Ensure exactly one recommended
     out.forEach((q) => { q.recommended = false; });
     if (out[0]) out[0].recommended = true;
