@@ -3,6 +3,9 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
     formatSimpleSearchLabel,
     formatBusinessTypeField,
@@ -21,6 +24,11 @@ import {
     formatProviderState,
     isWaitingForDiscoveryAgent,
     AGENT_OFFLINE_WAIT_MESSAGE,
+    BROWSER_REQUEST_TIMEOUT_MESSAGE,
+    isBrowserRequestTimeout,
+    isBrowserRequestTimeoutMessage,
+    isFatalBrowserTimeoutForCampaign,
+    snapshotAfterBrowserRequestTimeout,
     isOwnerStoppedSearch,
     isAlreadyStoppedMessage,
     alreadyStoppedUserMessage,
@@ -191,6 +199,51 @@ describe('Simple Lead Search UI null-safety', () => {
             session: { status: 'awaiting_user' },
             status: 'awaiting_user',
         }), '');
+    });
+
+    it('classifies Axios timeout of 120000ms as a browser HTTP timeout, not Playwright', () => {
+        const axiosErr = { code: 'ECONNABORTED', message: 'timeout of 120000ms exceeded' };
+        assert.equal(isBrowserRequestTimeout(axiosErr), true);
+        assert.equal(isBrowserRequestTimeoutMessage('timeout of 120000ms exceeded'), true);
+        assert.equal(isFatalBrowserTimeoutForCampaign(axiosErr), false);
+        assert.equal(isBrowserRequestTimeout({ message: 'Google navigation timeout' }), false);
+        assert.equal(lastVisibleRunError({
+            autoProcessing: {},
+            autoCollection: { lastErrorMessage: 'timeout of 120000ms exceeded', status: 'running' },
+            session: { status: 'opening' },
+            status: 'opening',
+        }), '');
+    });
+
+    it('keeps a >120-second extraction on the same campaign after the browser request times out', () => {
+        const before = {
+            campaignId: '6aa29bcb797b59fb54d409a8',
+            sessionId: '6aa29bcb797b59fb54d409a8',
+            uniqueCount: 20,
+            queryIndex: 1,
+            googlePage: 3,
+        };
+        const afterAck = snapshotAfterBrowserRequestTimeout(before);
+        assert.equal(afterAck.sameCampaign, true);
+        assert.equal(afterAck.campaignId, before.campaignId);
+        assert.equal(afterAck.sessionId, before.sessionId);
+        assert.equal(afterAck.uniqueCount, 20);
+        assert.equal(afterAck.queryIndex, 1);
+        assert.equal(afterAck.googlePage, 3);
+        assert.equal(afterAck.fatalTimeout, false);
+        assert.equal(afterAck.keepPolling, true);
+        assert.equal(afterAck.duplicatesCreated, false);
+        assert.equal(afterAck.campaignEnded, false);
+        assert.match(BROWSER_REQUEST_TIMEOUT_MESSAGE, /still running in the background/i);
+        assert.equal(shouldKeepPollingForAutoProcessing({ status: 'running', enabled: true }, true), true);
+        const apiSrc = readFileSync(
+            join(dirname(fileURLToPath(import.meta.url)), '../../services/dataExtractorApi.js'),
+            'utf8',
+        );
+        assert.match(apiSrc, /SLS_COMMAND_ACK_TIMEOUT_MS = 25000/);
+        assert.match(apiSrc, /simple-lead-search\/start', payload, \{ timeout: SLS_COMMAND_ACK_TIMEOUT_MS \}/);
+        assert.match(apiSrc, /auto-collection\/resume`, \{\}, \{ timeout: SLS_COMMAND_ACK_TIMEOUT_MS \}/);
+        assert.doesNotMatch(apiSrc, /simple-lead-search\/start', payload, \{ timeout: 120000 \}/);
     });
 
     it('treats owner Stop as terminal, not a failed request', () => {

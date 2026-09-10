@@ -26,6 +26,8 @@ import {
     formatProviderState,
     formatDiscoveryOwnerStatus,
     isWaitingForDiscoveryAgent,
+    isBrowserRequestTimeout,
+    BROWSER_REQUEST_TIMEOUT_MESSAGE,
     isOwnerStoppedSearch,
     isAlreadyStoppedMessage,
     isOwnerStopCopy,
@@ -260,6 +262,7 @@ const toneStyle = {
 };
 
 function softSessionError(err) {
+    if (isBrowserRequestTimeout(err)) return BROWSER_REQUEST_TIMEOUT_MESSAGE;
     const apiMsg = String(err?.response?.data?.message || '').trim();
     const msg = apiMsg || String(err?.message || '').trim();
     if (/session ended\. start a new search/i.test(msg) && /before auto collection|then use open next/i.test(msg)) {
@@ -277,6 +280,7 @@ function softSessionError(err) {
 
 /** Owner-facing start/preview errors — never show only a blank generic failure when backend sent detail. */
 function ownerFacingSearchError(err, fallback = 'Search & Start Automatic Process failed') {
+    if (isBrowserRequestTimeout(err)) return BROWSER_REQUEST_TIMEOUT_MESSAGE;
     const status = err?.response?.status;
     const data = err?.response?.data;
     const msg = String(data?.message || err?.message || '').trim();
@@ -995,7 +999,27 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                 toast.warning(data.autoCollectionStoppedWarning);
             }
         } catch (err) {
-            toast.error(ownerFacingSearchError(err, 'Source launch failed: Start API failed'));
+            if (isBrowserRequestTimeout(err)) {
+                toast(BROWSER_REQUEST_TIMEOUT_MESSAGE);
+                const existingSid = session?._id || result?.session?._id;
+                try {
+                    if (existingSid) {
+                        await refreshSession(existingSid);
+                    } else {
+                        const runs = await dataExtractorApi.simpleLeadSearchListRuns({ limit: 5 });
+                        const latest = (runs?.active || [])[0] || (runs?.recent || [])[0];
+                        const recovered = latest?.sessionId || latest?.runId;
+                        if (recovered) {
+                            bindRunId(recovered);
+                            await refreshSession(recovered);
+                        }
+                    }
+                } catch {
+                    /* status poll continues */
+                }
+            } else {
+                toast.error(ownerFacingSearchError(err, 'Source launch failed: Start API failed'));
+            }
         } finally {
             startInFlightRef.current = false;
             setBusy('');
@@ -1200,7 +1224,12 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
             toast.success('Automatic processing resumed');
             await refreshSession(sid);
         } catch (err) {
-            toast.error(err?.response?.data?.message || err?.message || 'Resume failed');
+            if (isBrowserRequestTimeout(err)) {
+                toast(BROWSER_REQUEST_TIMEOUT_MESSAGE);
+                try { await refreshSession(sid); } catch { /* poll continues */ }
+            } else {
+                toast.error(err?.response?.data?.message || err?.message || 'Resume failed');
+            }
         } finally {
             setBusy('');
         }
@@ -1289,6 +1318,20 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
             refreshGenuineness(pipeSid);
             return true;
         } catch (err) {
+            if (isBrowserRequestTimeout(err)) {
+                toast(BROWSER_REQUEST_TIMEOUT_MESSAGE);
+                try {
+                    const data = await refreshSession(sessionId);
+                    const acSt = data?.autoCollection?.status || '';
+                    if (acSt === 'running' || String(acSt).startsWith('paused_')) {
+                        autoBootPendingRef.current = false;
+                        return true;
+                    }
+                } catch {
+                    /* poll continues */
+                }
+                return false;
+            }
             const msg = softSessionError(err) || 'Could not start automatic process yet — waiting for Google Ready';
             toastErrorOnce(`boot:${sessionId}:${msg.slice(0, 120)}`, msg);
             if (err?.response?.status === 400 && (/campaign validation failed/i.test(msg) || /session ended/i.test(msg))) {
@@ -1341,7 +1384,12 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
             toast.success('Automatic Process resumed');
             await refreshSession(sid);
         } catch (err) {
-            toast.error(softSessionError(err));
+            if (isBrowserRequestTimeout(err)) {
+                toast(BROWSER_REQUEST_TIMEOUT_MESSAGE);
+                try { await refreshSession(sid); } catch { /* poll continues */ }
+            } else {
+                toast.error(softSessionError(err));
+            }
         } finally {
             setBusy('');
         }
@@ -1469,7 +1517,12 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
             toast.success(data?.message || 'Auto Collection resumed');
             await refreshSession(sid);
         } catch (err) {
-            toast.error(softSessionError(err));
+            if (isBrowserRequestTimeout(err)) {
+                toast(BROWSER_REQUEST_TIMEOUT_MESSAGE);
+                try { await refreshSession(sid); } catch { /* poll continues */ }
+            } else {
+                toast.error(softSessionError(err));
+            }
         } finally {
             setBusy('');
         }

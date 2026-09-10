@@ -141,7 +141,7 @@ export function lastVisibleRunError({ autoProcessing, autoCollection, session, s
         session?.safeFailureMessage,
         session?.manualActionMessage,
         autoCollection?.pauseReason,
-    ].map((s) => String(s || '').trim()).filter((s) => s && !isOwnerStopCopy(s));
+    ].map((s) => String(s || '').trim()).filter((s) => s && !isOwnerStopCopy(s) && !isBrowserRequestTimeoutMessage(s));
     if (candidates[0]) return candidates[0];
     const failed = ['failed', 'FAILED'].includes(String(status || ''))
         || String(autoCollection?.status || '') === 'failed'
@@ -266,5 +266,48 @@ export function reconcileBucketsFromCounts(counts = {}) {
         stageEnrichmentDocs: Number(counts.stageEnrichmentDocs || 0),
         stageQualificationDocs: Number(counts.stageQualificationDocs || 0),
         stageGenuinenessDocs: Number(counts.stageGenuinenessDocs || 0),
+    };
+}
+
+/**
+ * Axios/browser HTTP timeout — not a campaign failure and not a Playwright timeout.
+ * Axios message shape: "timeout of 120000ms exceeded"
+ */
+export const BROWSER_REQUEST_TIMEOUT_MESSAGE =
+    'The browser request timed out. The campaign is still running in the background — status will keep updating.';
+
+export function isBrowserRequestTimeoutMessage(text = '') {
+    return /timeout of \d+ms exceeded/i.test(String(text || ''));
+}
+
+export function isBrowserRequestTimeout(err) {
+    const code = String(err?.code || '');
+    const msg = String(err?.response?.data?.message || err?.message || '');
+    return code === 'ECONNABORTED' || isBrowserRequestTimeoutMessage(msg);
+}
+
+/** Browser HTTP timeout must not end, restart, or fail the campaign. */
+export function isFatalBrowserTimeoutForCampaign(err) {
+    return isBrowserRequestTimeout(err) ? false : null;
+}
+
+/**
+ * After Start/Resume HTTP ack (or a timed-out ack), keep the same campaign identity.
+ * Long Google/CP6–CP8 work continues via backend ticker + UI polling.
+ */
+export function snapshotAfterBrowserRequestTimeout(snapshot = {}) {
+    const campaignId = snapshot.campaignId || snapshot.campaign?._id || '';
+    const sessionId = snapshot.sessionId || snapshot.session?._id || '';
+    return {
+        sameCampaign: true,
+        campaignId,
+        sessionId,
+        uniqueCount: Number(snapshot.uniqueCount ?? snapshot.unique ?? 0),
+        queryIndex: Number(snapshot.queryIndex || 1),
+        googlePage: Number(snapshot.googlePage || 1),
+        fatalTimeout: false,
+        keepPolling: true,
+        duplicatesCreated: false,
+        campaignEnded: false,
     };
 }

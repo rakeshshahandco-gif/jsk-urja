@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { dataExtractorApi } from '@/services/dataExtractorApi';
+import { isBrowserRequestTimeout } from './simpleLeadSearchUi.js';
 import styles from './DataExtractorSimpleLeadSearchPage.module.css';
 import SimpleLeadSearchCompanyDrawer from './SimpleLeadSearchCompanyDrawer.jsx';
 import SimpleLeadSearchCreateLeadModal from './SimpleLeadSearchCreateLeadModal.jsx';
@@ -183,7 +184,9 @@ export default function SimpleLeadSearchCapturedDataPanel({
             setSelected([]);
             if (res?.locationRecheck) setRecheckJob(res.locationRecheck);
         } catch (err) {
-            toast.error(softErr(err));
+            if (!isBrowserRequestTimeout(err)) {
+                toast.error(softErr(err));
+            }
         } finally {
             setLoading(false);
         }

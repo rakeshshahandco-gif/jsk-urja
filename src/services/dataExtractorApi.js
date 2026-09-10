@@ -2,6 +2,9 @@ import api from './api';
 
 const unwrap = (res) => res.data?.data ?? res.data;
 
+/** Start/Resume/command ack only. Long Google/CP6–CP8 work must not hold this HTTP request. */
+export const SLS_COMMAND_ACK_TIMEOUT_MS = 25000;
+
 export const dataExtractorApi = {
     getProviderStatus: async () => {
         const res = await api.get('/data-extractor/provider-status');
@@ -159,7 +162,7 @@ export const dataExtractorApi = {
 
     // ---- Checkpoint 5B Simple Lead Search ----
     simpleLeadSearchStart: async (payload) => {
-        const res = await api.post('/data-extractor/simple-lead-search/start', payload, { timeout: 120000 });
+        const res = await api.post('/data-extractor/simple-lead-search/start', payload, { timeout: SLS_COMMAND_ACK_TIMEOUT_MS });
         return unwrap(res);
     },
     simpleLeadSearchPreviewQueries: async (payload) => {
@@ -273,7 +276,7 @@ export const dataExtractorApi = {
         return unwrap(res);
     },
     simpleLeadSearchAutoCollectionStart: async (sessionId, body = {}) => {
-        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/auto-collection/start`, body, { timeout: 60000 });
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/auto-collection/start`, body, { timeout: SLS_COMMAND_ACK_TIMEOUT_MS });
         return unwrap(res);
     },
     simpleLeadSearchAutoCollectionPause: async (sessionId) => {
@@ -281,7 +284,7 @@ export const dataExtractorApi = {
         return unwrap(res);
     },
     simpleLeadSearchAutoCollectionResume: async (sessionId) => {
-        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/auto-collection/resume`, {});
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/auto-collection/resume`, {}, { timeout: SLS_COMMAND_ACK_TIMEOUT_MS });
         return unwrap(res);
     },
     simpleLeadSearchAutoCollectionStop: async (sessionId, body = {}) => {
@@ -289,7 +292,7 @@ export const dataExtractorApi = {
         return unwrap(res);
     },
     simpleLeadSearchAutoCollectionContinue: async (sessionId) => {
-        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/auto-collection/continue`, {});
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/auto-collection/continue`, {}, { timeout: SLS_COMMAND_ACK_TIMEOUT_MS });
         return unwrap(res);
     },
     simpleLeadSearchAutoCollectionContinueBatch: async (sessionId) => {
@@ -297,7 +300,7 @@ export const dataExtractorApi = {
         return unwrap(res);
     },
     simpleLeadSearchAutoCollectionResumeCheckpoint: async (sessionId, body = {}) => {
-        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/auto-collection/resume-checkpoint`, body);
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/auto-collection/resume-checkpoint`, body, { timeout: SLS_COMMAND_ACK_TIMEOUT_MS });
         return unwrap(res);
     },
     simpleLeadSearchAutoCollectionNextQuery: async (sessionId) => {
@@ -309,7 +312,7 @@ export const dataExtractorApi = {
         return unwrap(res);
     },
     simpleLeadSearchAutoProcessingEnable: async (sessionId, payload = {}) => {
-        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/auto-processing/enable`, payload);
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/auto-processing/enable`, payload, { timeout: SLS_COMMAND_ACK_TIMEOUT_MS });
         return unwrap(res);
     },
     simpleLeadSearchAutoProcessingPause: async (sessionId) => {
@@ -317,7 +320,7 @@ export const dataExtractorApi = {
         return unwrap(res);
     },
     simpleLeadSearchAutoProcessingResume: async (sessionId) => {
-        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/auto-processing/resume`, {});
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/auto-processing/resume`, {}, { timeout: SLS_COMMAND_ACK_TIMEOUT_MS });
         return unwrap(res);
     },
     simpleLeadSearchAutoProcessingStop: async (sessionId, payload = {}) => {
