@@ -174,6 +174,24 @@ describe('SLS Auto Collection helpers', () => {
         assert.equal(view.manualActionRequired, true);
         assert.match(view.uiLabel, /Manual action required/);
     });
+
+    it('progressView labels agent-offline as waiting, not paused', () => {
+        const view = progressView({
+            status: 'awaiting_user', googlePageIndex: 3, acceptedCount: 20, visibleResultCount: 20,
+            autoCollection: {
+                status: 'running', phase: 'decide_next', pauseReason: 'agent_offline',
+                discoveryStatus: 'waiting_for_agent', providerState: 'Provider temporarily unavailable',
+                lastQueryIndex: 1, totalApprovedQueries: 5, rawRecordsCaptured: 20, sourceResultsFound: 20,
+                lastSuccessfullyCapturedPage: 3, summary: {},
+            },
+        }, { queryIndex: 1, queryTotal: 5, googlePage: 3, totalCampaignUniqueRecords: 20 });
+        assert.equal(view.status, 'running');
+        assert.equal(view.discoveryDisplayStatus, 'waiting_for_agent');
+        assert.match(view.uiLabel, /resume automatically/i);
+        assert.equal(view.providerState, 'Provider temporarily unavailable');
+        assert.equal(view.rawRecordsCaptured, 20);
+        assert.match(view.queryProgressLabel, /Query 1\/5 — Page 3/);
+    });
 });
 
 describe('SLS Auto Collection orchestration', () => {
@@ -507,5 +525,122 @@ describe('SLS Auto Collection orchestration', () => {
             `expected query advancement, got completed=${completed} lastQuery=${lastQuery} phase=${phase}`,
         );
         assert.ok(Number(advanced.autoCollection?.rawRecordsCaptured || advanced.session?.acceptedCount || 0) >= 110);
+    });
+
+    it('agent offline waits and auto-resumes from the same checkpoint without pausing', async () => {
+        await AssistedCaptureSession.updateOne({ _id: sessionId }, {
+            $set: {
+                status: 'awaiting_user',
+                acceptedCount: 20,
+                visibleResultCount: 20,
+                googlePageIndex: 3,
+                pendingCaptureStatus: 'none',
+                'autoCollection.status': 'running',
+                'autoCollection.enabled': true,
+                'autoCollection.phase': 'decide_next',
+                'autoCollection.collectionMode': 'unlimited',
+                'autoCollection.discoveryStatus': 'running',
+                'autoCollection.pauseReason': '',
+                'autoCollection.lastErrorCode': '',
+                'autoCollection.lastErrorMessage': '',
+                'autoCollection.providerState': 'Running',
+                'autoCollection.rawRecordsCaptured': 20,
+                'autoCollection.sourceResultsFound': 20,
+                'autoCollection.lastQueryIndex': 1,
+                'autoCollection.totalApprovedQueries': 5,
+                'autoCollection.lastSuccessfullyCapturedPage': 3,
+                'autoCollection.ownerStoppedAt': null,
+                'autoCollection.stopRequested': false,
+                'autoCollection.agentWaitAttempt': 0,
+                'autoCollection.nextActionAt': new Date(Date.now() - 1000),
+                'autoCollection.tickLockUntil': null,
+                'autoCollection.summary.stopReason': '',
+            },
+            $unset: { failedAt: 1 },
+        });
+        await DiscoveryAgentToken.updateMany({ companyId }, { $set: { lastUsedAt: new Date(Date.now() - 120000) } });
+        const waiting = await tickAutoCollection({ companyId, user, sessionId });
+        assert.equal(waiting.autoCollection.status, 'running');
+        assert.equal(waiting.autoCollection.discoveryStatus, 'waiting_for_agent');
+        assert.equal(waiting.autoCollection.pauseReason, 'agent_offline');
+        assert.equal(waiting.autoCollection.providerState, 'Provider temporarily unavailable');
+        assert.match(String(waiting.autoCollection.lastErrorMessage || ''), /resume automatically/i);
+        assert.equal(Number(waiting.session.googlePageIndex || 0), 3);
+        assert.equal(Number(waiting.autoCollection.lastQueryIndex || 0), 1);
+        assert.equal(Number(waiting.autoCollection.rawRecordsCaptured || waiting.session.acceptedCount || 0), 20);
+        assert.equal(Number(waiting.autoCollection.agentWaitAttempt || 0) >= 1, true);
+        const attempt = Number(waiting.autoCollection.agentWaitAttempt || 0);
+        const waitingAgain = await tickAutoCollection({ companyId, user, sessionId });
+        assert.equal(waitingAgain.autoCollection.discoveryStatus, 'waiting_for_agent');
+        assert.equal(Number(waitingAgain.autoCollection.agentWaitAttempt || 0), attempt);
+        assert.equal(Number(waitingAgain.session.googlePageIndex || 0), 3);
+
+        await DiscoveryAgentToken.updateMany({ companyId }, { $set: { lastUsedAt: new Date() } });
+        const resumed = await tickAutoCollection({ companyId, user, sessionId });
+        assert.equal(resumed.autoCollection.status, 'running');
+        assert.notEqual(resumed.autoCollection.discoveryStatus, 'waiting_for_agent');
+        assert.notEqual(resumed.autoCollection.pauseReason, 'agent_offline');
+        assert.equal(Number(resumed.session.googlePageIndex || 0), 3);
+        assert.equal(Number(resumed.autoCollection.rawRecordsCaptured || resumed.session.acceptedCount || 0), 20);
+        await stopAutoCollection({ companyId, user, sessionId });
+    });
+
+    it('reclaims a legacy paused_owner agent_offline campaign when the agent returns', async () => {
+        await AssistedCaptureSession.updateOne({ _id: sessionId }, {
+            $set: {
+                status: 'awaiting_user',
+                acceptedCount: 20,
+                googlePageIndex: 3,
+                'autoCollection.status': 'paused_owner',
+                'autoCollection.enabled': true,
+                'autoCollection.phase': 'decide_next',
+                'autoCollection.pauseReason': 'agent_offline',
+                'autoCollection.discoveryStatus': 'paused',
+                'autoCollection.lastErrorCode': 'agent_offline',
+                'autoCollection.lastErrorMessage': 'Discovery agent offline. Campaign paused — resume when the agent is back.',
+                'autoCollection.providerState': 'Provider temporarily unavailable',
+                'autoCollection.rawRecordsCaptured': 20,
+                'autoCollection.lastQueryIndex': 1,
+                'autoCollection.lastSuccessfullyCapturedPage': 3,
+                'autoCollection.ownerStoppedAt': null,
+                'autoCollection.stopRequested': false,
+                'autoCollection.summary.stopReason': '',
+                'autoCollection.nextActionAt': null,
+                'autoCollection.tickLockUntil': null,
+            },
+            $unset: { failedAt: 1, cancelledAt: 1 },
+        });
+        await DiscoveryAgentToken.updateMany({ companyId }, { $set: { lastUsedAt: new Date() } });
+        const ticked = await tickAutoCollection({ companyId, user, sessionId });
+        assert.equal(ticked.autoCollection.status, 'running');
+        assert.notEqual(ticked.autoCollection.pauseReason, 'agent_offline');
+        assert.equal(Number(ticked.session.googlePageIndex || 0), 3);
+        assert.equal(Number(ticked.autoCollection.rawRecordsCaptured || ticked.session.acceptedCount || 0), 20);
+        await stopAutoCollection({ companyId, user, sessionId });
+    });
+
+    it('owner pause does not auto-resume when the agent is online', async () => {
+        await AssistedCaptureSession.updateOne({ _id: sessionId }, {
+            $set: {
+                status: 'awaiting_user',
+                'autoCollection.status': 'idle',
+                'autoCollection.ownerStoppedAt': null,
+                'autoCollection.stopRequested': false,
+                'autoCollection.summary.stopReason': '',
+            },
+            $unset: { failedAt: 1, cancelledAt: 1 },
+        });
+        await DiscoveryAgentToken.updateMany({ companyId }, { $set: { lastUsedAt: new Date() } });
+        const started = await startAutoCollection({
+            companyId, user, sessionId,
+            body: { collectionMode: 'unlimited', delayMinSec: 5, delayMaxSec: 5, autoEnrichAfter: false },
+        });
+        assert.equal(started.autoCollection.status, 'running');
+        const paused = await pauseAutoCollection({ companyId, user, sessionId });
+        assert.equal(paused.autoCollection.pauseReason, 'owner_pause');
+        const ticked = await tickAutoCollection({ companyId, user, sessionId });
+        assert.equal(ticked.autoCollection.status, 'paused_owner');
+        assert.equal(ticked.autoCollection.pauseReason, 'owner_pause');
+        await stopAutoCollection({ companyId, user, sessionId });
     });
 });

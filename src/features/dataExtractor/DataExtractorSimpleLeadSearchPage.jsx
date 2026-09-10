@@ -23,8 +23,9 @@ import {
     shouldKeepPollingForAutoProcessing,
     formatQueryProgressLabel,
     pendingQueryCount,
-    formatDiscoveryOwnerStatus,
     formatProviderState,
+    formatDiscoveryOwnerStatus,
+    isWaitingForDiscoveryAgent,
     isOwnerStoppedSearch,
     isAlreadyStoppedMessage,
     isOwnerStopCopy,
@@ -1328,7 +1329,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
         if (!sid) return;
         setBusy('autoResume');
         try {
-            if (autoPausedOwner || autoCollection?.status === 'paused_owner') {
+            if (autoPausedOwner || autoCollection?.status === 'paused_owner' || isWaitingForDiscoveryAgent(autoCollection)) {
                 const data = await dataExtractorApi.simpleLeadSearchAutoCollectionResume(sid);
                 applyStatusPayload(data);
                 if (data?.autoCollection) setAutoCollection(data.autoCollection);
@@ -2144,8 +2145,9 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
     const canExport = !!activeSession && !busy && (rows.length > 0 || (captureStats?.uniqueResultCount || 0) > 0 || inactive);
     const autoStatus = autoCollection?.status || 'idle';
     const autoRunning = autoStatus === 'running';
-    const autoPausedOwner = autoStatus === 'paused_owner';
+    const autoPausedOwner = autoStatus === 'paused_owner' && !isWaitingForDiscoveryAgent(autoCollection);
     const autoPausedManual = autoStatus === 'paused_manual';
+    const waitingAgent = isWaitingForDiscoveryAgent(autoCollection);
     const autoActive = ['running', 'paused_owner', 'paused_manual', 'paused_batch'].includes(autoCollection?.status);
     const canStartAuto = (autoCollectionOptions.mode === 'auto') && (!!activeSession && !inactive && !busy && !autoActive && GOOGLE_READY.has(status));
     const bannerSession = captureCompletedFlash && !inactive && !isManual && status !== 'capturing'
@@ -2248,6 +2250,10 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
         processTitle = 'Manual Action Required';
         pulseClass = styles.pulseAmber;
         statusBadge = { text: 'Manual action required', cls: styles.badgeAmber };
+    } else if (waitingAgent) {
+        processTitle = 'Automatic Process Waiting';
+        pulseClass = styles.pulseBlue;
+        statusBadge = { text: 'Waiting for Discovery Agent', cls: styles.badgeBlue };
     } else if (processingBacklog > 0 && (pipeRunning || autoProcessing?.autoResumed || autoProcessing?.enabled)) {
         processTitle = 'Automatic Process Running';
         pulseClass = styles.pulse;
@@ -3107,10 +3113,12 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                                     <span>Pause future automatic actions safely.</span>
                                 </button>
                             )}
-                            {processPaused && !processManual && (
+                            {(processPaused || waitingAgent) && !processManual && (
                                 <button type="button" className={`${styles.ctrlBtn} ${styles.ctrlResume}`} disabled={!!busy} onClick={onResumeAutomaticProcess}>
                                     Resume Campaign
-                                    <span>Continue unfinished records only (no duplicates).</span>
+                                    <span>{waitingAgent
+                                        ? 'Fallback: continue from the last checkpoint after the agent reconnects.'
+                                        : 'Continue unfinished records only (no duplicates).'}</span>
                                 </button>
                             )}
                             {processManual && (

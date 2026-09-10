@@ -81,6 +81,18 @@ const SAFE_FAIL_REASON = Object.freeze({
     agent_offline: 'Agent offline',
 });
 
+export const AGENT_OFFLINE_WAIT_MESSAGE = 'Discovery Agent temporarily offline — extraction will resume automatically when the agent reconnects.';
+
+/** Temporary Discovery Agent disconnect — waiting, not a terminal pause/failure. */
+export function isWaitingForDiscoveryAgent(autoCollection = {}) {
+    const ac = autoCollection || {};
+    const waitingFlag = String(ac.pauseReason || '') === 'agent_offline'
+        || String(ac.discoveryStatus || '') === 'waiting_for_agent';
+    if (!waitingFlag) return false;
+    const st = String(ac.status || '');
+    return st === 'running' || st === 'paused_owner';
+}
+
 /**
  * Failed runs must never show a blank Last Processing Error.
  * Discovery failures live on autoCollection / session, not autoProcessing.
@@ -114,6 +126,7 @@ export function searchStoppedSuccessMessage() {
 }
 
 export function lastVisibleRunError({ autoProcessing, autoCollection, session, status } = {}) {
+    if (isWaitingForDiscoveryAgent(autoCollection)) return '';
     if (
         isOwnerStoppedSearch(session, autoCollection)
         || String(autoProcessing?.lastErrorCode || '') === 'owner_stop'
@@ -209,6 +222,7 @@ export function pendingQueryCount({ queryIndex = 1, queryTotal = 0 } = {}) {
 export function formatProviderState(autoCollection = {}, session = {}) {
     const explicit = String(autoCollection?.providerState || '').trim();
     if (explicit) return explicit;
+    if (isWaitingForDiscoveryAgent(autoCollection)) return 'Provider temporarily unavailable';
     if (session?.status === 'manual_action_required' || autoCollection?.status === 'paused_manual') {
         return 'Human Verification';
     }
@@ -221,6 +235,9 @@ export function formatProviderState(autoCollection = {}, session = {}) {
 }
 
 export function formatDiscoveryOwnerStatus(autoCollection = {}, session = {}) {
+    if (isWaitingForDiscoveryAgent(autoCollection)) {
+        return 'waiting_for_agent';
+    }
     const provider = formatProviderState(autoCollection, session);
     if (provider === 'Retry' || autoCollection?.pauseReason === 'unsupported_page_retry') {
         return 'Waiting on provider / retrying';

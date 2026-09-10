@@ -36,6 +36,9 @@ export const UNSUPPORTED_PAGE_CODES = Object.freeze(['UNSUPPORTED_LAYOUT', 'NO_O
 export const HUMAN_PAGE_KINDS = Object.freeze(['consent', 'captcha', 'login']);
 export const MAX_UNSUPPORTED_PAGE_RETRIES = 2;
 export const DISCOVERY_STALL_MS = 120000;
+/** Presence-check backoff while Discovery Agent is offline (seconds). */
+export const AGENT_WAIT_BACKOFF_SEC = Object.freeze([5, 10, 20, 30]);
+export const AGENT_OFFLINE_WAIT_MESSAGE = 'Discovery Agent temporarily offline — extraction will resume automatically when the agent reconnects.';
 
 export function parsePageKindFromMessage(message = '') {
     const m = String(message || '').match(/Page kind:\s*([a-z0-9_]+)/i);
@@ -102,7 +105,7 @@ function defaultAuto() {
         lastCursor: '', nextPageToken: '', lastDiscoveryAt: null, discoveryStatus: 'idle',
         pauseReason: '', stopRequested: false, ownerStoppedAt: null,
         autoEnrichAfter: false, autoQualifyAfterEnrich: false, autoVerifyAfterQualify: false,
-        nextActionAt: null, tickLockUntil: null,
+        nextActionAt: null, tickLockUntil: null, agentWaitAttempt: 0,
         pagesCapturedThisQuery: 0, pagesProcessedTotal: 0, queriesProcessedTotal: 0,
         consecutiveNoNewPages: 0, uniqueAtStart: 0, uniqueBeforeLastCapture: 0,
         lastPageVisible: 0, lastPageNewUnique: 0, lastPageUpdated: 0,
@@ -212,7 +215,10 @@ function progressView(session, campaignProgress = null) {
         stopped: 'Auto Collection Stopped',
         failed: 'Auto Collection Failed',
         idle: 'Auto Collection Idle',
+        waiting_for_agent: AGENT_OFFLINE_WAIT_MESSAGE,
     };
+    const waitingAgent = ac.pauseReason === 'agent_offline'
+        || ac.discoveryStatus === 'waiting_for_agent';
     return {
         enabled: Boolean(ac.enabled),
         status: ac.status || 'idle',
@@ -284,6 +290,7 @@ function progressView(session, campaignProgress = null) {
         summary: ac.summary || {},
         lastErrorCode: ac.lastErrorCode || '',
         lastErrorMessage: ac.lastErrorMessage || '',
+        agentWaitAttempt: Number(ac.agentWaitAttempt || 0),
         lastNewResultAt: ac.lastNewResultAt || session.lastCaptureAt || ac.lastDiscoveryAt || null,
         lastPageAdvancementAt: ac.lastPageAdvancementAt || ac.lastDiscoveryAt || null,
         providerState: ac.providerState
@@ -291,19 +298,25 @@ function progressView(session, campaignProgress = null) {
                 ? 'Human Verification'
                 : (ac.pauseReason === 'unsupported_page_retry'
                     ? 'Retry'
-                    : (ac.status === 'running' ? 'Running' : ''))),
+                    : (waitingAgent
+                        ? 'Provider temporarily unavailable'
+                        : (ac.status === 'running' ? 'Running' : '')))),
         pendingQueries: Math.max(0, Number(ac.totalApprovedQueries || campaignProgress?.queryTotal || 0)
             - Number(ac.lastQueryIndex || campaignProgress?.queryIndex || 1)),
         queryProgressLabel: `Query ${Number(ac.lastQueryIndex || campaignProgress?.queryIndex || 1)}/${Number(ac.totalApprovedQueries || campaignProgress?.queryTotal || 0) || '—'} — Page ${Number(session.googlePageIndex || campaignProgress?.googlePage || 1)}`,
-        discoveryDisplayStatus: ac.providerState === 'Retry' || ac.pauseReason === 'unsupported_page_retry'
-            ? 'Waiting on provider / retrying'
-            : (ac.providerState === 'Human Verification' || ac.status === 'paused_manual'
-                ? 'Human verification required'
-                : (ac.discoveryStatus || ac.status || 'idle')),
+        discoveryDisplayStatus: waitingAgent
+            ? 'waiting_for_agent'
+            : (ac.providerState === 'Retry' || ac.pauseReason === 'unsupported_page_retry'
+                ? 'Waiting on provider / retrying'
+                : (ac.providerState === 'Human Verification' || ac.status === 'paused_manual'
+                    ? 'Human verification required'
+                    : (ac.discoveryStatus || ac.status || 'idle'))),
         manualActionRequired: session.status === 'manual_action_required' || ac.status === 'paused_manual',
-        uiLabel: ac.providerState === 'Retry' || ac.pauseReason === 'unsupported_page_retry'
-            ? 'Waiting on provider / retrying'
-            : (labelMap[ac.status] || 'Auto Collection Idle'),
+        uiLabel: waitingAgent
+            ? AGENT_OFFLINE_WAIT_MESSAGE
+            : (ac.providerState === 'Retry' || ac.pauseReason === 'unsupported_page_retry'
+                ? 'Waiting on provider / retrying'
+                : (labelMap[ac.status] || 'Auto Collection Idle')),
         captureTargetOptions: CAPTURE_TARGET_OPTIONS,
     };
 }
@@ -654,8 +667,64 @@ async function pauseForManual(session, message) {
     await session.save();
 }
 
-/** Soft pause for CAPTCHA/rate-limit/agent offline — does not complete the campaign. */
+function isAgentOfflineWait(session) {
+    const ac = session?.autoCollection || {};
+    return ac.pauseReason === 'agent_offline'
+        || ac.discoveryStatus === 'waiting_for_agent'
+        || ac.lastErrorCode === 'agent_offline';
+}
+
+function nextAgentWaitDelaySec(attempt) {
+    const i = Math.min(AGENT_WAIT_BACKOFF_SEC.length - 1, Math.max(0, Number(attempt) || 0));
+    return AGENT_WAIT_BACKOFF_SEC[i];
+}
+
+/** Soft wait for Discovery Agent presence — campaign stays running; checkpoint is preserved. */
+async function waitForAgentReconnect(session, message = '') {
+    session.autoCollection = session.autoCollection || defaultAuto();
+    const ac = session.autoCollection;
+    const alreadyWaiting = isAgentOfflineWait(session);
+    const nextAt = ac.nextActionAt ? new Date(ac.nextActionAt).getTime() : 0;
+    if (alreadyWaiting && nextAt > Date.now()) {
+        return { deferred: true };
+    }
+    const attempt = Number(ac.agentWaitAttempt || 0);
+    const delaySec = nextAgentWaitDelaySec(attempt);
+    ac.status = 'running';
+    ac.enabled = true;
+    ac.discoveryStatus = 'waiting_for_agent';
+    ac.pauseReason = 'agent_offline';
+    ac.lastErrorCode = 'agent_offline';
+    ac.providerState = 'Provider temporarily unavailable';
+    ac.lastErrorMessage = String(message || AGENT_OFFLINE_WAIT_MESSAGE).slice(0, 500);
+    ac.agentWaitAttempt = attempt + 1;
+    ac.nextActionAt = new Date(Date.now() + delaySec * 1000);
+    ac.lastDiscoveryAt = new Date();
+    ac.tickLockUntil = null;
+    await session.save();
+    return { deferred: false };
+}
+
+function clearAgentWait(session) {
+    session.autoCollection = session.autoCollection || defaultAuto();
+    const ac = session.autoCollection;
+    ac.status = 'running';
+    ac.enabled = true;
+    ac.discoveryStatus = 'running';
+    ac.pauseReason = '';
+    ac.lastErrorCode = '';
+    ac.lastErrorMessage = '';
+    ac.providerState = 'Running';
+    ac.agentWaitAttempt = 0;
+    ac.nextActionAt = null;
+    ac.lastDiscoveryAt = new Date();
+}
+
+/** Soft pause for rate-limit / non-agent technical issues — does not complete the campaign. */
 async function pauseForTechnical(session, { reason = 'technical_retry', message = '' } = {}) {
+    if (String(reason || '') === 'agent_offline') {
+        return waitForAgentReconnect(session, message);
+    }
     session.autoCollection = session.autoCollection || defaultAuto();
     session.autoCollection.status = 'paused_owner';
     session.autoCollection.enabled = true;
@@ -772,7 +841,8 @@ export async function resumeAutoCollection({ companyId, user, sessionId }) {
     const st = session.autoCollection?.status || 'idle';
     if (isOwnerStopped(session)) throw new ApiError(400, 'STOPPED BY USER. This search will not resume. Start a new search.');
     if (st === 'paused_manual') throw new ApiError(400, 'Resolve the Google window issue first, then click Continue Auto Collection.');
-    if (st !== 'paused_owner') throw new ApiError(400, 'Auto Collection is not paused');
+    const waitingAgent = st === 'running' && isAgentOfflineWait(session);
+    if (st !== 'paused_owner' && !waitingAgent) throw new ApiError(400, 'Auto Collection is not paused');
     if (session.status === 'manual_action_required') {
         session.autoCollection.status = 'paused_manual';
         await session.save();
@@ -782,6 +852,10 @@ export async function resumeAutoCollection({ companyId, user, sessionId }) {
     session.autoCollection.enabled = true;
     session.autoCollection.discoveryStatus = 'running';
     session.autoCollection.pauseReason = '';
+    session.autoCollection.lastErrorCode = '';
+    session.autoCollection.lastErrorMessage = '';
+    session.autoCollection.providerState = 'Running';
+    session.autoCollection.agentWaitAttempt = 0;
     session.autoCollection.lastDiscoveryAt = new Date();
     scheduleDelay(session);
     await session.save();
@@ -836,6 +910,7 @@ export async function continueAutoCollectionAfterManual({ companyId, user, sessi
 function isDiscoveryStalled(session) {
     const ac = session?.autoCollection || {};
     if (ac.status !== 'running') return false;
+    if (isAgentOfflineWait(session)) return false;
     if (ac.nextActionAt && new Date(ac.nextActionAt).getTime() > Date.now()) return false;
     const last = ac.lastDiscoveryAt || ac.lastPageAdvancementAt || session.lastCaptureAt;
     if (!last) return false;
@@ -1384,14 +1459,28 @@ export async function tickAutoCollection({ companyId, user, sessionId }) {
 
     let session = await AssistedCaptureSession.findOneAndUpdate(
         {
-            _id: sessionId, companyId: cid, 'autoCollection.status': 'running',
+            _id: sessionId,
+            companyId: cid,
             'autoCollection.stopRequested': { $ne: true },
             'autoCollection.ownerStoppedAt': null,
             status: { $nin: ['cancelled', 'completed', 'expired'] },
-            $or: [
-                { 'autoCollection.tickLockUntil': null },
-                { 'autoCollection.tickLockUntil': { $lte: new Date() } },
-                { 'autoCollection.tickLockUntil': { $exists: false } },
+            $and: [
+                {
+                    $or: [
+                        { 'autoCollection.status': 'running' },
+                        {
+                            'autoCollection.status': 'paused_owner',
+                            'autoCollection.pauseReason': 'agent_offline',
+                        },
+                    ],
+                },
+                {
+                    $or: [
+                        { 'autoCollection.tickLockUntil': null },
+                        { 'autoCollection.tickLockUntil': { $lte: new Date() } },
+                        { 'autoCollection.tickLockUntil': { $exists: false } },
+                    ],
+                },
             ],
         },
         { $set: { 'autoCollection.tickLockUntil': new Date(Date.now() + 8000) } },
@@ -1522,11 +1611,12 @@ export async function tickAutoCollection({ companyId, user, sessionId }) {
         const agentStatus = await getAgentStatusForCompany(cid, { sessionId: session._id });
         const clearlyOffline = agentStatus && (agentStatus.online === false || agentStatus.connected === false || agentStatus.agentOnline === false);
         if (clearlyOffline) {
-            await pauseForTechnical(session, {
-                reason: 'agent_offline',
-                message: 'Discovery agent offline. Campaign paused — resume when the agent is back.',
-            });
+            await waitForAgentReconnect(session, AGENT_OFFLINE_WAIT_MESSAGE);
         } else {
+            if (isAgentOfflineWait(session) || session.autoCollection?.pauseReason === 'agent_offline') {
+                clearAgentWait(session);
+                await session.save();
+            }
             try {
                 const outcome = await runPhase(session, user, cid);
                 if (outcome?.sessionId && String(outcome.sessionId) !== String(session._id)) {

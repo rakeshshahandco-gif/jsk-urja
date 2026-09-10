@@ -150,9 +150,11 @@ const assistedCaptureSessionSchema = new mongoose.Schema(
             ownerStoppedAt: { type: Date, default: null },
             discoveryStatus: {
                 type: String,
-                enum: ['idle', 'running', 'paused', 'target_reached', 'no_more_results', 'failed', 'stopped', 'completed'],
+                enum: ['idle', 'running', 'paused', 'waiting_for_agent', 'target_reached', 'no_more_results', 'failed', 'stopped', 'completed'],
                 default: 'idle',
             },
+            /** Backoff step while waiting for Discovery Agent presence (not an owner pause). */
+            agentWaitAttempt: { type: Number, default: 0, min: 0, max: 20 },
             autoEnrichAfter: { type: Boolean, default: false },
             autoQualifyAfterEnrich: { type: Boolean, default: false },
             autoVerifyAfterQualify: { type: Boolean, default: false },

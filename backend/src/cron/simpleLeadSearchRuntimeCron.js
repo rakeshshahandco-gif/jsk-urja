@@ -33,13 +33,25 @@ async function tickOnce() {
         const sessions = await AssistedCaptureSession.find({
             $or: [
                 {
-                    'autoCollection.status': 'running',
-                    'autoCollection.stopRequested': { $ne: true },
-                    $or: [
-                        { 'autoCollection.ownerStoppedAt': null },
-                        { 'autoCollection.ownerStoppedAt': { $exists: false } },
+                    $and: [
+                        {
+                            $or: [
+                                { 'autoCollection.status': 'running' },
+                                {
+                                    'autoCollection.status': 'paused_owner',
+                                    'autoCollection.pauseReason': 'agent_offline',
+                                },
+                            ],
+                        },
+                        { 'autoCollection.stopRequested': { $ne: true } },
+                        {
+                            $or: [
+                                { 'autoCollection.ownerStoppedAt': null },
+                                { 'autoCollection.ownerStoppedAt': { $exists: false } },
+                            ],
+                        },
+                        { status: { $nin: ['cancelled', 'completed', 'expired'] } },
                     ],
-                    status: { $nin: ['cancelled', 'completed', 'expired'] },
                 },
                 {
                     'autoProcessing.status': { $nin: ['paused_owner', 'stopped'] },
@@ -52,7 +64,7 @@ async function tickOnce() {
                 },
             ],
         })
-            .select('_id companyId createdBy autoCollection.status autoCollection.stopRequested autoCollection.ownerStoppedAt autoProcessing.status autoProcessing.enabled autoProcessing.ownerWorkflowEnabled')
+            .select('_id companyId createdBy autoCollection.status autoCollection.pauseReason autoCollection.stopRequested autoCollection.ownerStoppedAt autoProcessing.status autoProcessing.enabled autoProcessing.ownerWorkflowEnabled')
             .limit(40)
             .lean();
 
@@ -73,7 +85,10 @@ async function tickOnce() {
                 try {
                     const ownerStopped = Boolean(s.autoCollection?.ownerStoppedAt)
                         || s.autoCollection?.stopRequested === true;
-                    if (s.autoCollection?.status === 'running' && !ownerStopped) {
+                    const waitingAgent = s.autoCollection?.status === 'running'
+                        || (s.autoCollection?.status === 'paused_owner'
+                            && s.autoCollection?.pauseReason === 'agent_offline');
+                    if (waitingAgent && !ownerStopped) {
                         await autoCol.tickAutoCollection({ companyId, user, sessionId });
                     }
                 } catch (e) {

@@ -19,6 +19,8 @@ import {
     pendingQueryCount,
     formatDiscoveryOwnerStatus,
     formatProviderState,
+    isWaitingForDiscoveryAgent,
+    AGENT_OFFLINE_WAIT_MESSAGE,
     isOwnerStoppedSearch,
     isAlreadyStoppedMessage,
     alreadyStoppedUserMessage,
@@ -168,6 +170,27 @@ describe('Simple Lead Search UI null-safety', () => {
             formatDiscoveryOwnerStatus({ providerState: 'Human Verification' }, { status: 'manual_action_required' }),
             'Human verification required',
         );
+    });
+
+    it('treats temporary Discovery Agent offline as waiting, not a processing error', () => {
+        const waiting = {
+            status: 'running',
+            pauseReason: 'agent_offline',
+            discoveryStatus: 'waiting_for_agent',
+            providerState: 'Provider temporarily unavailable',
+            lastErrorCode: 'agent_offline',
+            lastErrorMessage: AGENT_OFFLINE_WAIT_MESSAGE,
+        };
+        assert.equal(isWaitingForDiscoveryAgent(waiting), true);
+        assert.equal(isWaitingForDiscoveryAgent({ status: 'paused_owner', pauseReason: 'owner_pause' }), false);
+        assert.equal(formatDiscoveryOwnerStatus(waiting), 'waiting_for_agent');
+        assert.equal(formatProviderState(waiting), 'Provider temporarily unavailable');
+        assert.equal(lastVisibleRunError({
+            autoProcessing: {},
+            autoCollection: waiting,
+            session: { status: 'awaiting_user' },
+            status: 'awaiting_user',
+        }), '');
     });
 
     it('treats owner Stop as terminal, not a failed request', () => {
