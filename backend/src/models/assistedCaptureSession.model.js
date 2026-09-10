@@ -91,7 +91,7 @@ const assistedCaptureSessionSchema = new mongoose.Schema(
             enabled: { type: Boolean, default: false },
             status: {
                 type: String,
-                enum: ['idle', 'running', 'paused_owner', 'paused_manual', 'paused_batch', 'stopped', 'completed', 'failed'],
+                enum: ['idle', 'running', 'paused', 'paused_owner', 'paused_manual', 'paused_batch', 'stopped', 'completed', 'failed'],
                 default: 'idle',
             },
             phase: {
@@ -146,6 +146,8 @@ const assistedCaptureSessionSchema = new mongoose.Schema(
             nextPageToken: { type: String, default: '', maxlength: 500 },
             lastDiscoveryAt: { type: Date, default: null },
             pauseReason: { type: String, default: '', maxlength: 80 },
+            /** True for owner pause and long agent-offline/sleep. Short waits stay false. */
+            requiresManualResume: { type: Boolean, default: false },
             stopRequested: { type: Boolean, default: false },
             ownerStoppedAt: { type: Date, default: null },
             discoveryStatus: {
@@ -155,6 +157,8 @@ const assistedCaptureSessionSchema = new mongoose.Schema(
             },
             /** Backoff step while waiting for Discovery Agent presence (not an owner pause). */
             agentWaitAttempt: { type: Number, default: 0, min: 0, max: 20 },
+            /** When the current short agent-wait window started (laptop-sleep escalation). */
+            agentWaitStartedAt: { type: Date, default: null },
             autoEnrichAfter: { type: Boolean, default: false },
             autoQualifyAfterEnrich: { type: Boolean, default: false },
             autoVerifyAfterQualify: { type: Boolean, default: false },

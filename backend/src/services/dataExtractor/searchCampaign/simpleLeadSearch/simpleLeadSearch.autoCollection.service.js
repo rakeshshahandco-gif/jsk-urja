@@ -20,7 +20,7 @@ import {
 } from './simpleLeadSearch.multiQuery.service.js';
 import { MAX_MODEL_CHINA_QUERIES } from './queryBuilder.util.js';
 
-const ACTIVE_AUTO = ['running', 'paused_owner', 'paused_manual', 'paused_batch'];
+const ACTIVE_AUTO = ['running', 'paused', 'paused_owner', 'paused_manual', 'paused_batch'];
 const READY = new Set(['awaiting_user', 'ready_to_capture']);
 const ENDED = new Set(['completed', 'cancelled', 'expired', 'failed']);
 const LIVE_SESSION = [
@@ -39,6 +39,16 @@ export const DISCOVERY_STALL_MS = 120000;
 /** Presence-check backoff while Discovery Agent is offline (seconds). */
 export const AGENT_WAIT_BACKOFF_SEC = Object.freeze([5, 10, 20, 30]);
 export const AGENT_OFFLINE_WAIT_MESSAGE = 'Discovery Agent temporarily offline — extraction will resume automatically when the agent reconnects.';
+/** Laptop sleep / shutdown / agent closed — longer than stall (2m) and presence (45s). */
+export const LONG_AGENT_OFFLINE_MS = 4 * 60 * 1000;
+export const DISCOVERY_AGENT_OFFLINE = 'DISCOVERY_AGENT_OFFLINE';
+export const OWNER_PAUSE = 'OWNER_PAUSE';
+export const PAUSED_STATUS = 'paused';
+export const AGENT_SLEEP_PAUSE_MESSAGE = 'Discovery Agent is offline. Your progress is saved. When the computer/agent is available again, click Resume Campaign to continue from the saved position.';
+const GENUINE_COMPLETE_REASONS = new Set([
+    'owner_stop',
+    'capture_target_reached',
+]);
 
 export function parsePageKindFromMessage(message = '') {
     const m = String(message || '').match(/Page kind:\s*([a-z0-9_]+)/i);
@@ -103,9 +113,9 @@ function defaultAuto() {
         sourceResultsFound: 0, rawRecordsCaptured: 0, lastQueryIndex: 1,
         queriesCompleted: 0, totalApprovedQueries: 0,
         lastCursor: '', nextPageToken: '', lastDiscoveryAt: null, discoveryStatus: 'idle',
-        pauseReason: '', stopRequested: false, ownerStoppedAt: null,
+        pauseReason: '', requiresManualResume: false, stopRequested: false, ownerStoppedAt: null,
         autoEnrichAfter: false, autoQualifyAfterEnrich: false, autoVerifyAfterQualify: false,
-        nextActionAt: null, tickLockUntil: null, agentWaitAttempt: 0,
+        nextActionAt: null, tickLockUntil: null, agentWaitAttempt: 0, agentWaitStartedAt: null,
         pagesCapturedThisQuery: 0, pagesProcessedTotal: 0, queriesProcessedTotal: 0,
         consecutiveNoNewPages: 0, uniqueAtStart: 0, uniqueBeforeLastCapture: 0,
         lastPageVisible: 0, lastPageNewUnique: 0, lastPageUpdated: 0,
@@ -209,6 +219,7 @@ function progressView(session, campaignProgress = null) {
     const labelMap = {
         running: 'Auto Collection Running',
         paused_manual: 'Manual action required in the Google window.',
+        paused: 'Auto Collection Paused',
         paused_owner: 'Auto Collection Paused',
         paused_batch: 'Batch completed — waiting for owner to continue',
         completed: 'Auto Collection Completed',
@@ -268,8 +279,10 @@ function progressView(session, campaignProgress = null) {
         batchMessage: ac.batchMessage || '',
         resumeMessage: ac.resumeMessage || '',
         canContinueBatch: ac.status === 'paused_batch',
-        canResumeCheckpoint: ['paused_owner', 'paused_manual', 'paused_batch', 'stopped', 'failed'].includes(ac.status)
-            && Number(ac.lastSuccessfullyCapturedPage || 0) > 0,
+        canResumeCheckpoint: (
+            ['paused', 'paused_owner', 'paused_manual', 'paused_batch', 'stopped', 'failed', 'completed'].includes(ac.status)
+            || ac.pauseReason === DISCOVERY_AGENT_OFFLINE
+        ) && Number(ac.lastSuccessfullyCapturedPage || ac.lastQueryIndex || session.googlePageIndex || 0) > 0,
         queryIndex: campaignProgress?.queryIndex || 1,
         queryTotal: Number(campaignProgress?.queryTotal || ac.totalApprovedQueries || ac.maxQueries || 0),
         businessType: campaignProgress?.currentBusinessType || '',
@@ -290,6 +303,8 @@ function progressView(session, campaignProgress = null) {
         summary: ac.summary || {},
         lastErrorCode: ac.lastErrorCode || '',
         lastErrorMessage: ac.lastErrorMessage || '',
+        lastAgentHeartbeat: session.lastHeartbeatAt || null,
+        lastConfirmedGooglePage: Number(ac.lastSuccessfullyCapturedPage || 0),
         agentWaitAttempt: Number(ac.agentWaitAttempt || 0),
         lastNewResultAt: ac.lastNewResultAt || session.lastCaptureAt || ac.lastDiscoveryAt || null,
         lastPageAdvancementAt: ac.lastPageAdvancementAt || ac.lastDiscoveryAt || null,
@@ -304,19 +319,27 @@ function progressView(session, campaignProgress = null) {
         pendingQueries: Math.max(0, Number(ac.totalApprovedQueries || campaignProgress?.queryTotal || 0)
             - Number(ac.lastQueryIndex || campaignProgress?.queryIndex || 1)),
         queryProgressLabel: `Query ${Number(ac.lastQueryIndex || campaignProgress?.queryIndex || 1)}/${Number(ac.totalApprovedQueries || campaignProgress?.queryTotal || 0) || '—'} — Page ${Number(session.googlePageIndex || campaignProgress?.googlePage || 1)}`,
-        discoveryDisplayStatus: waitingAgent
-            ? 'waiting_for_agent'
-            : (ac.providerState === 'Retry' || ac.pauseReason === 'unsupported_page_retry'
-                ? 'Waiting on provider / retrying'
-                : (ac.providerState === 'Human Verification' || ac.status === 'paused_manual'
-                    ? 'Human verification required'
-                    : (ac.discoveryStatus || ac.status || 'idle'))),
+        discoveryDisplayStatus: ac.pauseReason === DISCOVERY_AGENT_OFFLINE
+            ? 'paused_agent_offline'
+            : (waitingAgent
+                ? 'waiting_for_agent'
+                : (ac.providerState === 'Retry' || ac.pauseReason === 'unsupported_page_retry'
+                    ? 'Waiting on provider / retrying'
+                    : (ac.providerState === 'Human Verification' || ac.status === 'paused_manual'
+                        ? 'Human verification required'
+                        : (ac.discoveryStatus || ac.status || 'idle')))),
         manualActionRequired: session.status === 'manual_action_required' || ac.status === 'paused_manual',
-        uiLabel: waitingAgent
-            ? AGENT_OFFLINE_WAIT_MESSAGE
-            : (ac.providerState === 'Retry' || ac.pauseReason === 'unsupported_page_retry'
-                ? 'Waiting on provider / retrying'
-                : (labelMap[ac.status] || 'Auto Collection Idle')),
+        requiresManualResume: Boolean(ac.requiresManualResume)
+            || ac.pauseReason === DISCOVERY_AGENT_OFFLINE
+            || ac.pauseReason === OWNER_PAUSE
+            || ac.pauseReason === 'owner_pause',
+        uiLabel: ac.pauseReason === DISCOVERY_AGENT_OFFLINE
+            ? AGENT_SLEEP_PAUSE_MESSAGE
+            : (waitingAgent
+                ? AGENT_OFFLINE_WAIT_MESSAGE
+                : (ac.providerState === 'Retry' || ac.pauseReason === 'unsupported_page_retry'
+                    ? 'Waiting on provider / retrying'
+                    : (labelMap[ac.status] || 'Auto Collection Idle'))),
         captureTargetOptions: CAPTURE_TARGET_OPTIONS,
     };
 }
@@ -465,6 +488,15 @@ export async function ownerStopPersistentRun({ companyId, user, sessionId, reaso
     };
 }
 async function finalizeStop(session, { status, reason, user }) {
+    if (status === 'completed' && !GENUINE_COMPLETE_REASONS.has(String(reason || ''))) {
+        if (collectionHasUnfinishedWork(session)) {
+            return pauseForLongAgentOffline(session, {
+                message: AGENT_SLEEP_PAUSE_MESSAGE,
+                fromInvalidComplete: true,
+                rejectedReason: reason,
+            });
+        }
+    }
     const summary = await buildSummary(session);
     summary.stopReason = reason;
     session.autoCollection = session.autoCollection || defaultAuto();
@@ -669,9 +701,96 @@ async function pauseForManual(session, message) {
 
 function isAgentOfflineWait(session) {
     const ac = session?.autoCollection || {};
+    if (isLongAgentOfflinePause(session)) return false;
     return ac.pauseReason === 'agent_offline'
         || ac.discoveryStatus === 'waiting_for_agent'
         || ac.lastErrorCode === 'agent_offline';
+}
+
+export function isLongAgentOfflinePause(sessionOrAc = {}) {
+    const ac = sessionOrAc.autoCollection || sessionOrAc;
+    return String(ac?.pauseReason || '') === DISCOVERY_AGENT_OFFLINE
+        || String(ac?.lastErrorCode || '') === DISCOVERY_AGENT_OFFLINE;
+}
+
+export function isOwnerManualPause(sessionOrAc = {}) {
+    const ac = sessionOrAc.autoCollection || sessionOrAc;
+    const reason = String(ac?.pauseReason || '');
+    return reason === OWNER_PAUSE || reason === 'owner_pause';
+}
+
+export function collectionHasUnfinishedWork(session = {}) {
+    const ac = session.autoCollection || {};
+    const queryIndex = Number(ac.lastQueryIndex || ac.resumeQueryIndex || 1);
+    const planned = Number(ac.totalApprovedQueries || 0);
+    const completed = Number(ac.queriesCompleted || ac.queriesProcessedTotal || 0);
+    if (planned > 0) {
+        if (completed < planned) return true;
+        if (queryIndex < planned) return true;
+        return false;
+    }
+    // Planned total unknown: still mid-query if captures exist and no query has completed.
+    if (completed === 0 && Number(ac.rawRecordsCaptured || session.acceptedCount || 0) > 0) return true;
+    return false;
+}
+
+export function isInvalidCompletedCollection(session = {}) {
+    if (isOwnerStopped(session)) return false;
+    const ac = session.autoCollection || {};
+    const reason = String(ac.summary?.stopReason || '');
+    if (GENUINE_COMPLETE_REASONS.has(reason)) return false;
+    if (!collectionHasUnfinishedWork(session)) return false;
+    const sessionEnded = ['completed', 'expired', 'failed'].includes(String(session.status || ''));
+    const acEnded = ['completed', 'failed'].includes(String(ac.status || ''))
+        || ['completed', 'no_more_results'].includes(String(ac.discoveryStatus || ''));
+    return sessionEnded || acEnded;
+}
+
+async function persistCheckpoint(session) {
+    const ac = session.autoCollection || defaultAuto();
+    session.autoCollection = ac;
+    const page = Number(session.googlePageIndex || ac.lastSuccessfullyCapturedPage || 1);
+    const lastOk = Number(ac.lastSuccessfullyCapturedPage || 0);
+    ac.resumeQueryId = session.queryId || ac.resumeQueryId;
+    ac.resumeQueryIndex = Number(ac.lastQueryIndex || ac.resumeQueryIndex || 1);
+    ac.lastCursor = String(lastOk || page || '');
+    ac.nextPageToken = String((lastOk || page || 1) + (lastOk && lastOk < page ? 0 : 1));
+    ac.resumeMessage = `Resume from Query ${ac.resumeQueryIndex}, Page ${page}${lastOk && lastOk < page ? ' (retry unconfirmed page)' : ''}`;
+}
+
+async function pauseForLongAgentOffline(session, { message = AGENT_SLEEP_PAUSE_MESSAGE, fromInvalidComplete = false, rejectedReason = '' } = {}) {
+    session.autoCollection = session.autoCollection || defaultAuto();
+    const ac = session.autoCollection;
+    await persistCheckpoint(session);
+    ac.status = PAUSED_STATUS;
+    ac.enabled = true;
+    ac.phase = ac.phase && ac.phase !== 'done' ? ac.phase : 'decide_next';
+    ac.discoveryStatus = 'paused';
+    ac.pauseReason = DISCOVERY_AGENT_OFFLINE;
+    ac.requiresManualResume = true;
+    ac.lastErrorCode = DISCOVERY_AGENT_OFFLINE;
+    ac.providerState = 'Provider temporarily unavailable';
+    ac.lastErrorMessage = String(message || AGENT_SLEEP_PAUSE_MESSAGE).slice(0, 500);
+    ac.nextActionAt = null;
+    ac.tickLockUntil = null;
+    ac.summary = { ...(ac.summary || {}), stopReason: fromInvalidComplete ? '' : (ac.summary?.stopReason || '') };
+    if (fromInvalidComplete && rejectedReason) {
+        ac.lastErrorMessage = AGENT_SLEEP_PAUSE_MESSAGE;
+    }
+    if (['completed', 'expired', 'failed'].includes(String(session.status || '')) && !isOwnerStopped(session)) {
+        session.status = 'awaiting_user';
+        session.completedAt = undefined;
+        session.failedAt = undefined;
+        session.failCode = '';
+        session.failMessage = '';
+        session.safeFailureMessage = '';
+        session.sessionExpiresAt = new Date(Date.now() + 60 * 60 * 1000);
+        session.pendingCaptureStatus = 'none';
+        session.pendingNavigationStatus = 'none';
+    }
+    ac.lastDiscoveryAt = new Date();
+    await session.save();
+    return session;
 }
 
 function nextAgentWaitDelaySec(attempt) {
@@ -683,6 +802,18 @@ function nextAgentWaitDelaySec(attempt) {
 async function waitForAgentReconnect(session, message = '') {
     session.autoCollection = session.autoCollection || defaultAuto();
     const ac = session.autoCollection;
+    if (isLongAgentOfflinePause(session)) {
+        return { deferred: true, requiresManualResume: true };
+    }
+    if (!ac.agentWaitStartedAt) ac.agentWaitStartedAt = new Date();
+    const waitedMs = Date.now() - new Date(ac.agentWaitStartedAt).getTime();
+    const heartbeatAt = session.lastHeartbeatAt;
+    const heartbeatAge = heartbeatAt ? (Date.now() - new Date(heartbeatAt).getTime()) : 0;
+    if (waitedMs >= LONG_AGENT_OFFLINE_MS || heartbeatAge >= LONG_AGENT_OFFLINE_MS) {
+        await persistCheckpoint(session);
+        await pauseForLongAgentOffline(session);
+        return { deferred: true, requiresManualResume: true };
+    }
     const alreadyWaiting = isAgentOfflineWait(session);
     const nextAt = ac.nextActionAt ? new Date(ac.nextActionAt).getTime() : 0;
     if (alreadyWaiting && nextAt > Date.now()) {
@@ -701,6 +832,7 @@ async function waitForAgentReconnect(session, message = '') {
     ac.nextActionAt = new Date(Date.now() + delaySec * 1000);
     ac.lastDiscoveryAt = new Date();
     ac.tickLockUntil = null;
+    await persistCheckpoint(session);
     await session.save();
     return { deferred: false };
 }
@@ -716,6 +848,7 @@ function clearAgentWait(session) {
     ac.lastErrorMessage = '';
     ac.providerState = 'Running';
     ac.agentWaitAttempt = 0;
+    ac.agentWaitStartedAt = null;
     ac.nextActionAt = null;
     ac.lastDiscoveryAt = new Date();
 }
@@ -822,7 +955,8 @@ export async function pauseAutoCollection({ companyId, user, sessionId }) {
     session.autoCollection.enabled = true;
     session.autoCollection.nextActionAt = null;
     session.autoCollection.discoveryStatus = 'paused';
-    session.autoCollection.pauseReason = 'owner_pause';
+    session.autoCollection.pauseReason = OWNER_PAUSE;
+    session.autoCollection.requiresManualResume = true;
     session.autoCollection.lastDiscoveryAt = new Date();
     await session.save();
     const campaignProgress = await buildCampaignProgress({ companyId: cid, campaignId: session.campaignId, session: session.toObject() });
@@ -842,20 +976,47 @@ export async function resumeAutoCollection({ companyId, user, sessionId }) {
     if (isOwnerStopped(session)) throw new ApiError(400, 'STOPPED BY USER. This search will not resume. Start a new search.');
     if (st === 'paused_manual') throw new ApiError(400, 'Resolve the Google window issue first, then click Continue Auto Collection.');
     const waitingAgent = st === 'running' && isAgentOfflineWait(session);
-    if (st !== 'paused_owner' && !waitingAgent) throw new ApiError(400, 'Auto Collection is not paused');
+    const longOffline = isLongAgentOfflinePause(session);
+    const invalidComplete = isInvalidCompletedCollection(session);
+    if (st !== 'paused_owner' && st !== PAUSED_STATUS && !waitingAgent && !longOffline && !invalidComplete) {
+        throw new ApiError(400, 'Auto Collection is not paused');
+    }
     if (session.status === 'manual_action_required') {
         session.autoCollection.status = 'paused_manual';
         await session.save();
         throw new ApiError(400, 'Manual action required in the Google window.');
     }
+    if (ENDED.has(session.status) && !isOwnerStopped(session)) {
+        session.status = 'awaiting_user';
+        session.completedAt = undefined;
+        session.failedAt = undefined;
+        session.failCode = '';
+        session.failMessage = '';
+        session.safeFailureMessage = '';
+        session.sessionExpiresAt = new Date(Date.now() + 60 * 60 * 1000);
+        session.pendingCaptureStatus = 'none';
+        session.pendingNavigationStatus = 'none';
+    }
+    await persistCheckpoint(session);
+    const lastOk = Number(session.autoCollection.lastSuccessfullyCapturedPage || 0);
+    const currentPage = Number(session.googlePageIndex || 1);
+    if (lastOk > 0 && currentPage > lastOk) {
+        session.autoCollection.phase = 'capture';
+        session.autoCollection.resumeMessage = `Retrying unconfirmed page ${currentPage} of query ${session.autoCollection.resumeQueryIndex || 1}`;
+    } else if (['done', 'none'].includes(session.autoCollection.phase)) {
+        session.autoCollection.phase = 'decide_next';
+    }
     session.autoCollection.status = 'running';
     session.autoCollection.enabled = true;
     session.autoCollection.discoveryStatus = 'running';
     session.autoCollection.pauseReason = '';
+    session.autoCollection.requiresManualResume = false;
     session.autoCollection.lastErrorCode = '';
     session.autoCollection.lastErrorMessage = '';
     session.autoCollection.providerState = 'Running';
     session.autoCollection.agentWaitAttempt = 0;
+    session.autoCollection.agentWaitStartedAt = null;
+    session.autoCollection.summary = { ...(session.autoCollection.summary || {}), stopReason: '' };
     session.autoCollection.lastDiscoveryAt = new Date();
     scheduleDelay(session);
     await session.save();
@@ -990,6 +1151,18 @@ async function runPhase(session, user, cid) {
         return handleUnsupportedPageOutcome(session, user, cid);
     }
     if (isDiscoveryStalled(session) && !HUMAN_PAGE_KINDS.includes(parsePageKindFromMessage(ac.lastErrorMessage))) {
+        const last = ac.lastDiscoveryAt || ac.lastPageAdvancementAt || session.lastCaptureAt;
+        const gapMs = last ? (Date.now() - new Date(last).getTime()) : 0;
+        if (gapMs >= LONG_AGENT_OFFLINE_MS) {
+            await persistCheckpoint(session);
+            await pauseForLongAgentOffline(session);
+            return {};
+        }
+        const heartbeatAt = session.lastHeartbeatAt || ac.lastDiscoveryAt;
+        const heartbeatAge = heartbeatAt ? (Date.now() - new Date(heartbeatAt).getTime()) : gapMs;
+        if (heartbeatAge >= DISCOVERY_STALL_MS) {
+            return waitForAgentReconnect(session, AGENT_OFFLINE_WAIT_MESSAGE);
+        }
         ac.lastErrorCode = ac.lastErrorCode || 'discovery_stalled';
         ac.lastErrorMessage = ac.lastErrorMessage || `No page/query advancement for ${Math.round(DISCOVERY_STALL_MS / 1000)}s. Inspecting current page.`;
         return handleUnsupportedPageOutcome(session, user, cid);
@@ -1161,6 +1334,7 @@ async function runPhase(session, user, cid) {
         ac.rawRecordsCaptured = await acceptedSourceAppearances(session);
         ac.sourceResultsFound = Math.max(Number(ac.sourceResultsFound || 0), Number(session.visibleResultCount || 0));
         ac.queriesCompleted = Number(ac.queriesProcessedTotal || 0);
+        await persistCheckpoint(session);
         if (!ac.batchStartPage) ac.batchStartPage = Number(session.googlePageIndex || 1);
         if (!ac.currentBatch) ac.currentBatch = 1;
         ac.consecutiveNoNewPages = ((newUnique || insertedDelta || pageAccepted) <= 0)
@@ -1180,6 +1354,7 @@ async function runPhase(session, user, cid) {
         ac.resumeMessage = `Resume Auto Collection from Query ${ac.resumeQueryIndex}, Page ${ac.lastSuccessfullyCapturedPage || 1}`;
         ac.lastCursor = String(ac.lastSuccessfullyCapturedPage || '');
         ac.nextPageToken = String(Number(ac.lastSuccessfullyCapturedPage || 0) + 1);
+        await persistCheckpoint(session);
 
         if (await maybeFinishLimits(session, user)) return { reload: true };
 
@@ -1292,6 +1467,11 @@ async function runPhase(session, user, cid) {
             const latest = await AssistedCaptureSession.findById(session._id).lean();
             if (isOwnerStopped(latest)) return {};
             if (Number(err?.statusCode) === 400) {
+                if (collectionHasUnfinishedWork(session)) {
+                    await persistCheckpoint(session);
+                    await pauseForLongAgentOffline(session, { rejectedReason: 'next_query_failed' });
+                    return { reload: true };
+                }
                 await startPostCollectionJobs(session, user);
                 return { reload: true };
             }
@@ -1410,6 +1590,26 @@ export async function tickAutoCollection({ companyId, user, sessionId }) {
             advanced: false,
             skipped: true,
             stopped: true,
+        };
+    }
+    if (probe && (isInvalidCompletedCollection(probe) || isLongAgentOfflinePause(probe))) {
+        const live = await loadOwnedSession(cid, sessionId);
+        if (isInvalidCompletedCollection(live) && !isLongAgentOfflinePause(live)) {
+            await persistCheckpoint(live);
+            await pauseForLongAgentOffline(live, { fromInvalidComplete: true });
+        }
+        const paused = await AssistedCaptureSession.findById(sessionId).lean();
+        const campaignProgress = paused
+            ? await buildCampaignProgress({ companyId: cid, campaignId: paused.campaignId, session: paused })
+            : null;
+        return {
+            session: sanitizeSession(paused),
+            autoCollection: paused ? progressView(paused, campaignProgress) : null,
+            campaignProgress,
+            sessionId: String(sessionId),
+            advanced: false,
+            skipped: true,
+            requiresManualResume: true,
         };
     }
     if (probe) {
@@ -1610,12 +1810,29 @@ export async function tickAutoCollection({ companyId, user, sessionId }) {
     } else {
         const agentStatus = await getAgentStatusForCompany(cid, { sessionId: session._id });
         const clearlyOffline = agentStatus && (agentStatus.online === false || agentStatus.connected === false || agentStatus.agentOnline === false);
-        if (clearlyOffline) {
-            await waitForAgentReconnect(session, AGENT_OFFLINE_WAIT_MESSAGE);
+        if (isLongAgentOfflinePause(session)) {
+            await persistCheckpoint(session);
+            await session.save();
+        } else if (clearlyOffline) {
+            const heartbeatAt = session.lastHeartbeatAt;
+            const heartbeatAge = heartbeatAt ? (Date.now() - new Date(heartbeatAt).getTime()) : 0;
+            if (heartbeatAge >= LONG_AGENT_OFFLINE_MS) {
+                await persistCheckpoint(session);
+                await pauseForLongAgentOffline(session);
+            } else {
+                await waitForAgentReconnect(session, AGENT_OFFLINE_WAIT_MESSAGE);
+            }
         } else {
             if (isAgentOfflineWait(session) || session.autoCollection?.pauseReason === 'agent_offline') {
-                clearAgentWait(session);
-                await session.save();
+                const started = session.autoCollection?.agentWaitStartedAt;
+                const waitedMs = started ? (Date.now() - new Date(started).getTime()) : 0;
+                if (waitedMs >= LONG_AGENT_OFFLINE_MS) {
+                    await persistCheckpoint(session);
+                    await pauseForLongAgentOffline(session);
+                } else {
+                    clearAgentWait(session);
+                    await session.save();
+                }
             }
             try {
                 const outcome = await runPhase(session, user, cid);
@@ -1711,7 +1928,7 @@ export async function resumeAutoCollectionCheckpoint({ companyId, user, sessionI
         throw new ApiError(400, 'STOPPED BY USER. This search will not resume. Start a new search.');
     }
     const ac = session.autoCollection || defaultAuto();
-    if (!ac.lastSuccessfullyCapturedPage && !['paused_owner', 'paused_manual', 'paused_batch', 'stopped', 'failed', 'running'].includes(ac.status)) {
+    if (!ac.lastSuccessfullyCapturedPage && !['paused', 'paused_owner', 'paused_manual', 'paused_batch', 'stopped', 'failed', 'running'].includes(ac.status)) {
         throw new ApiError(400, 'No Auto Collection checkpoint to resume');
     }
     if (ENDED.has(session.status)) {
@@ -1774,7 +1991,7 @@ export async function autoMoveToNextQuery({ companyId, user, sessionId, headers 
     const cid = requireCompanyId(companyId);
     assertAssistedCaptureStart(user);
     const session = await loadOwnedSession(cid, sessionId);
-    if (!session.autoCollection || !['paused_batch', 'paused_owner', 'running', 'paused_manual'].includes(session.autoCollection.status)) {
+    if (!session.autoCollection || !['paused_batch', 'paused', 'paused_owner', 'running', 'paused_manual'].includes(session.autoCollection.status)) {
         // allow even if idle after batch? require some auto state
     }
     session.autoCollection = session.autoCollection || defaultAuto();

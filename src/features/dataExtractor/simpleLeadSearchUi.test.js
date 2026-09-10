@@ -23,7 +23,14 @@ import {
     formatDiscoveryOwnerStatus,
     formatProviderState,
     isWaitingForDiscoveryAgent,
+    isLongAgentOfflinePause,
+    isOwnerManualPause,
+    OWNER_PAUSE,
+    campaignHasUnfinishedDiscovery,
+    isAuthoritativeCollectionComplete,
     AGENT_OFFLINE_WAIT_MESSAGE,
+    AGENT_SLEEP_PAUSE_MESSAGE,
+    DISCOVERY_AGENT_OFFLINE,
     BROWSER_REQUEST_TIMEOUT_MESSAGE,
     isBrowserRequestTimeout,
     isBrowserRequestTimeoutMessage,
@@ -178,6 +185,34 @@ describe('Simple Lead Search UI null-safety', () => {
             formatDiscoveryOwnerStatus({ providerState: 'Human Verification' }, { status: 'manual_action_required' }),
             'Human verification required',
         );
+    });
+
+    it('does not treat unfinished sleep/offline campaigns as Completed', () => {
+        const unfinished = {
+            status: 'completed',
+            pendingQueries: 15,
+            queryIndex: 1,
+            queryTotal: 16,
+            queriesCompleted: 0,
+            pauseReason: DISCOVERY_AGENT_OFFLINE,
+            lastErrorCode: DISCOVERY_AGENT_OFFLINE,
+            lastErrorMessage: AGENT_SLEEP_PAUSE_MESSAGE,
+            summary: { stopReason: 'all_queries_exhausted' },
+        };
+        assert.equal(campaignHasUnfinishedDiscovery(unfinished, { queryIndex: 1, queryTotal: 16 }), true);
+        assert.equal(isLongAgentOfflinePause(unfinished), true);
+        assert.equal(isOwnerManualPause(unfinished), false);
+        assert.equal(isOwnerManualPause({ status: 'paused_owner', pauseReason: OWNER_PAUSE }), true);
+        assert.equal(isOwnerManualPause({ status: 'paused_owner', pauseReason: 'owner_pause' }), true);
+        assert.equal(isWaitingForDiscoveryAgent(unfinished), false);
+        assert.equal(isAuthoritativeCollectionComplete(unfinished, { status: 'completed' }, { queryTotal: 16 }), false);
+        assert.equal(formatDiscoveryOwnerStatus(unfinished), 'paused_agent_offline');
+        assert.equal(lastVisibleRunError({
+            autoProcessing: {},
+            autoCollection: unfinished,
+            session: { status: 'completed' },
+            status: 'completed',
+        }), '');
     });
 
     it('treats temporary Discovery Agent offline as waiting, not a processing error', () => {

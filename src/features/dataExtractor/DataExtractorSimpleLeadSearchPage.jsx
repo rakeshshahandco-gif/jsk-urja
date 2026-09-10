@@ -26,6 +26,11 @@ import {
     formatProviderState,
     formatDiscoveryOwnerStatus,
     isWaitingForDiscoveryAgent,
+    isLongAgentOfflinePause,
+    isOwnerManualPause,
+    campaignHasUnfinishedDiscovery,
+    isAuthoritativeCollectionComplete,
+    AGENT_SLEEP_PAUSE_MESSAGE,
     isBrowserRequestTimeout,
     BROWSER_REQUEST_TIMEOUT_MESSAGE,
     isOwnerStoppedSearch,
@@ -909,7 +914,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
             return;
         }
         const acStatus = autoCollection?.status || '';
-        if (acStatus === 'running' || acStatus === 'paused_owner' || acStatus === 'paused_manual' || acStatus === 'paused_batch') {
+        if (acStatus === 'running' || acStatus === 'paused' || acStatus === 'paused_owner' || acStatus === 'paused_manual' || acStatus === 'paused_batch') {
             const ok = window.confirm(
                 'A new search will stop the current Auto Collection. Completed captures remain saved. Continue?',
             );
@@ -1372,7 +1377,8 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
         if (!sid) return;
         setBusy('autoResume');
         try {
-            if (autoPausedOwner || autoCollection?.status === 'paused_owner' || isWaitingForDiscoveryAgent(autoCollection)) {
+            if (autoPausedOwner || autoCollection?.status === 'paused_owner'
+                || isWaitingForDiscoveryAgent(autoCollection) || isLongAgentOfflinePause(autoCollection)) {
                 const data = await dataExtractorApi.simpleLeadSearchAutoCollectionResume(sid);
                 applyStatusPayload(data);
                 if (data?.autoCollection) setAutoCollection(data.autoCollection);
@@ -2198,10 +2204,12 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
     const canExport = !!activeSession && !busy && (rows.length > 0 || (captureStats?.uniqueResultCount || 0) > 0 || inactive);
     const autoStatus = autoCollection?.status || 'idle';
     const autoRunning = autoStatus === 'running';
-    const autoPausedOwner = autoStatus === 'paused_owner' && !isWaitingForDiscoveryAgent(autoCollection);
+    const autoPausedOwner = (autoStatus === 'paused_owner' || isOwnerManualPause(autoCollection))
+        && !isWaitingForDiscoveryAgent(autoCollection)
+        && !isLongAgentOfflinePause(autoCollection);
     const autoPausedManual = autoStatus === 'paused_manual';
     const waitingAgent = isWaitingForDiscoveryAgent(autoCollection);
-    const autoActive = ['running', 'paused_owner', 'paused_manual', 'paused_batch'].includes(autoCollection?.status);
+    const autoActive = ['running', 'paused', 'paused_owner', 'paused_manual', 'paused_batch'].includes(autoCollection?.status);
     const canStartAuto = (autoCollectionOptions.mode === 'auto') && (!!activeSession && !inactive && !busy && !autoActive && GOOGLE_READY.has(status));
     const bannerSession = captureCompletedFlash && !inactive && !isManual && status !== 'capturing'
         ? { ...activeSession, status: 'capture_completed_ui' }
@@ -2287,8 +2295,12 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
     const processRunning = autoRunning || pipeRunning;
     const processPaused = (autoPausedOwner || pipePaused) && !autoPausedManual && !isManual;
     const processManual = autoPausedManual || isManual;
-    const processDone = inactive
-        && ['completed', 'stopped', 'cancelled'].includes(autoStatus || status)
+    const unfinishedDiscovery = campaignHasUnfinishedDiscovery(autoCollection, campaignProgress);
+    const longAgentOffline = isLongAgentOfflinePause(autoCollection);
+    const processDone = !unfinishedDiscovery
+        && !longAgentOffline
+        && !waitingAgent
+        && isAuthoritativeCollectionComplete(autoCollection, activeSession, campaignProgress)
         && processingBacklog <= 0
         && autoProcessing?.status !== 'running';
     const processFailed = status === 'failed' || autoStatus === 'failed';
@@ -2303,6 +2315,10 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
         processTitle = 'Manual Action Required';
         pulseClass = styles.pulseAmber;
         statusBadge = { text: 'Manual action required', cls: styles.badgeAmber };
+    } else if (longAgentOffline) {
+        processTitle = 'Automatic Process Paused';
+        pulseClass = styles.pulseBlue;
+        statusBadge = { text: 'Paused — Discovery Agent offline', cls: styles.badgeBlue };
     } else if (waitingAgent) {
         processTitle = 'Automatic Process Waiting';
         pulseClass = styles.pulseBlue;
@@ -2331,10 +2347,14 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
         processTitle = 'Automatic Process Failed';
         pulseClass = styles.pulseRed;
         statusBadge = { text: 'Failed', cls: styles.badgeRed };
-    } else if (processDone || (inactive && genuinenessRows.length && processingBacklog <= 0)) {
+    } else if (processDone) {
         processTitle = 'Automatic Process Completed';
         pulseClass = styles.pulseGrey;
         statusBadge = { text: 'Completed', cls: styles.badgeGreen };
+    } else if (inactive && unfinishedDiscovery) {
+        processTitle = 'Automatic Process Paused';
+        pulseClass = styles.pulseBlue;
+        statusBadge = { text: 'Paused — progress saved', cls: styles.badgeBlue };
     } else if (status === 'queued') {
         processTitle = 'Waiting for discovery service';
         pulseClass = styles.pulseBlue;
@@ -2475,11 +2495,13 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
         ? 'Ready to discover and verify business data.'
         : OPENING.has(status)
             ? 'Discovery Agent is opening the managed Google search.'
-            : (processRunning
-                ? (capturedUnique ? 'Captured records are moving through Enrichment, Qualification and Verification.' : 'Automatic collection is running.')
-                : (processManual ? manualActionCopy(activeSession).title
-                    : (processDone ? ((reviewCount || failedCount) ? 'Some records require review or retry.' : 'Automatic processing completed successfully.')
-                        : (capturedUnique ? '' : 'No unique results captured yet.'))));
+            : (longAgentOffline
+                ? AGENT_SLEEP_PAUSE_MESSAGE
+                : (processRunning
+                    ? (capturedUnique ? 'Captured records are moving through Enrichment, Qualification and Verification.' : 'Automatic collection is running.')
+                    : (processManual ? manualActionCopy(activeSession).title
+                        : (processDone ? ((reviewCount || failedCount) ? 'Some records require review or retry.' : 'Automatic processing completed successfully.')
+                            : (capturedUnique ? '' : 'No unique results captured yet.')))));
 
     return (
         <SimpleLeadSearchErrorBoundary onStartNew={onStartNew}>
@@ -2909,6 +2931,14 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                             <span className={`${styles.pulse} ${pulseClass}`} aria-hidden />
                             <h3 className={styles.liveTitle}>{processTitle}</h3>
                         </div>
+                        {longAgentOffline && (
+                            <div className={styles.manualBanner} role="status" style={{ marginBottom: 12 }}>
+                                <div>
+                                    <h3>Paused — Discovery Agent was offline. Click Resume Campaign to continue.</h3>
+                                    <p>{AGENT_SLEEP_PAUSE_MESSAGE}</p>
+                                </div>
+                            </div>
+                        )}
                         {ownerStoppedUi && (
                             <div className={styles.manualBanner} role="status" style={{ marginBottom: 12 }}>
                                 <CheckCircle2 size={22} aria-hidden />
@@ -3000,7 +3030,9 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                                 })}
                             </div></div>
                             <div><div className={styles.metaLabel}>Current Google Page</div><div className={styles.metaValue}>{googlePage}</div></div>
+                            <div><div className={styles.metaLabel}>Last confirmed Google page</div><div className={styles.metaValue}>{autoCollection?.lastConfirmedGooglePage || autoCollection?.lastSuccessfullyCapturedPage || '—'}</div></div>
                             <div><div className={styles.metaLabel}>Pending Queries</div><div className={styles.metaValue}>{pendingQueryCount({ queryIndex, queryTotal: autoCollection?.totalApprovedQueries || queryTotal })}</div></div>
+                            <div><div className={styles.metaLabel}>Last agent heartbeat</div><div className={styles.metaValue}>{(autoCollection?.lastAgentHeartbeat || activeSession?.lastHeartbeatAt || agentStatus?.lastUsedAt) ? new Date(autoCollection?.lastAgentHeartbeat || activeSession?.lastHeartbeatAt || agentStatus?.lastUsedAt).toLocaleString() : '—'}</div></div>
                             <div><div className={styles.metaLabel}>Provider State</div><div className={styles.metaValue}>{formatProviderState(autoCollection, activeSession) || '—'}</div></div>
                             <div><div className={styles.metaLabel}>Discovery Status</div><div className={styles.metaValue}>{formatDiscoveryOwnerStatus(autoCollection, activeSession)}</div></div>
                             <div><div className={styles.metaLabel}>Last new result</div><div className={styles.metaValue}>{(autoCollection?.lastNewResultAt || autoCollection?.lastDiscoveryAt || lastProgressAt) ? new Date(autoCollection?.lastNewResultAt || autoCollection?.lastDiscoveryAt || lastProgressAt).toLocaleString() : '—'}</div></div>
@@ -3166,12 +3198,21 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                                     <span>Pause future automatic actions safely.</span>
                                 </button>
                             )}
-                            {(processPaused || waitingAgent) && !processManual && (
-                                <button type="button" className={`${styles.ctrlBtn} ${styles.ctrlResume}`} disabled={!!busy} onClick={onResumeAutomaticProcess}>
+                            {(processPaused || waitingAgent || longAgentOffline || unfinishedDiscovery) && !processManual && (
+                                <button
+                                    type="button"
+                                    className={`${styles.ctrlBtn} ${styles.ctrlResume}`}
+                                    disabled={!!busy || (longAgentOffline && agentStatus?.online === false && agentStatus?.connected === false)}
+                                    onClick={onResumeAutomaticProcess}
+                                >
                                     Resume Campaign
-                                    <span>{waitingAgent
-                                        ? 'Fallback: continue from the last checkpoint after the agent reconnects.'
-                                        : 'Continue unfinished records only (no duplicates).'}</span>
+                                    <span>{longAgentOffline
+                                        ? (agentStatus?.online || agentStatus?.connected
+                                            ? 'Continue from the saved query and Google page.'
+                                            : 'Available when Discovery Agent is Ready.')
+                                        : (waitingAgent
+                                            ? 'Fallback: continue from the last checkpoint after the agent reconnects.'
+                                            : 'Continue unfinished records only (no duplicates).')}</span>
                                 </button>
                             )}
                             {processManual && (
@@ -3789,7 +3830,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                                     </button>
                                 </>
                             )}
-                            {autoCollection?.resumeMessage && ['paused_owner', 'stopped', 'failed', 'paused_batch'].includes(autoStatus) && (
+                            {autoCollection?.resumeMessage && ['paused', 'paused_owner', 'stopped', 'failed', 'paused_batch'].includes(autoStatus) && (
                                 <div style={{ width: '100%', fontSize: 12, color: '#334155' }}>
                                     {autoCollection.resumeMessage}
                                     {' '}

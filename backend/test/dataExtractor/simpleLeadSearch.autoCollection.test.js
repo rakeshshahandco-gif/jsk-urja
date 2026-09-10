@@ -22,6 +22,14 @@ import {
     isPageOutcomeFail,
     parsePageKindFromMessage,
     MAX_UNSUPPORTED_PAGE_RETRIES,
+    LONG_AGENT_OFFLINE_MS,
+    DISCOVERY_AGENT_OFFLINE,
+    OWNER_PAUSE,
+    PAUSED_STATUS,
+    collectionHasUnfinishedWork,
+    isInvalidCompletedCollection,
+    isOwnerManualPause,
+    isLongAgentOfflinePause,
 } from '../../src/services/dataExtractor/searchCampaign/simpleLeadSearch/simpleLeadSearch.autoCollection.service.js';
 
 const MONGO_URI = process.env.SC_MONGO_URI || process.env.MONGODB_URL || 'mongodb://127.0.0.1:27017/crm_test';
@@ -68,6 +76,72 @@ describe('SLS Auto Collection helpers', () => {
         const manualWithoutTarget = readSettings({ collectionMode: 'manual' });
         assert.equal(manualWithoutTarget.collectionMode, 'unlimited');
         assert.equal(manualWithoutTarget.requestedCaptureTarget, 0);
+    });
+
+    it('rejects Completed when planned queries remain unfinished', () => {
+        const unfinished = {
+            status: 'completed',
+            acceptedCount: 90,
+            autoCollection: {
+                status: 'completed',
+                discoveryStatus: 'completed',
+                lastQueryIndex: 1,
+                queriesCompleted: 0,
+                totalApprovedQueries: 16,
+                rawRecordsCaptured: 90,
+                summary: { stopReason: 'all_queries_exhausted' },
+            },
+        };
+        assert.equal(collectionHasUnfinishedWork(unfinished), true);
+        assert.equal(isInvalidCompletedCollection(unfinished), true);
+        const exhausted = {
+            status: 'completed',
+            autoCollection: {
+                status: 'completed',
+                lastQueryIndex: 16,
+                queriesCompleted: 16,
+                totalApprovedQueries: 16,
+                rawRecordsCaptured: 90,
+                summary: { stopReason: 'all_queries_exhausted' },
+            },
+        };
+        assert.equal(collectionHasUnfinishedWork(exhausted), false);
+        assert.equal(isInvalidCompletedCollection(exhausted), false);
+        const sleepPaused = {
+            status: 'awaiting_user',
+            autoCollection: {
+                status: PAUSED_STATUS,
+                pauseReason: DISCOVERY_AGENT_OFFLINE,
+                requiresManualResume: true,
+                lastQueryIndex: 1,
+                totalApprovedQueries: 16,
+                queriesCompleted: 0,
+            },
+        };
+        assert.equal(isLongAgentOfflinePause(sleepPaused), true);
+        assert.equal(isOwnerManualPause(sleepPaused), false);
+        const ownerPaused = {
+            status: 'awaiting_user',
+            autoCollection: {
+                status: 'paused_owner',
+                pauseReason: OWNER_PAUSE,
+                requiresManualResume: true,
+            },
+        };
+        assert.equal(isOwnerManualPause(ownerPaused), true);
+        assert.equal(isLongAgentOfflinePause(ownerPaused), false);
+        const ownerStop = {
+            status: 'cancelled',
+            autoCollection: {
+                status: 'stopped',
+                ownerStoppedAt: new Date(),
+                lastQueryIndex: 1,
+                totalApprovedQueries: 16,
+                queriesCompleted: 0,
+                summary: { stopReason: 'owner_stop' },
+            },
+        };
+        assert.equal(isInvalidCompletedCollection(ownerStop), false);
     });
 
     it('never enables unique-company stop rules from body', () => {
@@ -249,7 +323,10 @@ describe('SLS Auto Collection orchestration', () => {
         const paused = await pauseAutoCollection({ companyId, user, sessionId });
         assert.equal(paused.autoCollection.status, 'paused_owner');
         assert.equal(paused.autoCollection.discoveryStatus, 'paused');
-        assert.equal(paused.autoCollection.pauseReason, 'owner_pause');
+        assert.equal(paused.autoCollection.pauseReason, OWNER_PAUSE);
+        assert.equal(paused.autoCollection.requiresManualResume, true);
+        assert.equal(isOwnerManualPause(paused.autoCollection), true);
+        assert.equal(isLongAgentOfflinePause(paused.autoCollection), false);
         const resumed = await resumeAutoCollection({ companyId, user, sessionId });
         assert.equal(resumed.autoCollection.status, 'running');
         assert.equal(resumed.autoCollection.pauseReason, '');
@@ -637,10 +714,142 @@ describe('SLS Auto Collection orchestration', () => {
         });
         assert.equal(started.autoCollection.status, 'running');
         const paused = await pauseAutoCollection({ companyId, user, sessionId });
-        assert.equal(paused.autoCollection.pauseReason, 'owner_pause');
+        assert.equal(paused.autoCollection.pauseReason, OWNER_PAUSE);
         const ticked = await tickAutoCollection({ companyId, user, sessionId });
         assert.equal(ticked.autoCollection.status, 'paused_owner');
-        assert.equal(ticked.autoCollection.pauseReason, 'owner_pause');
+        assert.equal(ticked.autoCollection.pauseReason, OWNER_PAUSE);
+        assert.equal(isOwnerManualPause(ticked.autoCollection), true);
+        assert.equal(isLongAgentOfflinePause(ticked.autoCollection), false);
         await stopAutoCollection({ companyId, user, sessionId });
+    });
+
+    it('long agent offline / laptop sleep pauses and requires manual resume', async () => {
+        await AssistedCaptureSession.updateOne({ _id: sessionId }, {
+            $set: {
+                status: 'awaiting_user',
+                acceptedCount: 90,
+                visibleResultCount: 90,
+                googlePageIndex: 9,
+                pendingCaptureStatus: 'none',
+                'autoCollection.status': 'running',
+                'autoCollection.enabled': true,
+                'autoCollection.phase': 'decide_next',
+                'autoCollection.collectionMode': 'unlimited',
+                'autoCollection.discoveryStatus': 'waiting_for_agent',
+                'autoCollection.pauseReason': 'agent_offline',
+                'autoCollection.lastErrorCode': 'agent_offline',
+                'autoCollection.providerState': 'Provider temporarily unavailable',
+                'autoCollection.rawRecordsCaptured': 90,
+                'autoCollection.lastQueryIndex': 1,
+                'autoCollection.queriesCompleted': 0,
+                'autoCollection.totalApprovedQueries': 16,
+                'autoCollection.maxQueries': 16,
+                'autoCollection.lastSuccessfullyCapturedPage': 8,
+                'autoCollection.agentWaitAttempt': 8,
+                'autoCollection.agentWaitStartedAt': new Date(Date.now() - LONG_AGENT_OFFLINE_MS - 1000),
+                'autoCollection.ownerStoppedAt': null,
+                'autoCollection.stopRequested': false,
+                'autoCollection.summary.stopReason': '',
+                'autoCollection.nextActionAt': new Date(Date.now() - 1000),
+                'autoCollection.tickLockUntil': null,
+            },
+            $unset: { failedAt: 1, completedAt: 1 },
+        });
+        await DiscoveryAgentToken.updateMany({ companyId }, { $set: { lastUsedAt: new Date(Date.now() - LONG_AGENT_OFFLINE_MS) } });
+        const paused = await tickAutoCollection({ companyId, user, sessionId });
+        assert.equal(paused.autoCollection.status, PAUSED_STATUS);
+        assert.notEqual(paused.autoCollection.status, 'paused_owner');
+        assert.equal(paused.autoCollection.pauseReason, DISCOVERY_AGENT_OFFLINE);
+        assert.equal(paused.autoCollection.requiresManualResume, true);
+        assert.equal(paused.autoCollection.lastErrorCode, DISCOVERY_AGENT_OFFLINE);
+        assert.equal(isLongAgentOfflinePause(paused.autoCollection), true);
+        assert.equal(isOwnerManualPause(paused.autoCollection), false);
+        assert.notEqual(paused.autoCollection.status, 'completed');
+        assert.equal(Number(paused.session.googlePageIndex || 0), 9);
+        assert.equal(Number(paused.autoCollection.lastSuccessfullyCapturedPage || 0), 8);
+        assert.equal(Number(paused.autoCollection.rawRecordsCaptured || 0), 90);
+        assert.equal(Number(paused.autoCollection.pendingQueries || 15), 15);
+
+        await DiscoveryAgentToken.updateMany({ companyId }, { $set: { lastUsedAt: new Date() } });
+        const stillPaused = await tickAutoCollection({ companyId, user, sessionId });
+        assert.equal(stillPaused.autoCollection.pauseReason, DISCOVERY_AGENT_OFFLINE);
+        assert.equal(stillPaused.autoCollection.status, PAUSED_STATUS);
+        assert.equal(stillPaused.autoCollection.requiresManualResume, true);
+
+        const resumed = await resumeAutoCollection({ companyId, user, sessionId });
+        assert.equal(resumed.autoCollection.status, 'running');
+        assert.notEqual(resumed.autoCollection.pauseReason, DISCOVERY_AGENT_OFFLINE);
+        assert.equal(Number(resumed.session.googlePageIndex || 0), 9);
+        assert.equal(Number(resumed.autoCollection.lastSuccessfullyCapturedPage || 0), 8);
+        assert.equal(Number(resumed.autoCollection.rawRecordsCaptured || 0), 90);
+        assert.match(String(resumed.autoCollection.resumeMessage || ''), /page 9/i);
+        await stopAutoCollection({ companyId, user, sessionId });
+    });
+
+    it('rejects Completed when pending queries remain and reclaims for manual resume', async () => {
+        await AssistedCaptureSession.updateOne({ _id: sessionId }, {
+            $set: {
+                status: 'completed',
+                completedAt: new Date(),
+                acceptedCount: 90,
+                googlePageIndex: 9,
+                'autoCollection.status': 'completed',
+                'autoCollection.enabled': false,
+                'autoCollection.phase': 'done',
+                'autoCollection.discoveryStatus': 'completed',
+                'autoCollection.rawRecordsCaptured': 90,
+                'autoCollection.lastQueryIndex': 1,
+                'autoCollection.queriesCompleted': 0,
+                'autoCollection.totalApprovedQueries': 16,
+                'autoCollection.maxQueries': 16,
+                'autoCollection.lastSuccessfullyCapturedPage': 8,
+                'autoCollection.summary.stopReason': 'all_queries_exhausted',
+                'autoCollection.ownerStoppedAt': null,
+                'autoCollection.stopRequested': false,
+                'autoCollection.tickLockUntil': null,
+            },
+        });
+        const session = await AssistedCaptureSession.findById(sessionId).lean();
+        assert.equal(collectionHasUnfinishedWork(session), true);
+        assert.equal(isInvalidCompletedCollection(session), true);
+        const reclaimed = await tickAutoCollection({ companyId, user, sessionId });
+        assert.equal(reclaimed.autoCollection.status, PAUSED_STATUS);
+        assert.notEqual(reclaimed.autoCollection.status, 'paused_owner');
+        assert.equal(reclaimed.autoCollection.pauseReason, DISCOVERY_AGENT_OFFLINE);
+        assert.equal(reclaimed.autoCollection.requiresManualResume, true);
+        assert.equal(isOwnerManualPause(reclaimed.autoCollection), false);
+        assert.notEqual(reclaimed.autoCollection.status, 'completed');
+        assert.equal(Number(reclaimed.autoCollection.rawRecordsCaptured || 0), 90);
+        assert.equal(Number(reclaimed.session.googlePageIndex || 0), 9);
+        const resumed = await resumeAutoCollection({ companyId, user, sessionId });
+        assert.equal(resumed.autoCollection.status, 'running');
+        assert.equal(String(resumed.session.status || ''), 'awaiting_user');
+        assert.equal(Number(resumed.session.googlePageIndex || 0), 9);
+        await stopAutoCollection({ companyId, user, sessionId });
+    });
+
+    it('owner stop stays stopped after the Discovery Agent reconnects', async () => {
+        await AssistedCaptureSession.updateOne({ _id: sessionId }, {
+            $set: {
+                status: 'awaiting_user',
+                'autoCollection.status': 'idle',
+                'autoCollection.ownerStoppedAt': null,
+                'autoCollection.stopRequested': false,
+                'autoCollection.summary.stopReason': '',
+            },
+            $unset: { failedAt: 1, cancelledAt: 1, completedAt: 1 },
+        });
+        const started = await startAutoCollection({
+            companyId, user, sessionId,
+            body: { collectionMode: 'unlimited', delayMinSec: 5, delayMaxSec: 5, autoEnrichAfter: false },
+        });
+        assert.equal(started.autoCollection.status, 'running');
+        const stopped = await stopAutoCollection({ companyId, user, sessionId });
+        assert.equal(String(stopped.autoCollection.summary?.stopReason || ''), 'owner_stop');
+        await DiscoveryAgentToken.updateMany({ companyId }, { $set: { lastUsedAt: new Date() } });
+        const ticked = await tickAutoCollection({ companyId, user, sessionId });
+        assert.equal(ticked.stopped, true);
+        assert.notEqual(ticked.autoCollection.status, 'running');
+        assert.equal(String(ticked.autoCollection.summary?.stopReason || ''), 'owner_stop');
     });
 });

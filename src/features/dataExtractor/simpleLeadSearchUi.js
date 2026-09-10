@@ -82,15 +82,52 @@ const SAFE_FAIL_REASON = Object.freeze({
 });
 
 export const AGENT_OFFLINE_WAIT_MESSAGE = 'Discovery Agent temporarily offline — extraction will resume automatically when the agent reconnects.';
+export const DISCOVERY_AGENT_OFFLINE = 'DISCOVERY_AGENT_OFFLINE';
+export const OWNER_PAUSE = 'OWNER_PAUSE';
+export const AGENT_SLEEP_PAUSE_MESSAGE =
+    'Discovery Agent is offline. Your progress is saved. When the computer/agent is available again, click Resume Campaign to continue from the saved position.';
+
+export function isLongAgentOfflinePause(autoCollection = {}) {
+    const ac = autoCollection || {};
+    return String(ac.pauseReason || '') === DISCOVERY_AGENT_OFFLINE
+        || String(ac.lastErrorCode || '') === DISCOVERY_AGENT_OFFLINE
+        || String(ac.discoveryDisplayStatus || '') === 'paused_agent_offline';
+}
+
+export function isOwnerManualPause(autoCollection = {}) {
+    const reason = String(autoCollection?.pauseReason || '');
+    return reason === OWNER_PAUSE || reason === 'owner_pause';
+}
 
 /** Temporary Discovery Agent disconnect — waiting, not a terminal pause/failure. */
 export function isWaitingForDiscoveryAgent(autoCollection = {}) {
     const ac = autoCollection || {};
+    if (isLongAgentOfflinePause(ac)) return false;
     const waitingFlag = String(ac.pauseReason || '') === 'agent_offline'
         || String(ac.discoveryStatus || '') === 'waiting_for_agent';
     if (!waitingFlag) return false;
     const st = String(ac.status || '');
-    return st === 'running' || st === 'paused_owner';
+    return st === 'running' || st === 'paused_owner' || st === 'paused';
+}
+
+export function campaignHasUnfinishedDiscovery(autoCollection = {}, campaignProgress = null) {
+    const pending = Number(autoCollection?.pendingQueries);
+    if (Number.isFinite(pending) && pending > 0) return true;
+    const qi = Number(autoCollection?.queryIndex || autoCollection?.lastQueryIndex || campaignProgress?.queryIndex || 1);
+    const qt = Number(autoCollection?.queryTotal || autoCollection?.totalApprovedQueries || campaignProgress?.queryTotal || 0);
+    const completed = Number(autoCollection?.queriesCompleted || 0);
+    if (qt > 0 && qi < qt) return true;
+    if (qt > 0 && completed < qt) return true;
+    return false;
+}
+
+export function isAuthoritativeCollectionComplete(autoCollection = {}, session = {}, campaignProgress = null) {
+    if (isOwnerStoppedSearch(session, autoCollection)) return false;
+    if (isLongAgentOfflinePause(autoCollection) || isWaitingForDiscoveryAgent(autoCollection)) return false;
+    if (campaignHasUnfinishedDiscovery(autoCollection, campaignProgress)) return false;
+    const reason = String(autoCollection?.summary?.stopReason || '');
+    return ['all_queries_exhausted', 'google_no_more_pages', 'capture_target_reached', 'collection_complete'].includes(reason)
+        && String(autoCollection?.status || '') === 'completed';
 }
 
 /**
@@ -126,7 +163,7 @@ export function searchStoppedSuccessMessage() {
 }
 
 export function lastVisibleRunError({ autoProcessing, autoCollection, session, status } = {}) {
-    if (isWaitingForDiscoveryAgent(autoCollection)) return '';
+    if (isWaitingForDiscoveryAgent(autoCollection) || isLongAgentOfflinePause(autoCollection)) return '';
     if (
         isOwnerStoppedSearch(session, autoCollection)
         || String(autoProcessing?.lastErrorCode || '') === 'owner_stop'
@@ -222,7 +259,9 @@ export function pendingQueryCount({ queryIndex = 1, queryTotal = 0 } = {}) {
 export function formatProviderState(autoCollection = {}, session = {}) {
     const explicit = String(autoCollection?.providerState || '').trim();
     if (explicit) return explicit;
-    if (isWaitingForDiscoveryAgent(autoCollection)) return 'Provider temporarily unavailable';
+    if (isLongAgentOfflinePause(autoCollection) || isWaitingForDiscoveryAgent(autoCollection)) {
+        return 'Provider temporarily unavailable';
+    }
     if (session?.status === 'manual_action_required' || autoCollection?.status === 'paused_manual') {
         return 'Human Verification';
     }
@@ -235,6 +274,9 @@ export function formatProviderState(autoCollection = {}, session = {}) {
 }
 
 export function formatDiscoveryOwnerStatus(autoCollection = {}, session = {}) {
+    if (isLongAgentOfflinePause(autoCollection)) {
+        return 'paused_agent_offline';
+    }
     if (isWaitingForDiscoveryAgent(autoCollection)) {
         return 'waiting_for_agent';
     }

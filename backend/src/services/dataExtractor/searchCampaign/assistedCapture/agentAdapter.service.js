@@ -32,6 +32,24 @@ export async function validateAgentSessionToken({ companyId, session, tokenHeade
     const nowTs = Date.now();
     if (session.sessionExpiresAt && new Date(session.sessionExpiresAt).getTime() < nowTs) {
         session.status = 'expired';
+        const ac = session.autoCollection || {};
+        const queryTotal = Number(ac.totalApprovedQueries || ac.maxQueries || 0);
+        const queryIndex = Number(ac.lastQueryIndex || ac.resumeQueryIndex || 1);
+        const unfinished = queryTotal > 0 && queryIndex < queryTotal;
+        const ownerStopped = Boolean(ac.ownerStoppedAt || ac.stopRequested);
+        if (!ownerStopped && (unfinished || ac.status === 'running')) {
+            session.autoCollection = session.autoCollection || {};
+            session.autoCollection.status = 'paused';
+            session.autoCollection.enabled = true;
+            session.autoCollection.discoveryStatus = 'paused';
+            session.autoCollection.pauseReason = 'DISCOVERY_AGENT_OFFLINE';
+            session.autoCollection.requiresManualResume = true;
+            session.autoCollection.lastErrorCode = 'DISCOVERY_AGENT_OFFLINE';
+            session.autoCollection.providerState = 'Provider temporarily unavailable';
+            session.autoCollection.lastErrorMessage = 'Discovery Agent is offline. Your progress is saved. When the computer/agent is available again, click Resume Campaign to continue from the saved position.';
+            session.autoCollection.nextActionAt = null;
+            session.autoCollection.summary = { ...(session.autoCollection.summary || {}), stopReason: '' };
+        }
         await session.save().catch(() => null);
         throw new ApiError(401, 'Assisted session expired');
     }

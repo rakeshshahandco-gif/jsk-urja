@@ -50,7 +50,20 @@ async function tickOnce() {
                                 { 'autoCollection.ownerStoppedAt': { $exists: false } },
                             ],
                         },
-                        { status: { $nin: ['cancelled', 'completed', 'expired'] } },
+                        { status: { $nin: ['cancelled'] } },
+                    ],
+                },
+                {
+                    $and: [
+                        { status: { $in: ['completed', 'expired', 'failed'] } },
+                        { 'autoCollection.stopRequested': { $ne: true } },
+                        {
+                            $or: [
+                                { 'autoCollection.ownerStoppedAt': null },
+                                { 'autoCollection.ownerStoppedAt': { $exists: false } },
+                            ],
+                        },
+                        { 'autoCollection.status': { $in: ['running', 'completed', 'failed'] } },
                     ],
                 },
                 {
@@ -64,7 +77,7 @@ async function tickOnce() {
                 },
             ],
         })
-            .select('_id companyId createdBy autoCollection.status autoCollection.pauseReason autoCollection.stopRequested autoCollection.ownerStoppedAt autoProcessing.status autoProcessing.enabled autoProcessing.ownerWorkflowEnabled')
+            .select('_id companyId createdBy status autoCollection.status autoCollection.pauseReason autoCollection.stopRequested autoCollection.ownerStoppedAt autoProcessing.status autoProcessing.enabled autoProcessing.ownerWorkflowEnabled')
             .limit(40)
             .lean();
 
@@ -88,7 +101,9 @@ async function tickOnce() {
                     const waitingAgent = s.autoCollection?.status === 'running'
                         || (s.autoCollection?.status === 'paused_owner'
                             && s.autoCollection?.pauseReason === 'agent_offline');
-                    if (waitingAgent && !ownerStopped) {
+                    const needsSleepReclaim = ['completed', 'expired', 'failed'].includes(s.status)
+                        && s.autoCollection?.pauseReason !== 'DISCOVERY_AGENT_OFFLINE';
+                    if (!ownerStopped && (waitingAgent || needsSleepReclaim)) {
                         await autoCol.tickAutoCollection({ companyId, user, sessionId });
                     }
                 } catch (e) {
