@@ -353,3 +353,135 @@ export function snapshotAfterBrowserRequestTimeout(snapshot = {}) {
         campaignEnded: false,
     };
 }
+
+export const RUN_LOAD = Object.freeze({
+    IDLE: 'idle',
+    LOADING: 'loading',
+    RETRYING: 'retrying',
+    READY: 'ready',
+    NOT_FOUND: 'not_found',
+});
+
+export const SESSION_LOAD_RETRY_MS = Object.freeze([2000, 5000, 10000, 15000, 30000]);
+
+export const RUN_LOAD_MESSAGES = Object.freeze({
+    LOADING: 'Loading existing campaign…',
+    RETRYING: 'Backend temporarily unavailable. Retrying this run automatically…',
+    DEGRADED: 'Connection temporarily unavailable. Retrying…',
+    RESTORED: 'Connection restored.',
+});
+
+export function nextSessionLoadRetryMs(attempt = 0) {
+    const i = Math.max(0, Number(attempt) || 0);
+    const last = SESSION_LOAD_RETRY_MS.length - 1;
+    return SESSION_LOAD_RETRY_MS[Math.min(i, last)];
+}
+
+export function isRetryableSessionLoadError(err) {
+    const status = Number(err?.response?.status || err?.status || 0);
+    if ([429, 500, 502, 503, 504].includes(status)) return true;
+    const code = String(err?.code || err?.cause?.code || '');
+    if (['ECONNABORTED', 'ERR_NETWORK', 'ENOTFOUND', 'ECONNREFUSED', 'ETIMEDOUT', 'ECONNRESET'].includes(code)) {
+        return true;
+    }
+    if (!err?.response) {
+        const msg = String(err?.message || '');
+        if (/timeout|network|failed to fetch|load failed|network error/i.test(msg)) return true;
+        if (err?.request) return true;
+    }
+    return false;
+}
+
+export function isConfirmedSessionAbsent(err) {
+    const status = Number(err?.response?.status || err?.status || 0);
+    if (status >= 500 || isRetryableSessionLoadError(err)) return false;
+    if (status === 404) return true;
+    const msg = String(err?.response?.data?.message || '');
+    return /assisted capture session not found|campaign not found/i.test(msg);
+}
+
+export function classifySessionLoadError(err) {
+    if (isConfirmedSessionAbsent(err)) return 'absent';
+    if (isRetryableSessionLoadError(err)) return 'retryable';
+    return 'retryable';
+}
+
+export function shouldHideStartExtraction({ isRunRoute = false, runLoadStatus = RUN_LOAD.IDLE, hasResult = false } = {}) {
+    if (!isRunRoute) return false;
+    if (hasResult) return false;
+    if (runLoadStatus === RUN_LOAD.NOT_FOUND) return false;
+    return true;
+}
+
+export function shouldAllowStartExtraction(opts = {}) {
+    return !shouldHideStartExtraction(opts);
+}
+
+export function reduceRunSessionLoad(state = {}, event = {}) {
+    const prev = {
+        status: RUN_LOAD.IDLE,
+        attempt: 0,
+        hasResult: false,
+        connectionDegraded: false,
+        warningShown: false,
+        showRestoredToast: false,
+        delayMs: 0,
+        sessionId: '',
+        campaignId: '',
+        uniqueCount: 0,
+        queryIndex: 0,
+        googlePage: 0,
+        ...state,
+    };
+    const type = String(event.type || '');
+    if (type === 'ROUTE') {
+        return {
+            ...prev,
+            status: event.sessionId ? RUN_LOAD.LOADING : RUN_LOAD.IDLE,
+            attempt: 0,
+            sessionId: String(event.sessionId || ''),
+            showRestoredToast: false,
+            delayMs: 0,
+        };
+    }
+    if (type === 'SUCCESS') {
+        const showRestoredToast = Boolean(prev.connectionDegraded);
+        return {
+            ...prev,
+            status: RUN_LOAD.READY,
+            attempt: 0,
+            hasResult: true,
+            connectionDegraded: false,
+            warningShown: false,
+            showRestoredToast,
+            delayMs: 0,
+            sessionId: String(event.sessionId || prev.sessionId || ''),
+            campaignId: String(event.campaignId || prev.campaignId || ''),
+            uniqueCount: Number(event.uniqueCount ?? prev.uniqueCount ?? 0),
+            queryIndex: Number(event.queryIndex ?? prev.queryIndex ?? 0),
+            googlePage: Number(event.googlePage ?? prev.googlePage ?? 0),
+        };
+    }
+    if (type === 'ERROR') {
+        if (isConfirmedSessionAbsent(event.error) && !prev.hasResult) {
+            return {
+                ...prev,
+                status: RUN_LOAD.NOT_FOUND,
+                delayMs: 0,
+                connectionDegraded: false,
+                warningShown: false,
+                showRestoredToast: false,
+            };
+        }
+        return {
+            ...prev,
+            status: prev.hasResult ? RUN_LOAD.READY : RUN_LOAD.RETRYING,
+            connectionDegraded: true,
+            warningShown: true,
+            showRestoredToast: false,
+            delayMs: nextSessionLoadRetryMs(prev.attempt),
+            attempt: prev.attempt + 1,
+        };
+    }
+    return prev;
+}

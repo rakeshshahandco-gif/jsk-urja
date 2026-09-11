@@ -39,6 +39,12 @@ import {
     alreadyStoppedUserMessage,
     allProcessingAlreadyStoppedMessage,
     searchStoppedSuccessMessage,
+    RUN_LOAD,
+    RUN_LOAD_MESSAGES,
+    nextSessionLoadRetryMs,
+    isRetryableSessionLoadError,
+    isConfirmedSessionAbsent,
+    shouldHideStartExtraction,
 } from './simpleLeadSearchUi.js';
 import SimpleLeadSearchCapturedDataPanel from './SimpleLeadSearchCapturedDataPanel.jsx';
 import SimpleLeadSearchLiveActivityPanel from './SimpleLeadSearchLiveActivityPanel.jsx';
@@ -496,6 +502,14 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
     const lastErrorToastRef = useRef({ key: '', at: 0 });
     const boundRunIdRef = useRef(resumeSessionId || '');
     const [campaignActive, setCampaignActive] = useState(true);
+    const [runLoadStatus, setRunLoadStatus] = useState(
+        resumeSessionId ? RUN_LOAD.LOADING : RUN_LOAD.IDLE,
+    );
+    const [connectionDegraded, setConnectionDegraded] = useState(false);
+    const resultRef = useRef(null);
+    const connectionDegradedRef = useRef(false);
+    const restoredToastRef = useRef(false);
+    const lastSessionLoadKindRef = useRef('');
 
     const toastErrorOnce = useCallback((key, message) => {
         const msg = String(message || '').trim() || 'Request failed';
@@ -643,22 +657,42 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
         }
     }, []);
 
-    const refreshSession = useCallback(async (sessionId) => {
-        if (!sessionId || pollBusyRef.current) return null;
+    const refreshSession = useCallback(async (sessionId, opts = {}) => {
+        if (!sessionId || (pollBusyRef.current && !opts.ignoreBusy)) return null;
         pollBusyRef.current = true;
         try {
             const data = await dataExtractorApi.simpleLeadSearchSessionStatus(sessionId);
+            lastSessionLoadKindRef.current = 'ok';
             applyStatusPayload(data);
+            if (connectionDegradedRef.current && !restoredToastRef.current) {
+                restoredToastRef.current = true;
+                toast.success(RUN_LOAD_MESSAGES.RESTORED);
+            }
+            connectionDegradedRef.current = false;
+            setConnectionDegraded(false);
+            if (resumeSessionId) setRunLoadStatus(RUN_LOAD.READY);
             return data;
         } catch (err) {
-            if (err?.response?.status === 404 || /ended|inactive|completed|expired|cancelled|failed/i.test(String(err?.response?.data?.message || ''))) {
-                setSession((prev) => (prev ? { ...prev, status: prev.status && INACTIVE.has(prev.status) ? prev.status : 'expired' } : prev));
+            if (isConfirmedSessionAbsent(err)) {
+                lastSessionLoadKindRef.current = 'absent';
+                if (!resultRef.current) {
+                    setRunLoadStatus(RUN_LOAD.NOT_FOUND);
+                    setSession((prev) => (prev ? {
+                        ...prev,
+                        status: prev.status && INACTIVE.has(prev.status) ? prev.status : 'expired',
+                    } : prev));
+                }
+            } else {
+                lastSessionLoadKindRef.current = isRetryableSessionLoadError(err) ? 'retryable' : 'retryable';
+                connectionDegradedRef.current = true;
+                setConnectionDegraded(true);
+                if (resumeSessionId && !resultRef.current) setRunLoadStatus(RUN_LOAD.RETRYING);
             }
             return null;
         } finally {
             pollBusyRef.current = false;
         }
-    }, [applyStatusPayload]);
+    }, [applyStatusPayload, resumeSessionId]);
 
     const refreshResults = useCallback(async (sessionId) => {
         if (!sessionId) return [];
@@ -690,23 +724,48 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
 
     // Resume persistent run from dedicated /runs/:sessionId tab (or initialSessionId prop)
     useEffect(() => {
-        if (!resumeSessionId) return undefined;
+        if (!resumeSessionId) {
+            setRunLoadStatus(RUN_LOAD.IDLE);
+            return undefined;
+        }
         let cancelled = false;
-        (async () => {
-            const data = await refreshSession(resumeSessionId);
-            if (cancelled || !data) return;
-            setResult((prev) => ({
-                ...(prev || {}),
-                session: data.session || { _id: resumeSessionId },
-                campaign: data.campaign || prev?.campaign,
-            }));
-            setSession(data.session || { _id: resumeSessionId });
-            if (ownerFullAuto) autoBootPendingRef.current = true;
-            const liveSid = data.autoCollectionSessionId || data.session?._id || resumeSessionId;
-            bindRunId(liveSid);
-            await refreshResults(liveSid);
-        })();
-        return () => { cancelled = true; };
+        let timer = 0;
+        let attempt = 0;
+        if (!resultRef.current) setRunLoadStatus(RUN_LOAD.LOADING);
+
+        const load = async () => {
+            if (cancelled) return;
+            const data = await refreshSession(resumeSessionId, { ignoreBusy: true });
+            if (cancelled) return;
+            if (data) {
+                const nextResult = {
+                    ...(resultRef.current || {}),
+                    session: data.session || { _id: resumeSessionId },
+                    campaign: data.campaign || resultRef.current?.campaign,
+                };
+                resultRef.current = nextResult;
+                setResult((prev) => ({
+                    ...(prev || {}),
+                    session: data.session || { _id: resumeSessionId },
+                    campaign: data.campaign || prev?.campaign,
+                }));
+                setSession(data.session || { _id: resumeSessionId });
+                if (ownerFullAuto) autoBootPendingRef.current = true;
+                const liveSid = data.autoCollectionSessionId || data.session?._id || resumeSessionId;
+                bindRunId(liveSid);
+                await refreshResults(liveSid);
+                return;
+            }
+            if (lastSessionLoadKindRef.current === 'absent') return;
+            const delay = nextSessionLoadRetryMs(attempt);
+            attempt += 1;
+            timer = window.setTimeout(load, delay);
+        };
+        load();
+        return () => {
+            cancelled = true;
+            if (timer) window.clearTimeout(timer);
+        };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [resumeSessionId]);
 
@@ -906,9 +965,18 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
         return () => clearInterval(t);
     }, [session?._id, result?.session?._id, genuinenessJob?.status, refreshGenuineness]);
 
+    resultRef.current = result;
+    const isRunRoute = Boolean(runMode && resumeSessionId);
+    const hideStartExtraction = shouldHideStartExtraction({
+        isRunRoute,
+        runLoadStatus,
+        hasResult: Boolean(result),
+    });
+
     const onSearch = async (e) => {
         e.preventDefault();
         if (busy || startInFlightRef.current) return;
+        if (hideStartExtraction) return;
         if (!form.product.trim()) {
             toast.error('Enter Product / Industry');
             return;
@@ -1032,7 +1100,9 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
     };
 
     const onStartNew = () => {
+        if (hideStartExtraction) return;
         setResult(null);
+        resultRef.current = null;
         setSession(null);
         setRows([]);
         setCaptureStats(null);
@@ -2485,6 +2555,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
     const secsAgo = Math.max(0, Math.round((Date.now() - (lastUpdatedRef.current || Date.now())) / 1000));
     const ALL_BUSINESS_TYPES = ['Manufacturer', 'OEM / ODM', 'Brand Owner', 'Provider', 'Supplier', 'Dealer', 'Distributor', 'Importer', 'Exporter', 'Wholesaler', 'Retailer', 'System Integrator', 'Service Provider', 'Contractor', 'Consultant', 'Marketplace Seller', 'Other'];
     const formLocked = !!result && !inactive;
+    const hideStartForm = hideStartExtraction && !result;
     const formManualLimit = isManualCollectionLimit(autoCollectionOptions);
     const runningManualLimit = String(autoCollection?.collectionMode || '').toLowerCase() === 'fixed_target'
         && Number(autoCollection?.requestedCaptureTarget || 0) > 0;
@@ -2558,6 +2629,26 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                 <span className={styles.agentDot} style={{ background: connected.color }} aria-hidden />
                 {connected.text}
             </div>
+            {isRunRoute && hideStartForm ? (
+                <div className={styles.card} role="status" style={{ marginBottom: 16 }}>
+                    <p style={{ margin: 0, fontWeight: 700, color: '#0f172a' }}>
+                        {runLoadStatus === RUN_LOAD.RETRYING
+                            ? RUN_LOAD_MESSAGES.RETRYING
+                            : RUN_LOAD_MESSAGES.LOADING}
+                    </p>
+                    <p style={{ margin: '8px 0 0', fontSize: 13, color: '#475569' }}>
+                        Run ID: <code>{resumeSessionId}</code>
+                    </p>
+                </div>
+            ) : null}
+            {isRunRoute && result && connectionDegraded ? (
+                <div className={styles.manualBanner} role="status" style={{ marginBottom: 12 }}>
+                    <RefreshCw size={18} aria-hidden />
+                    <div>
+                        <h3>{RUN_LOAD_MESSAGES.DEGRADED}</h3>
+                    </div>
+                </div>
+            ) : null}
             {isChinaCountryInput(form.country) ? (
                 <div style={{ margin: '8px 0 12px', padding: '10px 12px', border: '1px solid #c7d2fe', background: '#eef2ff', borderRadius: 8, fontSize: 13 }}>
                     <div style={{ fontWeight: 700, marginBottom: 6 }}>China Native Supplier Discovery</div>
@@ -2597,6 +2688,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                 </div>
             )}
 
+            {!hideStartForm ? (
             <form className={styles.card} onSubmit={onSearch}>
                 {!isChinaCountryInput(form.country) && (form.product.trim() || form.city.trim()) ? (
                     <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 8, background: '#f8fafc', border: '1px solid #e2e8f0', fontSize: 15, fontWeight: 700, color: '#0f172a' }}>
@@ -2856,6 +2948,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                         ) : null}
                     </>
                 ) : null}
+                {!hideStartExtraction ? (
                 <button type="submit" className={styles.primaryBtn} disabled={!!busy || formLocked}>
                     <span className={styles.primaryBtnRow}>
                         <Rocket size={18} aria-hidden />
@@ -2863,12 +2956,14 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                     </span>
                     <span className={styles.primaryHint}>Auto Collection and all checkpoints will run automatically.</span>
                 </button>
+                ) : null}
                 <p className={styles.helperText}>
                     {isChinaCountryInput(form.country)
                         ? 'CRM will automatically collect, enrich, qualify and verify. For China, handle 1688 / Baidu / Sogou / 360 / Google login or CAPTCHA only when requested.'
                         : 'CRM will automatically collect, enrich, qualify and verify the data. You only need to handle Google CAPTCHA or consent when requested.'}
                 </p>
             </form>
+            ) : null}
 
             <div className={styles.strip} aria-label="Automation defaults">
                 <div className={styles.stripItem}>
