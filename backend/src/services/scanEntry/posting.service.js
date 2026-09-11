@@ -22,7 +22,7 @@ import mongoose from 'mongoose';
 
 async function invokeController(handler, body, user) {
     return new Promise((resolve, reject) => {
-        const req = { body, user: { _id: user._id || user.id, id: user.id || user._id }, query: {} };
+        const req = { body, user: { _id: user._id || user.id, id: user.id || user._id, name: user.name || '' }, query: {}, headers: {}, originalUrl: '/api/v1/scan-entry/drafts/post' };
         const res = {
             statusCode: 200,
             status(code) { this.statusCode = code; return this; },
@@ -162,6 +162,10 @@ function buildSalesPayload(draft, customer) {
     return {
         customerId: String(draft.mappedCustomerId), customerName: customer.customerName || ex.customerName || '', invoiceDate: ex.invoiceDate || new Date(),
         poNumber: ex.poNumber || '', gstType: ex.gstType || 'CGST / SGST', items, status: 'Confirmed', financialYear: draft.financialYear, remarks: draft.userRemarks || 'Posted from Scan Entry',
+        creationSource: 'SCAN_ENTRY_POST', creationRoute: '/api/v1/scan-entry/drafts/post',
+        sourceDocumentType: 'ScanEntryDraft', sourceDocumentId: String(draft._id || ''),
+        sourceDocumentNumber: String(draft._id || ''),
+        idempotencyKey: draft._id ? `scan-entry:${String(draft._id)}` : undefined,
     };
 }
 

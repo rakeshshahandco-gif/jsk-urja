@@ -23,6 +23,7 @@ import InvoiceBarcodeBlock from '@/components/invoice/InvoiceBarcodeBlock';
 import toast from 'react-hot-toast';
 import { BrandedLoader } from '@/components/ui/BrandedLoading';
 import { getBillAdjustments } from '@/services/billWiseAdjustmentApi';
+import { formatCreationAudit } from '@/features/sales/salesInvoiceCreationUi';
 
 const PAY_COLORS = {
     Unpaid: { color: '#d97706', bg: '#fffbeb', border: '#fcd34d' },
@@ -513,6 +514,25 @@ export default function SalesInvoiceDetailPage() {
                         <InvoiceBarcodeBlock invoiceId={id} variant="screen" />
                     </div>
                     )}
+                    {(() => {
+                        const audit = formatCreationAudit(inv);
+                        const createdAtLabel = audit.createdAt
+                            ? new Date(audit.createdAt).toLocaleString('en-GB', { timeZone: 'Asia/Kolkata', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+                            : '—';
+                        return (
+                            <div className="no-print" style={{ marginTop: 16, padding: 14, background: '#f8fafc', borderRadius: 10, border: '1px solid #cbd5e1' }}>
+                                <div style={{ fontWeight: 800, fontSize: 12, color: '#334155', marginBottom: 8, textTransform: 'uppercase' }}>Creation audit</div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 8, fontSize: 13, color: '#334155' }}>
+                                    <div><span style={{ color: '#64748b' }}>Created by: </span><strong>{audit.createdBy || '—'}</strong></div>
+                                    <div><span style={{ color: '#64748b' }}>Created at: </span><strong>{createdAtLabel}</strong></div>
+                                    <div><span style={{ color: '#64748b' }}>Source: </span><strong>{audit.source || '—'}</strong></div>
+                                    <div><span style={{ color: '#64748b' }}>Sales Order: </span><strong>{audit.soNumber || '—'}</strong></div>
+                                    <div><span style={{ color: '#64748b' }}>Request ID: </span><strong style={{ fontWeight: 600, wordBreak: 'break-all' }}>{audit.requestId || '—'}</strong></div>
+                                    <div><span style={{ color: '#64748b' }}>Idempotency Key: </span><strong style={{ fontWeight: 600, wordBreak: 'break-all' }}>{audit.idempotencyKey || '—'}</strong></div>
+                                </div>
+                            </div>
+                        );
+                    })()}
                     {billWiseRows.length > 0 && (
                         <div style={{ marginTop: 16, padding: 14, background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0' }}>
                             <div style={{ fontWeight: 800, fontSize: 12, color: '#475569', marginBottom: 8, textTransform: 'uppercase' }}>Settlement breakup</div>

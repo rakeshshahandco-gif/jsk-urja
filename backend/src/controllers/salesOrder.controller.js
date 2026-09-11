@@ -429,6 +429,11 @@ export const createTaxInvoiceFromSalesOrder = asyncHandler(async (req, res, next
         items,
         status: 'Confirmed',
         idempotencyKey: idempotencyKey || req.headers['idempotency-key'] || null,
+        creationSource: 'API_SO_CONVERSION',
+        creationRoute: req.originalUrl || '/api/v1/sales-orders/:id/create-tax-invoice',
+        sourceDocumentType: 'SalesOrder',
+        sourceDocumentId: String(soPrepared._id),
+        sourceDocumentNumber: soPrepared.soNumber || '',
     };
 
     const { createSalesInvoice } = await import('./salesInvoice.controller.js');

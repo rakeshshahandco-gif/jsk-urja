@@ -174,7 +174,12 @@ export const SalesInvoiceCreateScreen = ({ route, navigation }) => {
         roundedTotal: rounded,
       };
 
-      await salesApi.createInvoice(payload);
+      await salesApi.createInvoice({
+        ...payload,
+        creationSource: 'MOBILE_NEW_INVOICE',
+        creationRoute: 'mobile/SalesInvoiceCreateScreen',
+        idempotencyKey: `mobile-si-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      });
       Alert.alert('Success', 'Invoice generated successfully!', [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);

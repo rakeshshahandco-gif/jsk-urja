@@ -180,6 +180,16 @@ const salesInvoiceSchema = new mongoose.Schema({
 
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    createdByName: { type: String, default: '', trim: true },
+    creationSource: { type: String, default: '', trim: true, index: true },
+    creationRoute: { type: String, default: '', trim: true },
+    sourceDocumentType: { type: String, default: '', trim: true },
+    sourceDocumentId: { type: mongoose.Schema.Types.ObjectId, default: null },
+    sourceDocumentNumber: { type: String, default: '', trim: true },
+    idempotencyKey: { type: String, default: null, trim: true },
+    requestId: { type: String, default: '', trim: true },
+    createdFromUserAgent: { type: String, default: '', trim: true },
+    createdFromIp: { type: String, default: '', trim: true },
     
     financialYear: { type: String, trim: true }, // e.g. "2025-2026"
 
@@ -256,6 +266,9 @@ salesInvoiceSchema.index({ paymentStatus: 1 });
 salesInvoiceSchema.index({ soId: 1 });
 salesInvoiceSchema.index({ isDeleted: 1 });
 salesInvoiceSchema.index({ financialYear: 1 });
+salesInvoiceSchema.index({ idempotencyKey: 1 }, { unique: true, sparse: true });
+salesInvoiceSchema.index({ requestId: 1 });
+salesInvoiceSchema.index({ createdBy: 1, createdAt: -1 });
 
 const SalesInvoice = mongoose.model('SalesInvoice', salesInvoiceSchema);
 export { SalesInvoice };

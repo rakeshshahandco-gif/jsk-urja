@@ -203,6 +203,7 @@ import CustomerPriceHistoryPage from '@/features/sales/customerPriceList/Custome
 import SalesInvoiceListPage from '@/features/sales/SalesInvoiceListPage';
 import SalesInvoiceFormPage from '@/features/sales/SalesInvoiceFormPage';
 import SalesInvoiceDetailPage from '@/features/sales/SalesInvoiceDetailPage';
+import SalesInvoiceCreationAuditPage from '@/features/sales/SalesInvoiceCreationAuditPage';
 import PublicInvoicePage from '@/features/sales/PublicInvoicePage';
 import ProductionSheetPage from '@/features/sales/ProductionSheetPage';
 import InvoiceSeriesPage from '@/features/sales/InvoiceSeriesPage';
@@ -826,6 +827,7 @@ const AppLayout = () => {
                         <Route path="/sales/customer-price-lists/:id" element={<ProtectedRoute requirePermission="sales"><CustomerPriceListDetailPage /></ProtectedRoute>} />
                         <Route path="/sales/invoices" element={<ProtectedRoute requirePermission="sales"><SalesInvoiceListPage /></ProtectedRoute>} />
                         <Route path="/sales/invoices/new" element={<ProtectedRoute requirePermission="sales"><SalesInvoiceFormPage /></ProtectedRoute>} />
+                        <Route path={PATHS.SALES.CREATION_AUDIT} element={<ProtectedRoute requireRole="admin"><SalesInvoiceCreationAuditPage /></ProtectedRoute>} />
                         <Route path="/sales/invoices/:id" element={<ProtectedRoute requirePermission="sales"><SalesInvoiceDetailPage /></ProtectedRoute>} />
                         <Route path={PATHS.SALES.ESTIMATES} element={<ProtectedRoute requirePermission="sales"><SalesInvoiceListPage listMode="estimate" /></ProtectedRoute>} />
                         <Route path={PATHS.SALES.NEW_ESTIMATE} element={<ProtectedRoute requirePermission="sales"><SalesInvoiceFormPage listMode="estimate" /></ProtectedRoute>} />

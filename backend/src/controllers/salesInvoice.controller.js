@@ -33,7 +33,10 @@ import {
     resolveSalesOrderId,
     getSalesOrderBillingSnapshot,
     evaluateInvoiceItemsAgainstRemaining,
+    shouldBlockInvoiceForRemainingQty,
 } from '../utils/salesOrderBilling.utils.js';
+import { buildSalesInvoiceCreationAuditFields } from '../utils/salesInvoiceCreationAudit.util.js';
+import { SI_DUPLICATE_ATTEMPT_AUDIT } from '../constants/salesInvoiceCreation.constants.js';
 import logger from '../utils/logger.js';
 import { isGstr1PeriodFiled } from '../services/gstr1InvoiceCorrection.service.js';
 import { Gstr3bAdjustment } from '../models/gstr3bAdjustment.model.js';
@@ -75,9 +78,27 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
     try {
         const body = req.body;
         const linkedSoId = resolveSalesOrderId(body);
-        const idemKey = body.idempotencyKey || req.headers['idempotency-key'] || null;
+        const creationAudit = buildSalesInvoiceCreationAuditFields({
+            req,
+            body,
+            linkedSoId,
+            soNumber: body.soNumber || '',
+        });
+        const idemKey = creationAudit.idempotencyKey;
 
         if (idemKey) {
+            const existingByKey = await SalesInvoice.findOne({
+                idempotencyKey: idemKey,
+                isDeleted: { $ne: true },
+            }).session(session).lean();
+            if (existingByKey && existingByKey.status !== 'Cancelled') {
+                await session.abortTransaction();
+                return res.status(httpStatus.OK).json({
+                    success: true,
+                    data: existingByKey,
+                    idempotentReplay: true,
+                });
+            }
             const prior = await AuditLog.findOne({
                 action: 'CREATE',
                 module: 'SalesInvoice',
@@ -100,8 +121,44 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
         if (linkedSoId) {
             const soPrepared = await prepareSalesOrderForInvoiceCreation(linkedSoId, session);
             const billingSnap = await getSalesOrderBillingSnapshot(soPrepared, session);
-            // Calculate remaining / over-invoice warnings — NEVER block save for excess qty.
             soOverInvoice = evaluateInvoiceItemsAgainstRemaining(soPrepared, body.items, billingSnap);
+            const qtyBlock = shouldBlockInvoiceForRemainingQty(soPrepared, body.items, billingSnap);
+            if (qtyBlock.blocked) {
+                await AuditLog.create({
+                    user: req.user?.id || req.user?._id,
+                    action: 'OTHER',
+                    module: 'SalesInvoice',
+                    resourceId: linkedSoId,
+                    description: SI_DUPLICATE_ATTEMPT_AUDIT,
+                    details: {
+                        code: SI_DUPLICATE_ATTEMPT_AUDIT,
+                        soId: linkedSoId,
+                        soNumber: soPrepared.soNumber || body.soNumber || null,
+                        requestedQty: qtyBlock.requestedQty,
+                        remainingQty: qtyBlock.remainingQty,
+                        blockCode: qtyBlock.code,
+                        idempotencyKey: idemKey || null,
+                        requestId: creationAudit.requestId,
+                        creationSource: creationAudit.creationSource,
+                    },
+                    ipAddress: req.ip,
+                    userAgent: req.headers?.['user-agent'],
+                });
+                const blockErr = new ApiError(httpStatus.CONFLICT, qtyBlock.message);
+                blockErr.code = qtyBlock.code;
+                blockErr.details = {
+                    code: qtyBlock.code,
+                    soId: linkedSoId,
+                    soNumber: soPrepared.soNumber || body.soNumber || null,
+                    requestedQty: qtyBlock.requestedQty,
+                    remainingQty: qtyBlock.remainingQty,
+                    warnings: qtyBlock.warnings,
+                };
+                throw blockErr;
+            }
+            if (!creationAudit.sourceDocumentNumber) {
+                creationAudit.sourceDocumentNumber = soPrepared.soNumber || '';
+            }
         }
 
         // Financial Year Tagging
@@ -152,6 +209,16 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
             sequenceNumber,
             financialYear: fy,
             createdBy: req.user.id,
+            createdByName: creationAudit.createdByName,
+            creationSource: creationAudit.creationSource,
+            creationRoute: creationAudit.creationRoute,
+            sourceDocumentType: creationAudit.sourceDocumentType,
+            sourceDocumentId: creationAudit.sourceDocumentId,
+            sourceDocumentNumber: creationAudit.sourceDocumentNumber,
+            idempotencyKey: idemKey || undefined,
+            requestId: creationAudit.requestId,
+            createdFromUserAgent: creationAudit.createdFromUserAgent,
+            createdFromIp: creationAudit.createdFromIp,
             status: body.status || 'Confirmed',
             paymentStatus: 'Unpaid',
             numberLocked: body.status === 'Confirmed', // Auto-lock if confirmed
@@ -503,9 +570,13 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
                 invoiceNumber: invoice.invoiceNumber,
                 seriesId: invoice.seriesId || null,
                 idempotencyKey: idemKey || null,
+                requestId: invoice.requestId || creationAudit.requestId,
+                creationSource: invoice.creationSource || creationAudit.creationSource,
+                creationRoute: invoice.creationRoute || creationAudit.creationRoute,
+                createdByName: invoice.createdByName || creationAudit.createdByName,
             },
             ipAddress: req.ip,
-            userAgent: req.headers['user-agent'],
+            userAgent: req.headers?.['user-agent'],
         }], { session });
 
         await session.commitTransaction();
@@ -520,6 +591,22 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
 
     } catch (error) {
         await session.abortTransaction();
+        if (error?.code === 11000 && (req.body?.idempotencyKey || req.headers?.['idempotency-key'])) {
+            const replayKey = String(req.body?.idempotencyKey || req.headers?.['idempotency-key'] || '').trim();
+            if (replayKey) {
+                const existingInv = await SalesInvoice.findOne({
+                    idempotencyKey: replayKey,
+                    isDeleted: { $ne: true },
+                }).lean();
+                if (existingInv && existingInv.status !== 'Cancelled') {
+                    return res.status(httpStatus.OK).json({
+                        success: true,
+                        data: existingInv,
+                        idempotentReplay: true,
+                    });
+                }
+            }
+        }
         logger.error(`[createSalesInvoice] aborted: ${error.message}`, { stack: error.stack });
         throw error;
     } finally {
@@ -623,6 +710,73 @@ export const getSalesInvoices = asyncHandler(async (req, res) => {
         SalesInvoice.countDocuments(filter),
     ]);
    res.json({ success: true, invoices, total });
+});
+
+export const getSalesInvoiceCreationAudit = asyncHandler(async (req, res) => {
+    const {
+        invoiceNumber,
+        user,
+        createdBy,
+        soNumber,
+        dateFrom,
+        dateTo,
+        creationSource,
+        limit = 50,
+        page = 1,
+    } = req.query;
+    const filter = { isDeleted: { $ne: true } };
+    if (invoiceNumber) {
+        const q = String(invoiceNumber).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        filter.$or = [
+            { invoiceNumber: new RegExp(q, 'i') },
+            { displayInvoiceNumber: new RegExp(q, 'i') },
+            { originalInvoiceNumber: new RegExp(q, 'i') },
+        ];
+    }
+    if (soNumber) {
+        filter.soNumber = new RegExp(String(soNumber).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    }
+    if (creationSource) filter.creationSource = String(creationSource).trim();
+    const userQ = String(user || createdBy || '').trim();
+    if (userQ) {
+        filter.createdByName = new RegExp(userQ.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    }
+    if (dateFrom || dateTo) {
+        filter.createdAt = {};
+        if (dateFrom) filter.createdAt.$gte = new Date(dateFrom);
+        if (dateTo) {
+            const end = new Date(dateTo);
+            if (!String(dateTo).includes('T')) end.setHours(23, 59, 59, 999);
+            filter.createdAt.$lte = end;
+        }
+    }
+    const skip = (Number(page) - 1) * Number(limit);
+    const [rows, total] = await Promise.all([
+        SalesInvoice.find(filter)
+            .select('invoiceNumber displayInvoiceNumber createdBy createdByName createdAt creationSource creationRoute sourceDocumentType sourceDocumentNumber soId soNumber requestId idempotencyKey grandTotal customerName')
+            .populate('createdBy', 'name username')
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(Math.min(200, Number(limit) || 50))
+            .lean(),
+        SalesInvoice.countDocuments(filter),
+    ]);
+    const data = rows.map((inv) => ({
+        _id: inv._id,
+        invoiceNumber: inv.invoiceNumber,
+        createdBy: inv.createdByName || inv.createdBy?.name || '',
+        createdById: inv.createdBy?._id || inv.createdBy || null,
+        createdAt: inv.createdAt,
+        source: inv.creationSource || '',
+        creationRoute: inv.creationRoute || '',
+        soNumber: inv.soNumber || inv.sourceDocumentNumber || '',
+        soId: inv.soId || null,
+        requestId: inv.requestId || '',
+        idempotencyKey: inv.idempotencyKey || '',
+        customerName: inv.customerName || '',
+        grandTotal: inv.grandTotal,
+    }));
+    res.json({ success: true, data, total });
 });
 
 export const getSalesInvoiceById = asyncHandler(async (req, res) => {

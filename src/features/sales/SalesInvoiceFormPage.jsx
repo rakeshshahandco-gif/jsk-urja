@@ -18,6 +18,13 @@ import GstinStatusWarningModal from '@/features/sales/components/GstinStatusWarn
 import { useAuth } from '@/hooks/useAuth';
 import { lookupCustomerPrice } from '@/features/sales/customerPriceList/lookupCustomerPrice';
 import CustomerPriceSuggestionPanel from '@/features/sales/customerPriceList/CustomerPriceSuggestionPanel';
+import {
+    formatInvoiceCreatedToast,
+    newIdempotencyKey,
+    newRequestId,
+    resolveWebCreationSource,
+} from '@/features/sales/salesInvoiceCreationUi';
+
 
 function customerIdStr(id) {
     if (!id) return '';
@@ -27,7 +34,7 @@ function customerIdStr(id) {
 
 function customerDisplayName(c) {
     if (!c) return '';
-    return String(c.company || c.customerName || c.name || '').trim();
+    return String(c.name || c.company || c.customerName || '').trim();
 }
 
 const inp = { padding: '7px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, width: '100%', boxSizing: 'border-box', outline: 'none', background: '#fff', color: '#374151' };
@@ -162,7 +169,7 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
     const [searchParams] = useSearchParams();
     const { isFeatureEnabled } = useFeatureSettings();
     const { selectedFY } = useFinancialYear();
-    const { hasPermission } = useAuth();
+    const { hasPermission, user } = useAuth();
     const scanEntryEnabled = isFeatureEnabled('accounting.enableAiSmartImport');
     const soId = searchParams.get('soId') || searchParams.get('sold');
     const [saving, setSaving] = useState(false);
@@ -176,6 +183,9 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
     const [previewInvoiceNo, setPreviewInvoiceNo] = useState('');
     /** Sales Order series to apply once Tax Invoice series list is ready */
     const soSeriesPrefRef = useRef({ id: '', name: '' });
+    const idempotencyKeyRef = useRef(newIdempotencyKey());
+    const createdInvoiceIdRef = useRef(null);
+    const submitLockRef = useRef(false);
 
     // Fetch accurate next invoice number from backend (self-healing sync)
     const fetchPreviewNo = async (seriesId) => {
@@ -674,16 +684,39 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
     };
 
     const handleSubmit = async () => {
-        if (!form.seriesId) return toast.error('⚠️ Please select an Invoice Series. The invoice number is generated from the selected series.');
+        if (submitLockRef.current || saving) return;
+        if (createdInvoiceIdRef.current) {
+            toast.error('This invoice was already created. Open the invoice instead of creating another.');
+            navigate(PATHS.SALES.INVOICE_DETAIL(createdInvoiceIdRef.current), { replace: true });
+            return;
+        }
+        submitLockRef.current = true;
+        setSaving(true);
+
+        if (!form.seriesId) {
+            submitLockRef.current = false;
+            setSaving(false);
+            return toast.error('⚠️ Please select an Invoice Series. The invoice number is generated from the selected series.');
+        }
         
         const selectedSeries = seriesList.find(s => s._id === form.seriesId);
         const isEstimate = selectedSeries?.isEstimate === true || selectedSeries?.documentType === 'Estimate';
         if (isEstimate && form.gstApplicable === true) {
+            submitLockRef.current = false;
+            setSaving(false);
             return toast.error('Estimate document is non-GST document and cannot be included in GSTR-1 or GSTR-3B. Please disable GST or use a Tax Invoice series.');
         }
 
-        if (!form.customerName) return toast.error('Customer name is required');
-        if (form.items.some(i => !i.itemName || !i.qty || !i.rate)) return toast.error('All items need name, qty, and rate');
+        if (!form.customerName) {
+            submitLockRef.current = false;
+            setSaving(false);
+            return toast.error('Customer name is required');
+        }
+        if (form.items.some(i => !i.itemName || !i.qty || !i.rate)) {
+            submitLockRef.current = false;
+            setSaving(false);
+            return toast.error('All items need name, qty, and rate');
+        }
 
         if (form.customerGstin && String(form.customerGstin).length >= 15) {
             const res = await resolveGstForForm({ forceRefresh: false });
@@ -693,16 +726,25 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
             if (res && (res.statusOnTransactionDate === 'Cancelled' || res.requiresUserConfirmation) && !overridden && !confirmedB2c) {
                 pendingSubmitRef.current = true;
                 setGstWarning({ ...res, invoiceDate: form.invoiceDate });
+                submitLockRef.current = false;
+                setSaving(false);
                 return;
             }
         }
 
-        setSaving(true);
         try {
+            const requestId = newRequestId();
             const payload = {
                 ...form,
                 gstApplicable: isEstimate ? false : gstApplicable,
                 gstVerificationSnapshot: gstSnapshot || undefined,
+                creationSource: resolveWebCreationSource({ soId: form.soId || soId }),
+                creationRoute: soId ? '/sales/invoices/new?soId' : '/sales/invoices/new',
+                sourceDocumentType: (form.soId || soId) ? 'SalesOrder' : '',
+                sourceDocumentId: form.soId || soId || null,
+                sourceDocumentNumber: form.soNumber || '',
+                idempotencyKey: idempotencyKeyRef.current,
+                requestId,
                 items: processedItems.map(i => {
                     const itemGstRate = gstApplicable ? (Number(i.gstRate) || 18) : 0;
                     return {
@@ -745,8 +787,12 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                 roundOff: Number((roundedTotal - grandTotal).toFixed(2)),
                 amountInWords: numberToWords(roundedTotal)
             };
-            const resBody = await createSalesInvoice(payload);
+            const resBody = await createSalesInvoice(payload, {
+                idempotencyKey: idempotencyKeyRef.current,
+                requestId,
+            });
             const inv = resBody?.data || resBody;
+            if (inv?._id) createdInvoiceIdRef.current = inv._id;
             if (resBody?.soOverInvoice?.overInvoiced) {
                 const msg =
                     resBody.warning ||
@@ -754,7 +800,8 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                     'Warning: Invoice quantity exceeds Sales Order remaining quantity.';
                 toast(msg, { icon: '⚠️', duration: 8000 });
             }
-            toast.success('Invoice created!');
+            const createdByName = inv?.createdByName || user?.name || user?.username || '';
+            toast.success(formatInvoiceCreatedToast(inv?.invoiceNumber || inv?.displayInvoiceNumber, createdByName), { duration: 6000 });
 
             // E-Way Bill reminder: prompt only for GST tax invoices above the threshold.
             const needsEwb = !isEstimateForm && form.gstApplicable === true && Number(roundedTotal) >= EWAY_BILL_THRESHOLD;
@@ -772,7 +819,7 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                         const draftRes = await createEwayBillDraft(inv._id);
                         const draft = draftRes?.data || draftRes;
                         if (draft && draft._id) {
-                            navigate(PATHS.EWAY_BILL.DRAFT(draft._id));
+                            navigate(PATHS.EWAY_BILL.DRAFT(draft._id), { replace: true });
                             return;
                         }
                     } catch (err) {
@@ -780,14 +827,20 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                     }
                 }
             }
-            navigate(PATHS.SALES.INVOICE_DETAIL(inv._id));
+            navigate(PATHS.SALES.INVOICE_DETAIL(inv._id), { replace: true });
         } catch (e) {
             const msg = e.code === 'ECONNABORTED'
                 ? 'Request timed out — the invoice may still have been created. Check the invoice list.'
                 : (e.response?.data?.message || 'Create failed');
-            toast.error(msg);
+            toast.error(msg, { duration: 8000 });
+            if (e.response?.status === 409) {
+                createdInvoiceIdRef.current = createdInvoiceIdRef.current || e.response?.data?.details?.existingInvoiceId || null;
+            }
         }
-        finally { setSaving(false); }
+        finally {
+            submitLockRef.current = false;
+            setSaving(false);
+        }
     };
 
     const onUploadSalesScan = async (e) => {
@@ -825,8 +878,10 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                             </label>
                         )}
                         <button onClick={() => { if (window.confirm('Discard changes?')) navigate(-1); }} style={{ padding: '8px 16px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 7, cursor: 'pointer', fontWeight: 600, color: '#374151', fontSize: 13 }}>Cancel</button>
-                        <button onClick={handleSubmit} disabled={saving} style={{ padding: '8px 20px', background: '#0d9488', color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
-                            {saving ? 'Creating...' : '✓ Create Invoice'}
+                        <button onClick={handleSubmit} disabled={saving} style={{ padding: '8px 20px', background: '#0d9488', color: '#fff', border: 'none', borderRadius: 7, cursor: saving ? 'wait' : 'pointer', fontWeight: 700, fontSize: 13 }}>
+                            {saving
+                                ? 'Creating invoice...'
+                                : (soId ? 'Create Tax Invoice' : '✓ Create Invoice')}
                         </button>
                     </div>
                 </div>

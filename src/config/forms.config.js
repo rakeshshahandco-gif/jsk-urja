@@ -51,6 +51,7 @@ export const ALL_FORMS = [
     // Sales
     { id: 'sales-order', title: 'Sales Order', path: PATHS.SALES.ORDERS, icon: 'sales', permission: 'sales.sales_orders.view', module: 'Sales' },
     { id: 'sales-invoice', title: 'Tax Invoice (GST)', path: PATHS.SALES.INVOICES, icon: 'sales', permission: 'sales.sales_invoices.view', module: 'Sales' },
+    { id: 'sales-invoice-creation-audit', title: 'Sales Invoice Creation Audit', path: PATHS.SALES.CREATION_AUDIT, icon: 'sales', permission: 'sales.sales_invoices.view', module: 'Sales' },
     { id: 'estimate', title: 'Estimate / Internal Sale', path: PATHS.SALES.ESTIMATES, icon: 'sales', permission: 'sales.sales_invoices.view', module: 'Sales' },
     { id: 'eway-bill', title: 'E-Way Bill Tracking', path: PATHS.EWAY_BILL.LIST, icon: 'sales', permission: 'sales.sales_invoices.view', module: 'Sales' },
     { id: 'e-invoice', title: 'E-Invoice / IRN Tracking', path: PATHS.E_INVOICE.LIST, icon: 'sales', permission: 'sales.sales_invoices.view', module: 'Sales' },

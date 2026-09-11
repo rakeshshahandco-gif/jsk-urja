@@ -14,6 +14,8 @@ router.use((req, res, next) => {
 // Standard Invoice Routes
 router.route('/').get(siCtrl.getSalesInvoices).post(siCtrl.createSalesInvoice);
 
+router.get('/creation-audit', authorize('admin', 'superadmin'), siCtrl.getSalesInvoiceCreationAudit);
+
 router.get('/incentive-report', siCtrl.getIncentiveReport);
 
 // QR / Barcode (must be before /:id)

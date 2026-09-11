@@ -2,6 +2,10 @@ import mongoose from 'mongoose';
 import httpStatus from 'http-status';
 import { SalesOrder } from '../models/salesOrder.model.js';
 import { SalesInvoice } from '../models/salesInvoice.model.js';
+import {
+    SO_FULLY_INVOICED_MESSAGE,
+    SO_QTY_EXCEEDS_REMAINING_MESSAGE,
+} from '../constants/salesInvoiceCreation.constants.js';
 import { ApiError } from './ApiError.js';
 
 const ORDER_TERMINAL_STATUSES = new Set(['Cancelled', 'Closed', 'Completed']);
@@ -357,11 +361,60 @@ export function evaluateInvoiceItemsAgainstRemaining(so, invoiceItems, billingSn
 }
 
 /**
- * Name kept for call sites — over-invoicing is ALLOWED (non-blocking).
- * Returns evaluateInvoiceItemsAgainstRemaining result; does not throw on excess qty.
+ * Name kept for call sites. New creates that exceed remaining qty are blocked by
+ * shouldBlockInvoiceForRemainingQty — this helper still only evaluates.
  */
 export function assertInvoiceItemsWithinRemaining(so, invoiceItems, billingSnapshot) {
     return evaluateInvoiceItemsAgainstRemaining(so, invoiceItems, billingSnapshot);
+}
+
+/**
+ * Hard-block a NEW invoice that would exceed remaining uninvoiced SO qty.
+ * Partial invoicing (50 then 50 of 100) remains valid.
+ * Does not mutate remaining-qty math used for historical snapshots.
+ */
+export function shouldBlockInvoiceForRemainingQty(so, invoiceItems, billingSnapshot) {
+    const evaluation = evaluateInvoiceItemsAgainstRemaining(so, invoiceItems, billingSnapshot);
+    const requestedQty = (invoiceItems || []).reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
+    const remainingQty = (billingSnapshot?.lines || []).reduce(
+        (sum, line) => sum + Math.max(0, Number(line.remainingQty) || 0),
+        0,
+    );
+    const fullyInvoiced = billingSnapshot?.fullyInvoiced === true
+        || (remainingQty <= 0.0001 && (billingSnapshot?.anyInvoiced === true || (billingSnapshot?.activeInvoices || []).length > 0));
+
+    if (requestedQty > 0.0001 && fullyInvoiced) {
+        return {
+            blocked: true,
+            code: 'SO_ALREADY_INVOICED',
+            message: SO_FULLY_INVOICED_MESSAGE,
+            requestedQty,
+            remainingQty: r2(remainingQty),
+            overInvoiced: true,
+            warnings: evaluation.warnings || [],
+        };
+    }
+    if (evaluation.overInvoiced) {
+        const allRemainingGone = remainingQty <= 0.0001;
+        return {
+            blocked: true,
+            code: allRemainingGone ? 'SO_ALREADY_INVOICED' : 'SO_QTY_EXCEEDS_REMAINING',
+            message: allRemainingGone ? SO_FULLY_INVOICED_MESSAGE : SO_QTY_EXCEEDS_REMAINING_MESSAGE,
+            requestedQty,
+            remainingQty: r2(remainingQty),
+            overInvoiced: true,
+            warnings: evaluation.warnings || [],
+        };
+    }
+    return {
+        blocked: false,
+        code: null,
+        message: null,
+        requestedQty,
+        remainingQty: r2(remainingQty),
+        overInvoiced: false,
+        warnings: evaluation.warnings || [],
+    };
 }
 
 /**
