@@ -38,6 +38,9 @@ import * as rawCaptureController from '../../controllers/rawCapture.controller.j
 import * as rawCaptureImportController from '../../controllers/rawCaptureImport.controller.js';
 import * as assistedCaptureController from '../../controllers/assistedCapture.controller.js';
 import * as simpleLeadSearchController from '../../controllers/simpleLeadSearch.controller.js';
+import {
+    assertSimpleLeadSearchSessionAccess,
+} from '../../services/dataExtractor/searchCampaign/simpleLeadSearch/simpleLeadSearch.ownership.util.js';
 import * as rawCaptureEnrichmentController from '../../controllers/rawCaptureEnrichment.controller.js';
 import * as rawCaptureQualificationController from '../../controllers/rawCaptureQualification.controller.js';
 import * as rawCaptureGenuinenessController from '../../controllers/rawCaptureGenuineness.controller.js';
@@ -156,6 +159,8 @@ router.post('/simple-lead-search/start', checkPermission('data_extractor.assiste
 router.post('/simple-lead-search/preview-queries', checkPermission('data_extractor.assisted_capture.start'), simpleLeadSearchController.previewQueries);
 router.get('/simple-lead-search/agent-status', checkPermission('data_extractor.assisted_capture.view'), simpleLeadSearchController.agentStatus);
 router.get('/simple-lead-search/runs', checkPermission('data_extractor.assisted_capture.view'), simpleLeadSearchController.listRuns);
+router.use('/simple-lead-search/sessions/:sessionId', assertSimpleLeadSearchSessionAccess);
+router.post('/simple-lead-search/sessions/:sessionId/delete-data', checkPermission('data_extractor.assisted_capture.view'), simpleLeadSearchController.deleteRunData);
 router.get('/simple-lead-search/sessions/:sessionId', checkPermission('data_extractor.assisted_capture.view'), simpleLeadSearchController.sessionStatus);
 router.get('/simple-lead-search/sessions/:sessionId/results', checkPermission('data_extractor.raw_capture.view'), simpleLeadSearchController.sessionResults);
 router.post('/simple-lead-search/sessions/:sessionId/stop', checkPermission('data_extractor.assisted_capture.start'), simpleLeadSearchController.stop);

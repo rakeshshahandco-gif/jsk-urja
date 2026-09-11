@@ -50,6 +50,7 @@ import {
     persistSessionExportArtifacts,
     getSessionExportDownloadUrl,
 } from '../services/dataExtractor/searchCampaign/simpleLeadSearch/simpleLeadSearch.exportS3.service.js';
+import { deleteSimpleLeadSearchRunData } from '../services/dataExtractor/searchCampaign/simpleLeadSearch/simpleLeadSearch.deleteRunData.service.js';
 import {
     previewCrmLeadFromCapture,
     createCrmLeadFromCapture,
@@ -450,7 +451,10 @@ export const exportAllCurrentData = withSafeErrors(async (req, res) => {
 export const listRuns = withSafeErrors(async (req, res) => {
     const data = await listSimpleLeadSearchRuns({
         companyId: requireCompany(req),
+        user: req.user,
         limit: req.query?.limit,
+        scope: req.query?.scope,
+        includeDeleted: req.query?.includeDeleted,
     });
     res.send(new ApiResponse(200, data, 'Data Extractor runs'));
 });
@@ -474,4 +478,16 @@ export const downloadExportArtifact = withSafeErrors(async (req, res) => {
         expiresInSeconds: Number(req.query?.expiresIn) || 300,
     });
     res.send(new ApiResponse(200, data, 'Signed download URL'));
+});
+
+export const deleteRunData = withSafeErrors(async (req, res) => {
+    const data = await deleteSimpleLeadSearchRunData({
+        companyId: requireCompany(req),
+        user: req.user,
+        sessionId: req.params.sessionId,
+        confirmText: req.body?.confirmText,
+        deletionReason: req.body?.deletionReason,
+        downloadedConfirmed: Boolean(req.body?.downloadedConfirmed),
+    });
+    res.send(new ApiResponse(200, data, 'Extracted data deleted. Audit record retained.'));
 });

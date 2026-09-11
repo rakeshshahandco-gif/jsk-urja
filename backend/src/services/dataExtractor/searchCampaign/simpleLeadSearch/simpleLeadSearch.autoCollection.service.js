@@ -556,11 +556,16 @@ function scheduleDelay(session) {
     ac.phase = 'delay';
     ac.nextActionAt = new Date(Date.now() + randomDelayMs(ac.delayMinSec || 20, ac.delayMaxSec || 40));
 }
-export async function stopCompanyAutoCollection({ companyId, user, reason = 'new_search_started' }) {
+export async function stopCompanyAutoCollection({ companyId, user, reason = 'new_search_started', createdBy = null }) {
     const cid = requireCompanyId(companyId);
     const now = new Date();
+    const ownerId = createdBy || actorId(user);
     const res = await AssistedCaptureSession.updateMany(
-        { companyId: cid, 'autoCollection.status': { $in: ACTIVE_AUTO } },
+        {
+            companyId: cid,
+            ...(ownerId ? { createdBy: ownerId } : {}),
+            'autoCollection.status': { $in: ACTIVE_AUTO },
+        },
         {
             $set: {
                 'autoCollection.status': 'stopped',

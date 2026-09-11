@@ -395,7 +395,7 @@ export function isRetryableSessionLoadError(err) {
 export function isConfirmedSessionAbsent(err) {
     const status = Number(err?.response?.status || err?.status || 0);
     if (status >= 500 || isRetryableSessionLoadError(err)) return false;
-    if (status === 404) return true;
+    if (status === 404 || status === 403) return true;
     const msg = String(err?.response?.data?.message || '');
     return /assisted capture session not found|campaign not found/i.test(msg);
 }

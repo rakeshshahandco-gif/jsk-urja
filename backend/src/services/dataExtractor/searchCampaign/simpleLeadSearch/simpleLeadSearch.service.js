@@ -18,6 +18,12 @@ import { getAgentStatusForCompany, SESSION_UI_LABELS } from '../assistedCapture/
 import { ensureSimpleLeadSearchCampaign } from '../searchCampaign.service.js';
 import { ensureSimpleLeadSearchQuery } from '../searchQuery/searchQuery.service.js';
 import { SearchQuery } from '../../../../models/searchQuery.model.js';
+import {
+    actorUserId,
+    assertCanAccessOwnedRun,
+    findOtherUserLiveRun,
+    isLiveExtractionSession,
+} from './simpleLeadSearch.ownership.util.js';
 import { SearchCampaign } from '../../../../models/searchCampaign.model.js';
 import { buildCampaignName, buildSimpleQueries, normalizeDisplay, normalizeBusinessTypes, parseRelatedKeywords, parseLocationExpandList, inferLocationScope, validateLocationForScope, suggestMajorCitiesForState, BUSINESS_TYPE_OPTIONS, DEFAULT_BUSINESS_TYPES, SEARCH_MARKETS, INDIA_GLOBAL_SOURCE_OPTIONS, CHINA_SOURCE_OPTIONS, isChinaCountry, isIndiaCountry, suggestIndiaProductSynonyms, INDIA_PRIORITY_CITIES, parseProductModels, sourceHintFromPlatform } from './queryBuilder.util.js';
 import { attachStageA, summarizeStageA } from './stageAPreFilter.util.js';
@@ -235,12 +241,33 @@ export async function startSimpleLeadSearch({ companyId, user, body, headers = {
         if (!loc.ok) throw new ApiError(400, loc.message);
     }
 
+    const otherLive = await findOtherUserLiveRun({ companyId: cid, user });
+    if (otherLive) {
+        throw new ApiError(
+            409,
+            'The company Discovery Agent is currently busy with another user\'s extraction. Ask an admin to check All Searches, or try again after that run is paused or completed.',
+        );
+    }
+
+    const ownLive = await AssistedCaptureSession.findOne({
+        companyId: cid,
+        createdBy: actorUserId(user),
+        dataRetentionStatus: { $ne: 'DATA_DELETED' },
+    }).sort({ updatedAt: -1 }).lean();
+    if (ownLive && isLiveExtractionSession(ownLive) && !body?.pauseOwnActive) {
+        throw new ApiError(
+            409,
+            'Your current extraction is still running. Continue it, or pause it before starting a new search.',
+        );
+    }
+
     let autoCollectionStopped = null;
     try {
         const { stopCompanyAutoCollection } = await import('./simpleLeadSearch.autoCollection.service.js');
         autoCollectionStopped = await stopCompanyAutoCollection({
             companyId: cid,
             user,
+            createdBy: actorUserId(user),
             reason: 'new_search_started',
         });
     } catch {
@@ -567,6 +594,7 @@ export async function getSimpleLeadSearchStatus({ companyId, user, sessionId }) 
 
     let session = await AssistedCaptureSession.findOne({ _id: sessionId, companyId: cid }).lean();
     if (!session) throw new ApiError(404, 'Assisted capture session not found');
+    const access = assertCanAccessOwnedRun(user, session);
     session = await enforceOpeningReadyTimeout(session);
 
     const pending = await getPendingCaptureRequest({ companyId: cid, sessionId });
@@ -707,6 +735,11 @@ export async function getSimpleLeadSearchStatus({ companyId, user, sessionId }) 
 
     return {
         session: sanitizeSession(session),
+        owner: {
+            userId: session.createdBy ? String(session.createdBy) : null,
+            name: session.createdByName || '',
+            monitoring: Boolean(access.monitoring),
+        },
         agentStatus,
         pendingCapture: pending.pendingCapture,
         pending: pending.pending,

@@ -177,6 +177,10 @@ export const dataExtractorApi = {
         const res = await api.get('/data-extractor/simple-lead-search/runs', { params });
         return unwrap(res);
     },
+    simpleLeadSearchDeleteRunData: async (sessionId, body = {}) => {
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/delete-data`, body);
+        return unwrap(res);
+    },
     simpleLeadSearchPersistExport: async (sessionId, body = {}) => {
         const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/export-artifacts`, body);
         return unwrap(res);

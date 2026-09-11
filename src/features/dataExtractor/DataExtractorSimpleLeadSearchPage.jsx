@@ -3,7 +3,13 @@ import toast from 'react-hot-toast';
 import { useParams, useNavigate } from 'react-router-dom';
 import { PATHS } from '@/routes/paths';
 import { useFinancialYear } from '@/contexts/FinancialYearContext';
+import { useAuth } from '@/hooks/useAuth';
 import { dataExtractorApi } from '@/services/dataExtractorApi';
+import {
+    formatOwnerBanner,
+    isLiveRunStatus,
+    resolveStartNewDecision,
+} from './simpleLeadSearchOwnershipUi';
 import {
     Rocket, Info, PlayCircle, ShieldAlert, Search, Database, Sparkles,
     CheckCircle2, AlertTriangle, XCircle, RefreshCw, ChevronRight, Layers, Ban,
@@ -406,6 +412,8 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
     const navigate = useNavigate();
     const resumeSessionId = initialSessionId || params.sessionId || null;
     const { selectedFY } = useFinancialYear();
+    const { user } = useAuth();
+    const [startNewPrompt, setStartNewPrompt] = useState(false);
     const [form, setForm] = useState({
         product: '',
         relatedKeywords: '',
@@ -675,6 +683,9 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
         } catch (err) {
             if (isConfirmedSessionAbsent(err)) {
                 lastSessionLoadKindRef.current = 'absent';
+                if (Number(err?.response?.status || 0) === 403) {
+                    toast.error('Permission denied: this extraction belongs to another user');
+                }
                 if (!resultRef.current) {
                     setRunLoadStatus(RUN_LOAD.NOT_FOUND);
                     setSession((prev) => (prev ? {
@@ -884,7 +895,6 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
         refreshLiveActivity(sid);
         return undefined;
     }, [session?._id, result?.session?._id, refreshLiveActivity]);
-
 
     const refreshEnrichment = useCallback(async (sessionId) => {
         if (!sessionId) return;
@@ -1099,8 +1109,8 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
         }
     };
 
-    const onStartNew = () => {
-        if (hideStartExtraction) return;
+    const goCleanWorkspace = useCallback(() => {
+        setStartNewPrompt(false);
         setResult(null);
         resultRef.current = null;
         setSession(null);
@@ -1112,6 +1122,40 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
         lastRowCountRef.current = 0;
         wasCapturingRef.current = false;
         setAutoCollectionOptions((o) => ({ ...o, ...collectionModeResetPatch() }));
+        if (resumeSessionId || runMode) {
+            navigate(PATHS.DATA_EXTRACTOR.SIMPLE_LEAD_SEARCH, { replace: true });
+        }
+    }, [navigate, resumeSessionId, runMode, setAutoCollectionOptions]);
+
+    const onStartNew = () => {
+        if (hideStartExtraction) return;
+        const live = isLiveRunStatus({
+            status: session?.status || result?.session?.status,
+            autoCollectionStatus: session?.autoCollection?.status || result?.autoCollection?.status,
+            autoProcessingStatus: session?.autoProcessing?.status || result?.autoProcessing?.status,
+        });
+        const decision = resolveStartNewDecision({
+            hasOpenRun: Boolean(resumeSessionId || session || result),
+            runIsLive: live,
+        });
+        if (decision === 'CONFIRM_LIVE') {
+            setStartNewPrompt(true);
+            return;
+        }
+        goCleanWorkspace();
+    };
+
+    const pauseAndStartNew = async () => {
+        const sid = session?._id || result?.session?._id || resumeSessionId;
+        setStartNewPrompt(false);
+        if (sid) {
+            try {
+                await dataExtractorApi.simpleLeadSearchAutoCollectionPause(sid);
+            } catch {
+                /* workspace still resets; backend blocks a second live start if pause failed */
+            }
+        }
+        goCleanWorkspace();
     };
 
     const waitForCaptureSettle = async (sessionId, baselineUnique) => {
@@ -2581,6 +2625,26 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                 <div style={{ marginBottom: 12, padding: '10px 12px', background: '#eff6ff', borderRadius: 8, border: '1px solid #bfdbfe', fontSize: 13 }}>
                     Dedicated search run window — closing this tab does <strong>not</strong> stop the backend search.
                     {resumeSessionId ? <> Run ID: <code>{resumeSessionId}</code></> : null}
+                    {(() => {
+                        const banner = formatOwnerBanner(
+                            { createdByName: session?.createdByName, createdBy: session?.createdBy, ownerName: result?.owner?.name, owner: result?.owner },
+                            user?._id || user?.id,
+                        );
+                        return banner.ownerName && banner.ownerName !== 'Unknown'
+                            ? <div style={{ marginTop: 6, fontWeight: 700 }}>{banner.label}{banner.monitoring ? ' (monitoring — ownership unchanged)' : ''}</div>
+                            : null;
+                    })()}
+                </div>
+            ) : null}
+            {startNewPrompt ? (
+                <div style={{ marginBottom: 16, padding: 14, background: '#fff7ed', border: '1px solid #fdba74', borderRadius: 8 }}>
+                    <strong>Your current extraction is still running.</strong>
+                    <p style={{ margin: '8px 0 12px', fontSize: 13, color: '#9a3412' }}>Do not start a second campaign by accident. Previous results stay in My Searches.</p>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <button type="button" className={styles.howBtn} onClick={() => setStartNewPrompt(false)}>Continue Current Search</button>
+                        <button type="button" className={styles.howBtn} onClick={pauseAndStartNew}>Pause &amp; Start New</button>
+                        <button type="button" className={styles.howBtn} onClick={() => setStartNewPrompt(false)}>Cancel</button>
+                    </div>
                 </div>
             ) : null}
             {!runMode ? <DataExtractorActiveRunsPanel /> : null}

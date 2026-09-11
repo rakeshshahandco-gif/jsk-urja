@@ -241,11 +241,14 @@ async function findReusableSimpleLeadSearchCampaign(companyId, {
     relatedKeywordsKey = '',
     expandCitiesKey = '',
     worldwide = false,
+    createdBy = null,
 }) {
+    const ownerId = createdBy || null;
     const byName = await SearchCampaign.findOne({
         companyId,
         nameNormalized,
         status: { $ne: 'archived' },
+        ...(ownerId ? { createdBy: ownerId } : {}),
     }).lean();
     if (byName) {
         // Legacy Simple Lead Search (no scope/business-type profile): name match is enough.
@@ -276,6 +279,7 @@ async function findReusableSimpleLeadSearchCampaign(companyId, {
     const candidates = await SearchCampaign.find({
         companyId,
         status: { $ne: 'archived' },
+        ...(ownerId ? { createdBy: ownerId } : {}),
     }).lean();
 
     return candidates.find((c) => {
@@ -333,6 +337,7 @@ export async function ensureSimpleLeadSearchCampaign({ companyId, user, body }) 
         relatedKeywordsKey: (payload.relatedKeywords || []).map((t) => String(t).toLowerCase()).sort().join('|'),
         expandCitiesKey: (payload.expandCities || []).map((t) => String(t).toLowerCase()).sort().join('|'),
         worldwide: Boolean(payload.worldwide),
+        createdBy: actorUserId(user),
     });
 
     if (campaign) {
@@ -354,6 +359,7 @@ export async function ensureSimpleLeadSearchCampaign({ companyId, user, body }) 
         companyId: cid,
         status: 'draft',
         createdBy: userId,
+        createdByName: String(user?.name || user?.fullName || user?.username || '').trim(),
         updatedBy: userId,
         archivedAt: null,
         archivedBy: null,

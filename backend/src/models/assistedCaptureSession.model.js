@@ -64,7 +64,14 @@ const assistedCaptureSessionSchema = new mongoose.Schema(
         failMessage: { type: String, default: '', trim: true, maxlength: 500 },
         manualActionMessage: { type: String, default: '', trim: true, maxlength: 500 },
         createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+        createdByName: { type: String, default: '', trim: true, maxlength: 160 },
         updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+        dataRetentionStatus: { type: String, default: '', trim: true, maxlength: 40 },
+        dataDeletedAt: { type: Date, default: null },
+        dataDeletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+        dataDeletedByName: { type: String, default: '', trim: true, maxlength: 160 },
+        originalRecordCount: { type: Number, default: 0, min: 0 },
+        deletionReason: { type: String, default: '', trim: true, maxlength: 300 },
         // Checkpoint 5B — queued UI capture request (additive; stdin `capture` still works)
         pendingCaptureIdempotencyKey: { type: String, default: '', trim: true, maxlength: 200 },
         pendingCaptureRequestedAt: { type: Date, default: null },
@@ -289,6 +296,7 @@ const assistedCaptureSessionSchema = new mongoose.Schema(
     { timestamps: true, collection: 'assisted_capture_sessions' },
 );
 
+assistedCaptureSessionSchema.index({ companyId: 1, createdBy: 1, updatedAt: -1 });
 assistedCaptureSessionSchema.index({ companyId: 1, campaignId: 1, queryId: 1, createdAt: -1 });
 assistedCaptureSessionSchema.index({ companyId: 1, status: 1, createdAt: 1 });
 assistedCaptureSessionSchema.index({ companyId: 1, agentId: 1, status: 1 });

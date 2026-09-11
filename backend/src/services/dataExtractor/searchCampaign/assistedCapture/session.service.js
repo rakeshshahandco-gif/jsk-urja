@@ -125,6 +125,7 @@ export async function createAssistedCaptureSession({ companyId, user, campaignId
         await AssistedCaptureSession.updateMany(
             {
                 companyId,
+                createdBy: actorId,
                 status: { $in: ACTIVE_RELEASE },
             },
             {
@@ -184,6 +185,7 @@ export async function createAssistedCaptureSession({ companyId, user, campaignId
         tokenExpiresAt,
         sessionExpiresAt,
         createdBy: actorId,
+        createdByName: String(user?.name || user?.fullName || user?.username || '').trim(),
         updatedBy: actorId,
     });
 

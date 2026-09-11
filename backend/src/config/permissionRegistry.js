@@ -535,6 +535,7 @@ export const PERMISSION_REGISTRY = [
                     { id: 'convert_supplier', label: 'Convert to Supplier', type: 'boolean' },
                     { id: 'convert_customer', label: 'Convert to Customer', type: 'boolean' },
                     { id: 'delete', label: 'Delete Draft', type: 'boolean' },
+                    { id: 'delete_run_data', label: 'Delete Extraction Run Data', type: 'boolean' },
                     { id: 'settings', label: 'Manage Settings', type: 'boolean' },
                 ],
             },

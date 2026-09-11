@@ -333,6 +333,8 @@ describe('Simple Lead Search run-page 502 recovery', () => {
         assert.equal(classifySessionLoadError(err502), 'retryable');
         assert.equal(classifySessionLoadError(err404), 'absent');
         assert.equal(isConfirmedSessionAbsent(err404), true);
+        assert.equal(isConfirmedSessionAbsent({ response: { status: 403, data: { message: 'Permission denied' } } }), true);
+        assert.equal(isConfirmedSessionAbsent(err502), false);
     });
 
     it('backs off 2s → 5s → 10s → 15s → 30s max', () => {
