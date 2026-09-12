@@ -217,6 +217,14 @@ export const dataExtractorApi = {
         const res = await api.get(`/data-extractor/simple-lead-search/sessions/${sessionId}/export-artifacts/download`, { params });
         return unwrap(res);
     },
+    simpleLeadSearchArchiveCampaign: async (campaignId, body = {}) => {
+        const res = await api.post(`/data-extractor/simple-lead-search/campaigns/${campaignId}/archive`, body);
+        return unwrap(res);
+    },
+    simpleLeadSearchCampaignArchive: async (campaignId) => {
+        const res = await api.get(`/data-extractor/simple-lead-search/campaigns/${campaignId}/archive`);
+        return unwrap(res);
+    },
     simpleLeadSearchSessionStatus: async (sessionId) => {
         const res = await api.get(`/data-extractor/simple-lead-search/sessions/${sessionId}`);
         return unwrap(res);

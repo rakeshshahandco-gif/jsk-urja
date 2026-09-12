@@ -73,6 +73,24 @@ const searchCampaignSchema = new mongoose.Schema(
         deletionReason: { type: String, default: '', trim: true, maxlength: 300 },
         archivedAt: { type: Date, default: null },
         archivedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+        /** S3 archive metadata only (Phase 1). Raw rows stay in Mongo until a later retention phase. */
+        s3Archive: {
+            status: {
+                type: String,
+                enum: ['NOT_ARCHIVED', 'ARCHIVING', 'VERIFIED', 'FAILED'],
+                default: 'NOT_ARCHIVED',
+            },
+            startedAt: { type: Date, default: null },
+            completedAt: { type: Date, default: null },
+            archivedAt: { type: Date, default: null },
+            objectKey: { type: String, default: '', maxlength: 1024 },
+            checksum: { type: String, default: '', maxlength: 80 },
+            size: { type: Number, default: 0, min: 0 },
+            recordCount: { type: Number, default: 0, min: 0 },
+            error: { type: String, default: '', maxlength: 500 },
+            storageProvider: { type: String, default: '', maxlength: 20 },
+            bucket: { type: String, default: '', maxlength: 200 },
+        },
         /** Embedded Facebook Group Member Collector checkpoint. Not a new collection. */
         facebookMemberCollector: { type: mongoose.Schema.Types.Mixed, default: undefined },
     },
