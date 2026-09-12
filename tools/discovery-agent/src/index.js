@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import crypto from 'crypto';
+import os from 'os';
 import { crm } from './crmClient.js';
 import { openVisibleContext, clearLocalProfile } from './browserSession.js';
 import { runGoogleVisible } from './sources/googleVisible.js';
@@ -39,6 +40,8 @@ async function cmdConnect() {
         companyId: data?.companyId,
         agentTokenId: data?.agentTokenId,
         agentInstanceId: data?.agentInstanceId,
+        deviceId: data?.deviceId || process.env.DISCOVERY_AGENT_DEVICE_ID || '',
+        deviceName: data?.deviceName || process.env.DISCOVERY_AGENT_DEVICE_NAME || os.hostname(),
         serverTime: data?.serverTime,
         policy: data?.policy,
     }, null, 2));
@@ -253,7 +256,13 @@ async function cmdListen() {
     process.on('SIGINT', onSig);
     process.on('SIGTERM', onSig);
 
-    console.log('Listen mode started. agentInstanceId=', agentInstanceId);
+    if (!process.env.DISCOVERY_AGENT_DEVICE_NAME && os.hostname()) {
+        process.env.DISCOVERY_AGENT_DEVICE_NAME = os.hostname();
+    }
+    if (!process.env.COMPUTERNAME && !process.env.HOSTNAME) {
+        process.env.HOSTNAME = os.hostname();
+    }
+    console.log('Listen mode started. agentInstanceId=', agentInstanceId, 'device=', process.env.DISCOVERY_AGENT_DEVICE_NAME || os.hostname());
     // Retry CRM connect — brief backend reloads must not kill the agent permanently
     for (let attempt = 1; attempt <= 10; attempt += 1) {
         try {

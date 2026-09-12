@@ -7,6 +7,7 @@ import {
     includeDeletedQueryValue,
     resolveStartNewDecision,
     formatOwnerBanner,
+    formatExtractionDeviceLine,
     deleteConfirmMessage,
 } from './simpleLeadSearchOwnershipUi.js';
 
@@ -27,6 +28,13 @@ describe('Simple Lead Search ownership UI', () => {
         const banner = formatOwnerBanner({ createdByName: 'Jatin Thakker', createdBy: 'u-jatin' }, 'u-admin');
         assert.equal(banner.label, 'Owner: Jatin Thakker');
         assert.equal(banner.monitoring, true);
+        const withDevice = formatOwnerBanner({
+            createdByName: 'Jatin Thakker',
+            createdBy: 'u-jatin',
+            assignedDeviceName: 'JATIN-PC',
+        }, 'u-admin');
+        assert.equal(withDevice.deviceLine, 'Extraction Device: JATIN-PC');
+        assert.equal(formatExtractionDeviceLine({ assignedDeviceName: 'JATIN-PC' }), 'Extraction Device: JATIN-PC');
     });
 
     it('does not treat DATA_DELETED as live', () => {

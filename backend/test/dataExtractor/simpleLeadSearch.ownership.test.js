@@ -85,6 +85,19 @@ describe('Simple Lead Search ownership', () => {
         assert.match(controller, /includeDeleted:\s*req\.query\?\.includeDeleted/);
     });
 
+    it('start binds the run to the actor device and poll is token-filtered', () => {
+        const start = fs.readFileSync(
+            path.join(srcRoot, 'services/dataExtractor/searchCampaign/simpleLeadSearch/simpleLeadSearch.service.js'),
+            'utf8',
+        );
+        assert.match(start, /resolveStartDeviceAssignment/);
+        const adapter = fs.readFileSync(
+            path.join(srcRoot, 'services/dataExtractor/searchCampaign/assistedCapture/agentAdapter.service.js'),
+            'utf8',
+        );
+        assert.match(adapter, /tokenMayClaimSession|assertTokenMayClaimSession/);
+    });
+
     it('paused delete finalizes the run before removing heavy data', () => {
         const src = fs.readFileSync(
             path.join(srcRoot, 'services/dataExtractor/searchCampaign/simpleLeadSearch/simpleLeadSearch.deleteRunData.service.js'),

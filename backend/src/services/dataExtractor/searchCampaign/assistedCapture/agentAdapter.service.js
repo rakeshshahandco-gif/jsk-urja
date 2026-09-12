@@ -7,6 +7,11 @@ import { ApiError } from '../../../../utils/ApiError.js';
 import { AGENT_HEARTBEAT_STATUS_ALLOWED, SESSION_ALLOWED_TTL_MINUTES_MAX } from './constants.js';
 import { submitAssistedCaptureEvent } from './event.service.js';
 import { assertSessionTokenHeader, hashSessionToken, issueSessionToken } from './sessionToken.util.js';
+import {
+    assertTokenMayClaimSession,
+    queuedSessionFilterForToken,
+    tokenMayClaimSession,
+} from '../../discovery/agent/agentDevice.util.js';
 
 const CHINA_ASSISTED_RECLAIM_SOURCES = Object.freeze(['1688', 'baidu', 'sogou', 'so360']);
 const RECLAIMABLE_STATUSES = Object.freeze(['manual_action_required', 'opening', 'awaiting_user', 'agent_assigned']);
@@ -64,7 +69,7 @@ export async function validateAgentSessionToken({ companyId, session, tokenHeade
  * Stale queued sessions (>30s unclaimed) are failed so they do not block forever.
  * Returns {_id, status, searchUrlHost} only (no token).
  */
-export async function pollQueuedSessionId(companyId) {
+export async function pollQueuedSessionId(companyId, agentToken = null) {
     const cutoff = new Date(Date.now() - QUEUE_TIMEOUT_MS);
     await AssistedCaptureSession.updateMany(
         {
@@ -82,12 +87,15 @@ export async function pollQueuedSessionId(companyId) {
         },
     );
 
-    // Prefer the newest queued session (owner's latest Search & Capture)
-    const session = await AssistedCaptureSession.findOne({ companyId, status: 'queued' })
+    const filter = agentToken
+        ? queuedSessionFilterForToken(companyId, agentToken)
+        : { companyId, status: 'queued' };
+    const session = await AssistedCaptureSession.findOne(filter)
         .sort({ createdAt: -1 })
-        .select('_id status searchUrl')
+        .select('_id status searchUrl assignedDeviceId assignedAgentTokenId createdBy')
         .lean();
     if (!session) return null;
+    if (agentToken && !tokenMayClaimSession(agentToken, session)) return null;
     return pollSessionSummary(session);
 }
 
@@ -109,7 +117,7 @@ function pollSessionSummary(session) {
  * Re-attach a live China assisted session whose visible browser died,
  * without creating a new campaign or queued child session.
  */
-export async function pollReclaimableAssistedSession(companyId) {
+export async function pollReclaimableAssistedSession(companyId, agentToken = null) {
     const staleCutoff = new Date(Date.now() - STALE_HEARTBEAT_MS);
     const session = await AssistedCaptureSession.findOne({
         companyId,
@@ -121,18 +129,19 @@ export async function pollReclaimableAssistedSession(companyId) {
         ],
     })
         .sort({ updatedAt: -1 })
-        .select('_id status searchUrl source')
+        .select('_id status searchUrl source assignedDeviceId assignedAgentTokenId createdBy')
         .lean();
     if (!session) return null;
+    if (agentToken && !tokenMayClaimSession(agentToken, session)) return null;
     return pollSessionSummary(session);
 }
 
 /** Alias used by listen flow: poll then claim separately. */
-export async function pollQueuedAssistedCapture({ companyId }) {
-    return pollQueuedSessionId(companyId);
+export async function pollQueuedAssistedCapture({ companyId, agentToken = null }) {
+    return pollQueuedSessionId(companyId, agentToken);
 }
 
-async function reclaimAssistedCaptureSession({ companyId, sessionId, agentInstanceId }) {
+async function reclaimAssistedCaptureSession({ companyId, sessionId, agentInstanceId, agentToken = null }) {
     const now = new Date();
     const issued = issueSessionToken(now, SESSION_ALLOWED_TTL_MINUTES_MAX);
     const staleCutoff = new Date(now.getTime() - STALE_HEARTBEAT_MS);
@@ -144,6 +153,11 @@ async function reclaimAssistedCaptureSession({ companyId, sessionId, agentInstan
         sessionExpiresAt: new Date(now.getTime() + SESSION_ALLOWED_TTL_MINUTES_MAX * 60 * 1000),
         lastHeartbeatAt: now,
     };
+
+    const preview = await AssistedCaptureSession.findOne({ _id: sessionId, companyId })
+        .select('createdBy assignedDeviceId assignedAgentTokenId status')
+        .lean();
+    if (preview && agentToken) assertTokenMayClaimSession(agentToken, preview);
 
     const session = await AssistedCaptureSession.findOneAndUpdate(
         {
@@ -163,14 +177,27 @@ async function reclaimAssistedCaptureSession({ companyId, sessionId, agentInstan
     return { session: sanitizeSession(session), sessionToken: issued.plain, reclaimed: true };
 }
 
-export async function claimAssistedCaptureSession({ companyId, sessionId, agentInstanceId }) {
+export async function claimAssistedCaptureSession({ companyId, sessionId, agentInstanceId, agentToken = null }) {
     const safeAgentId = String(agentInstanceId || '').trim().slice(0, 120);
     if (!safeAgentId) throw new ApiError(400, 'agentInstanceId is required');
+
+    if (sessionId && agentToken) {
+        requireObjectId(sessionId, 'Assisted capture session');
+        const preview = await AssistedCaptureSession.findOne({ _id: sessionId, companyId })
+            .select('createdBy assignedDeviceId assignedAgentTokenId status')
+            .lean();
+        if (preview) assertTokenMayClaimSession(agentToken, preview);
+    }
 
     const filter = { companyId, status: 'queued' };
     if (sessionId) {
         requireObjectId(sessionId, 'Assisted capture session');
         filter._id = sessionId;
+    }
+    if (agentToken) {
+        Object.assign(filter, queuedSessionFilterForToken(companyId, agentToken));
+        filter.status = 'queued';
+        if (sessionId) filter._id = sessionId;
     }
 
     const session = await AssistedCaptureSession.findOneAndUpdate(
@@ -184,6 +211,7 @@ export async function claimAssistedCaptureSession({ companyId, sessionId, agentI
                 companyId,
                 sessionId,
                 agentInstanceId: safeAgentId,
+                agentToken,
             });
             if (reclaimed) return reclaimed;
         }

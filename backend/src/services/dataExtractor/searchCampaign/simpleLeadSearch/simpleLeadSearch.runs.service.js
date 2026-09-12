@@ -76,6 +76,13 @@ function mapRun(session, campaign, query) {
         createdBy: session.createdBy ? String(session.createdBy) : null,
         createdByName: session.createdByName || '',
         ownerName: session.createdByName || '',
+        assignedDeviceId: session.assignedDeviceId || '',
+        assignedDeviceName: session.assignedDeviceName || '',
+        agentStatus: session.assignedDeviceName
+            ? (['queued', 'agent_assigned', 'opening', 'capturing', 'awaiting_user', 'ready_to_capture'].includes(session.status)
+                ? 'Bound'
+                : 'Assigned')
+            : '',
         failureReason: session.safeFailureMessage || ac.lastErrorMessage || ap.lastErrorMessage || '',
     };
 }

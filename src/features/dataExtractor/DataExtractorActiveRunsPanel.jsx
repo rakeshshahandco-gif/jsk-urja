@@ -24,6 +24,9 @@ export default function DataExtractorActiveRunsPanel() {
     const [loading, setLoading] = useState(true);
     const [busyId, setBusyId] = useState('');
     const [deleteRun, setDeleteRun] = useState(null);
+    const [transferRun, setTransferRun] = useState(null);
+    const [transferTarget, setTransferTarget] = useState('');
+    const [myDevices, setMyDevices] = useState([]);
     const [deleteWord, setDeleteWord] = useState('');
     const [downloadedConfirmed, setDownloadedConfirmed] = useState(false);
 
@@ -36,6 +39,14 @@ export default function DataExtractorActiveRunsPanel() {
             });
             setActive(Array.isArray(data?.active) ? data.active : []);
             setRecent(Array.isArray(data?.recent) ? data.recent : []);
+            if (isAdmin) {
+                try {
+                    const status = await dataExtractorApi.simpleLeadSearchAgentStatus({});
+                    setMyDevices(Array.isArray(status?.devices) ? status.devices : []);
+                } catch {
+                    setMyDevices([]);
+                }
+            }
         } catch {
             /* soft */
         } finally {
@@ -89,6 +100,27 @@ export default function DataExtractorActiveRunsPanel() {
         }
     };
 
+    const submitTransfer = async () => {
+        if (!transferRun || !transferTarget) return;
+        const fromName = transferRun.assignedDeviceName || 'current device';
+        const toName = myDevices.find((d) => d.deviceId === transferTarget)?.deviceName || transferTarget;
+        if (!window.confirm(`Transfer Extraction Device?\n${fromName} → ${toName}\nThis does not change the search owner.`)) return;
+        setBusyId(`transfer-${transferRun.runId}`);
+        try {
+            await dataExtractorApi.simpleLeadSearchTransferDevice(transferRun.runId, {
+                targetDeviceId: transferTarget,
+                confirm: true,
+            });
+            toast.success('Extraction device transferred');
+            setTransferRun(null);
+            await load();
+        } catch (e) {
+            toast.error(e.response?.data?.message || 'Transfer failed');
+        } finally {
+            setBusyId('');
+        }
+    };
+
     const submitDelete = async () => {
         if (!deleteRun) return;
         setBusyId(`delete-${deleteRun.runId}`);
@@ -121,6 +153,8 @@ export default function DataExtractorActiveRunsPanel() {
                             <tr style={{ background: '#f8fafc', textAlign: 'left' }}>
                                 <th style={{ padding: 8 }}>Search Name</th>
                                 <th style={{ padding: 8 }}>User</th>
+                                {isAdmin && scope === 'all' ? <th style={{ padding: 8 }}>Device</th> : null}
+                                {isAdmin && scope === 'all' ? <th style={{ padding: 8 }}>Agent Status</th> : null}
                                 <th style={{ padding: 8 }}>Location</th>
                                 <th style={{ padding: 8 }}>Started</th>
                                 <th style={{ padding: 8 }}>Status</th>
@@ -136,6 +170,12 @@ export default function DataExtractorActiveRunsPanel() {
                                 <tr key={r.runId} style={{ borderTop: '1px solid #e2e8f0' }}>
                                     <td style={{ padding: 8, fontWeight: 600 }}>{r.product || r.campaignName || '—'}</td>
                                     <td style={{ padding: 8 }}>{r.createdByName || r.ownerName || '—'}</td>
+                                    {isAdmin && scope === 'all' ? (
+                                        <td style={{ padding: 8 }}>{r.assignedDeviceName || '—'}</td>
+                                    ) : null}
+                                    {isAdmin && scope === 'all' ? (
+                                        <td style={{ padding: 8 }}>{r.agentStatus || '—'}</td>
+                                    ) : null}
                                     <td style={{ padding: 8, color: '#64748b' }}>
                                         {[r.city, r.state, r.country].filter(Boolean).join(', ') || '—'}
                                     </td>
@@ -199,6 +239,18 @@ export default function DataExtractorActiveRunsPanel() {
                                                             Cancel
                                                         </button>
                                                     ) : null}
+                                                    {isAdmin && isPausedRun(r) ? (
+                                                        <button
+                                                            type="button"
+                                                            disabled={!!busyId}
+                                                            onClick={() => {
+                                                                setTransferRun(r);
+                                                                setTransferTarget(myDevices.find((d) => d.online)?.deviceId || '');
+                                                            }}
+                                                        >
+                                                            Transfer Extraction Device
+                                                        </button>
+                                                    ) : null}
                                                     {canShowDeleteData(r) ? (
                                                         <button
                                                             type="button"
@@ -250,6 +302,38 @@ export default function DataExtractorActiveRunsPanel() {
                 (showDeleted ? recent : recent.filter((r) => r.dataRetentionStatus !== 'DATA_DELETED')).slice(0, 12),
                 'RECENT / COMPLETED RUNS',
             )}
+            {transferRun ? (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', zIndex: 80, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ width: 420, maxWidth: '94vw', background: '#fff', borderRadius: 10, padding: 20 }}>
+                        <h3 style={{ margin: '0 0 8px' }}>Transfer Extraction Device</h3>
+                        <p style={{ fontSize: 13 }}>
+                            Owner stays {transferRun.createdByName || transferRun.ownerName || '—'}.
+                            Current device: {transferRun.assignedDeviceName || '—'}.
+                        </p>
+                        <label style={{ display: 'block', fontSize: 13, marginBottom: 12 }}>
+                            Transfer to
+                            <select
+                                value={transferTarget}
+                                onChange={(e) => setTransferTarget(e.target.value)}
+                                style={{ display: 'block', width: '100%', marginTop: 6, padding: 8 }}
+                            >
+                                <option value="">Select device</option>
+                                {myDevices.map((d) => (
+                                    <option key={d.deviceId} value={d.deviceId}>
+                                        {d.deviceName || d.deviceId} — {d.online ? 'Ready' : 'Offline'}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                            <button type="button" onClick={() => setTransferRun(null)}>Cancel</button>
+                            <button type="button" disabled={!transferTarget || busyId === `transfer-${transferRun.runId}`} onClick={submitTransfer}>
+                                Confirm transfer
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
             {confirm ? (
                 <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', zIndex: 80, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <div style={{ width: 460, maxWidth: '94vw', background: '#fff', borderRadius: 10, padding: 20 }}>

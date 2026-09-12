@@ -65,6 +65,11 @@ const assistedCaptureSessionSchema = new mongoose.Schema(
         manualActionMessage: { type: String, default: '', trim: true, maxlength: 500 },
         createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
         createdByName: { type: String, default: '', trim: true, maxlength: 160 },
+        assignedAgentTokenId: { type: mongoose.Schema.Types.ObjectId, ref: 'DiscoveryAgentToken', default: null },
+        assignedAgentId: { type: String, default: '', trim: true, maxlength: 120 },
+        assignedDeviceId: { type: String, default: '', trim: true, maxlength: 80 },
+        assignedDeviceName: { type: String, default: '', trim: true, maxlength: 120 },
+        deviceTransferLog: { type: [mongoose.Schema.Types.Mixed], default: [] },
         updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
         dataRetentionStatus: { type: String, default: '', trim: true, maxlength: 40 },
         dataDeletedAt: { type: Date, default: null },
@@ -300,6 +305,8 @@ assistedCaptureSessionSchema.index({ companyId: 1, createdBy: 1, updatedAt: -1 }
 assistedCaptureSessionSchema.index({ companyId: 1, campaignId: 1, queryId: 1, createdAt: -1 });
 assistedCaptureSessionSchema.index({ companyId: 1, status: 1, createdAt: 1 });
 assistedCaptureSessionSchema.index({ companyId: 1, agentId: 1, status: 1 });
+assistedCaptureSessionSchema.index({ companyId: 1, assignedDeviceId: 1, status: 1 });
+assistedCaptureSessionSchema.index({ companyId: 1, assignedAgentTokenId: 1, status: 1 });
 assistedCaptureSessionSchema.index(
     { companyId: 1, idempotencyKey: 1 },
     {

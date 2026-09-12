@@ -33,7 +33,11 @@ export const createToken = asyncHandler(async (req, res) => {
     const data = await createAgentToken({
         companyId: req.companyId,
         userId: req.user.id,
+        userName: req.user?.name || req.user?.fullName || req.user?.username || '',
         name: req.body?.name,
+        deviceName: req.body?.deviceName,
+        deviceId: req.body?.deviceId,
+        hostname: req.body?.hostname,
         expiresInDays: req.body?.expiresInDays,
     });
     res.status(201).send(new ApiResponse(201, data, 'Discovery agent token created'));
@@ -94,6 +98,11 @@ export const connect = asyncHandler(async (req, res) => {
     rejectScopedBody(req.body);
     const data = await agentConnect(req.companyId, req.agentToken._id, {
         agentInstanceId: req.body?.agentInstanceId,
+        deviceId: req.body?.deviceId,
+        deviceName: req.body?.deviceName,
+        hostname: req.body?.hostname,
+        version: req.body?.version,
+        applicationKey: req.body?.applicationKey,
     });
     res.send(new ApiResponse(200, data, 'Agent connected'));
 });

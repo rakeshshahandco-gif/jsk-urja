@@ -8,7 +8,9 @@ import { dataExtractorApi } from '@/services/dataExtractorApi';
 import {
     formatOwnerBanner,
     isLiveRunStatus,
+    readLocalDeviceId,
     resolveStartNewDecision,
+    writeLocalDeviceId,
 } from './simpleLeadSearchOwnershipUi';
 import {
     Rocket, Info, PlayCircle, ShieldAlert, Search, Database, Sparkles,
@@ -182,14 +184,30 @@ function isChinaCountryInput(country) {
 }
 
 function agentLabel(status) {
-    if (!status) return { text: 'Checking agent...', color: '#64748b', online: false };
+    if (!status) return { text: 'Checking agent...', color: '#64748b', online: false, canStart: false };
     const raw = String(status.displayStatus || status.status || '').toLowerCase();
-    if (raw === 'busy') return { text: 'Discovery Agent: Busy', color: '#b45309', online: true };
-    if (raw === 'error') return { text: 'Discovery Agent: Error', color: '#b91c1c', online: false };
-    if (status.online || raw === 'ready' || raw === 'connected' || status.connected) {
-        return { text: 'Discovery Agent: Ready', color: '#15803d', online: true };
+    const deviceName = status.deviceName || status.assignedDeviceName || '';
+    const labeled = String(status.displayLabel || '').trim();
+    if (raw === 'busy') {
+        return { text: labeled || (deviceName ? `Discovery Agent: Busy — ${deviceName}` : 'Discovery Agent: Busy'), color: '#b45309', online: true, canStart: false };
     }
-    return { text: 'Discovery Agent: Offline', color: '#b45309', online: false };
+    if (raw === 'error') {
+        return { text: labeled || 'Discovery Agent: Error', color: '#b91c1c', online: false, canStart: false };
+    }
+    if (status.online || raw === 'ready' || raw === 'connected' || status.connected) {
+        return {
+            text: labeled || (deviceName ? `Discovery Agent: Ready — ${deviceName}` : 'Discovery Agent: Ready'),
+            color: '#15803d',
+            online: true,
+            canStart: status.canStartOnThisDevice !== false,
+        };
+    }
+    return {
+        text: labeled || (deviceName ? 'Discovery Agent: Offline on this device' : 'Discovery Agent: Offline'),
+        color: '#b45309',
+        online: false,
+        canStart: false,
+    };
 }
 
 function sessionBanner(session, uiLabel, manualMessage, opts = {}) {
@@ -432,6 +450,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
     const [queryPreview, setQueryPreview] = useState(null);
     const [previewBusy, setPreviewBusy] = useState(false);
     const [agentStatus, setAgentStatus] = useState(null);
+    const [selectedDeviceId, setSelectedDeviceId] = useState(() => readLocalDeviceId());
     const [busy, setBusy] = useState('');
     const [result, setResult] = useState(null);
     const [session, setSession] = useState(null);
@@ -492,6 +511,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
         maxRetryAttempts: 2,
     });
     const [showAdminControls, setShowAdminControls] = useState(false);
+    const [archiveInfo, setArchiveInfo] = useState(null);
     const [verifiedContactExpand, setVerifiedContactExpand] = useState(''); // `${rowId}:phone|email|whatsapp`
     const [showHowItWorks, setShowHowItWorks] = useState(false);
     const [workflowHash, setWorkflowHash] = useState(() => (typeof window !== 'undefined' ? window.location.hash : ''));
@@ -656,14 +676,23 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
 
     const refreshAgent = useCallback(async (sessionId) => {
         try {
-            const params = sessionId ? { sessionId } : {};
+            const preferred = selectedDeviceId || readLocalDeviceId();
+            const params = {
+                ...(sessionId ? { sessionId } : {}),
+                ...(preferred ? { preferredDeviceId: preferred } : {}),
+            };
             const data = await dataExtractorApi.simpleLeadSearchAgentStatus(params);
-            setAgentStatus(data?.agentStatus || data || null);
+            const next = data?.agentStatus || data || null;
+            setAgentStatus(next);
+            if (next?.deviceId && !selectedDeviceId) {
+                setSelectedDeviceId(next.deviceId);
+                writeLocalDeviceId(next.deviceId);
+            }
             if (data?.sessionLabel) setSessionUiLabel(data.sessionLabel);
         } catch {
-            setAgentStatus({ connected: false });
+            setAgentStatus({ connected: false, canStartOnThisDevice: false });
         }
-    }, []);
+    }, [selectedDeviceId]);
 
     const refreshSession = useCallback(async (sessionId, opts = {}) => {
         if (!sessionId || (pollBusyRef.current && !opts.ignoreBusy)) return null;
@@ -896,6 +925,19 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
         return undefined;
     }, [session?._id, result?.session?._id, refreshLiveActivity]);
 
+    useEffect(() => {
+        const campaignId = result?.campaign?._id;
+        if (!campaignId) {
+            setArchiveInfo(null);
+            return undefined;
+        }
+        let cancelled = false;
+        dataExtractorApi.simpleLeadSearchCampaignArchive(campaignId)
+            .then((data) => { if (!cancelled) setArchiveInfo(data); })
+            .catch(() => { /* archive status is optional metadata */ });
+        return () => { cancelled = true; };
+    }, [result?.campaign?._id]);
+
     const refreshEnrichment = useCallback(async (sessionId) => {
         if (!sessionId) return;
         try {
@@ -987,6 +1029,10 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
         e.preventDefault();
         if (busy || startInFlightRef.current) return;
         if (hideStartExtraction) return;
+        if (agentStatus && agentStatus.canStartOnThisDevice === false) {
+            toast.error(agentStatus.startBlockedReason || 'Discovery Agent is not connected on this computer. Start the Discovery Agent on this PC to begin extraction.');
+            return;
+        }
         if (!form.product.trim()) {
             toast.error('Enter Product / Industry');
             return;
@@ -1026,6 +1072,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                 enabledQueryTexts: enabledQueryTexts.length ? enabledQueryTexts : undefined,
                 financialYear: selectedFY,
                 idempotencyKey: `sls-ui-${Date.now()}`,
+                preferredDeviceId: selectedDeviceId || readLocalDeviceId() || undefined,
             });
             const sid = data?.session?._id;
             if (!sid) {
@@ -1533,6 +1580,29 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
             await refreshSession(sid);
         } catch (err) {
             toast.error(softSessionError(err));
+        } finally {
+            setBusy('');
+        }
+    };
+
+    const onArchiveCampaignToS3 = async () => {
+        const campaignId = result?.campaign?._id;
+        if (!campaignId) return;
+        setBusy('archiveS3');
+        try {
+            const data = await dataExtractorApi.simpleLeadSearchArchiveCampaign(campaignId, {
+                ownerApproved: ownerStoppedUi,
+            });
+            setArchiveInfo(data);
+            toast.success(data?.archiveStatus === 'VERIFIED'
+                ? 'Campaign archive copied to S3 and verified. Mongo data was not deleted.'
+                : 'Archive finished');
+        } catch (err) {
+            toast.error(err?.response?.data?.message || err?.message || 'Archive failed. Mongo data was not deleted.');
+            try {
+                const status = await dataExtractorApi.simpleLeadSearchCampaignArchive(campaignId);
+                setArchiveInfo(status);
+            } catch { /* keep last */ }
         } finally {
             setBusy('');
         }
@@ -2406,6 +2476,14 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
         || captureStats?.googlePageIndex
         || 1;
     const campaignName = result?.campaign?.name || '—';
+    const s3Archive = archiveInfo || result?.campaign?.s3Archive || {};
+    const archiveStatus = String(archiveInfo?.archiveStatus || s3Archive.status || 'NOT_ARCHIVED');
+    const archiveSizeBytes = Number(archiveInfo?.archiveSize || s3Archive.size || 0);
+    const archiveSizeLabel = archiveSizeBytes
+        ? (archiveSizeBytes < 1024 ? `${archiveSizeBytes} B`
+            : (archiveSizeBytes < 1024 * 1024 ? `${(archiveSizeBytes / 1024).toFixed(1)} KB`
+                : `${(archiveSizeBytes / (1024 * 1024)).toFixed(1)} MB`))
+        : '—';
     const processRunning = autoRunning || pipeRunning;
     const processPaused = (autoPausedOwner || pipePaused) && !autoPausedManual && !isManual;
     const processManual = autoPausedManual || isManual;
@@ -2627,11 +2705,23 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                     {resumeSessionId ? <> Run ID: <code>{resumeSessionId}</code></> : null}
                     {(() => {
                         const banner = formatOwnerBanner(
-                            { createdByName: session?.createdByName, createdBy: session?.createdBy, ownerName: result?.owner?.name, owner: result?.owner },
+                            {
+                                createdByName: session?.createdByName,
+                                createdBy: session?.createdBy,
+                                ownerName: result?.owner?.name,
+                                owner: result?.owner,
+                                assignedDeviceName: session?.assignedDeviceName || result?.owner?.deviceName,
+                                assignedDeviceId: session?.assignedDeviceId || result?.owner?.deviceId,
+                            },
                             user?._id || user?.id,
                         );
                         return banner.ownerName && banner.ownerName !== 'Unknown'
-                            ? <div style={{ marginTop: 6, fontWeight: 700 }}>{banner.label}{banner.monitoring ? ' (monitoring — ownership unchanged)' : ''}</div>
+                            ? (
+                                <div style={{ marginTop: 6, fontWeight: 700 }}>
+                                    {banner.label}{banner.monitoring ? ' (monitoring — ownership unchanged)' : ''}
+                                    {banner.deviceLine ? <div>{banner.deviceLine}</div> : null}
+                                </div>
+                            )
                             : null;
                     })()}
                 </div>
@@ -2693,6 +2783,31 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                 <span className={styles.agentDot} style={{ background: connected.color }} aria-hidden />
                 {connected.text}
             </div>
+            {Array.isArray(agentStatus?.devices) && agentStatus.devices.length > 1 && !runMode ? (
+                <label style={{ display: 'block', margin: '0 0 12px', fontSize: 13 }}>
+                    Run extraction on:
+                    <select
+                        value={selectedDeviceId || agentStatus.preferredDeviceId || ''}
+                        onChange={(e) => {
+                            setSelectedDeviceId(e.target.value);
+                            writeLocalDeviceId(e.target.value);
+                            refreshAgent();
+                        }}
+                        style={{ display: 'block', marginTop: 6, padding: '6px 8px', minWidth: 240 }}
+                    >
+                        {agentStatus.devices.map((d) => (
+                            <option key={d.deviceId || d.agentTokenId} value={d.deviceId}>
+                                {d.deviceName || d.deviceId} — {d.online ? 'Ready' : 'Offline'}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+            ) : null}
+            {!connected.online && !runMode ? (
+                <p style={{ margin: '0 0 12px', fontSize: 13, color: '#9a3412' }}>
+                    Discovery Agent is not connected on this computer. Start the Discovery Agent on this PC to begin extraction.
+                </p>
+            ) : null}
             {isRunRoute && hideStartForm ? (
                 <div className={styles.card} role="status" style={{ marginBottom: 16 }}>
                     <p style={{ margin: 0, fontWeight: 700, color: '#0f172a' }}>
@@ -3013,7 +3128,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                     </>
                 ) : null}
                 {!hideStartExtraction ? (
-                <button type="submit" className={styles.primaryBtn} disabled={!!busy || formLocked}>
+                <button type="submit" className={styles.primaryBtn} disabled={!!busy || formLocked || (agentStatus?.canStartOnThisDevice === false)}>
                     <span className={styles.primaryBtnRow}>
                         <Rocket size={18} aria-hidden />
                         {busy === 'start' ? 'Starting...' : 'Start Extraction'}
@@ -3242,6 +3357,40 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                                 + Number(sourceCaptured.global_sources || 0)
                             }</div></div>
                         </div>
+
+                        {result?.campaign?._id && (
+                            <div style={{
+                                margin: '12px 0 0',
+                                padding: '12px',
+                                borderRadius: 8,
+                                border: '1px solid #cbd5e1',
+                                background: archiveStatus === 'VERIFIED' ? '#ecfdf5' : (archiveStatus === 'FAILED' ? '#fef2f2' : '#f8fafc'),
+                            }}>
+                                <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 6 }}>
+                                    {archiveStatus === 'VERIFIED' ? 'Archived' : 'S3 Archive (copy only — Mongo data is kept)'}
+                                </div>
+                                <div className={styles.metaGrid}>
+                                    <div><div className={styles.metaLabel}>Archive Status</div><div className={styles.metaValue}>{archiveStatus}</div></div>
+                                    <div><div className={styles.metaLabel}>Record Count</div><div className={styles.metaValue}>{archiveInfo?.archiveRecordCount ?? s3Archive.recordCount ?? 0}</div></div>
+                                    <div><div className={styles.metaLabel}>Archive Size</div><div className={styles.metaValue}>{archiveSizeLabel}</div></div>
+                                    <div><div className={styles.metaLabel}>Archived Date</div><div className={styles.metaValue}>{(archiveInfo?.archivedAt || s3Archive.archivedAt) ? new Date(archiveInfo?.archivedAt || s3Archive.archivedAt).toLocaleString() : '—'}</div></div>
+                                </div>
+                                {archiveStatus === 'FAILED' && (archiveInfo?.archiveError || s3Archive.error) ? (
+                                    <p style={{ margin: '8px 0 0', fontSize: 12, color: '#991b1b' }}>{archiveInfo?.archiveError || s3Archive.error}</p>
+                                ) : null}
+                                {showAdminControls && (
+                                    <button
+                                        type="button"
+                                        className={styles.ctrlBtn}
+                                        style={{ marginTop: 10, width: 'auto', padding: '8px 12px' }}
+                                        disabled={!!busy || archiveStatus === 'ARCHIVING'}
+                                        onClick={onArchiveCampaignToS3}
+                                    >
+                                        {busy === 'archiveS3' ? 'Archiving…' : (archiveStatus === 'FAILED' ? 'Retry Archive' : 'Archive to S3')}
+                                    </button>
+                                )}
+                            </div>
+                        )}
 
                         <div className={styles.kpiRow}>
                             <div className={`${styles.kpi} ${styles.kpiBlue}`}>

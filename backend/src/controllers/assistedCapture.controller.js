@@ -132,6 +132,7 @@ export const claim = withSafeErrors(async (req, res) => {
         companyId: requireCompany(req),
         sessionId: req.body?.sessionId,
         agentInstanceId: req.body?.agentInstanceId,
+        agentToken: req.agentToken || null,
     });
     res.send(new ApiResponse(200, data, 'Assisted capture session claimed'));
 });
@@ -221,14 +222,22 @@ export const presence = withSafeErrors(async (req, res) => {
         requireCompany(req),
         tokenId,
         req.body?.agentInstanceId,
+        {
+            deviceId: req.body?.deviceId,
+            deviceName: req.body?.deviceName,
+            hostname: req.body?.hostname,
+            version: req.body?.version,
+            applicationKey: req.body?.applicationKey,
+        },
     );
     res.send(new ApiResponse(200, data, 'Agent presence updated'));
 });
 
 export const pollQueued = withSafeErrors(async (req, res) => {
     const companyId = requireCompany(req);
-    const queued = (await pollQueuedSessionId(companyId))
-        || (await pollReclaimableAssistedSession(companyId));
+    const token = req.agentToken || null;
+    const queued = (await pollQueuedSessionId(companyId, token))
+        || (await pollReclaimableAssistedSession(companyId, token));
     res.send(new ApiResponse(200, { queued }, queued ? 'Queued assisted session available' : 'No queued assisted session'));
 });
 

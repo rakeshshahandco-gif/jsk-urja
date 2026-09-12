@@ -173,6 +173,34 @@ export const dataExtractorApi = {
         const res = await api.get('/data-extractor/simple-lead-search/agent-status', { params });
         return unwrap(res);
     },
+    simpleLeadSearchTransferDevice: async (sessionId, body = {}) => {
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/transfer-device`, body);
+        return unwrap(res);
+    },
+    listDiscoveryAgentTokens: async () => {
+        const res = await api.get('/data-extractor/discovery/agent/tokens');
+        return unwrap(res);
+    },
+    createDiscoveryAgentToken: async (payload = {}) => {
+        const res = await api.post('/data-extractor/discovery/agent/tokens', payload);
+        return unwrap(res);
+    },
+    revokeDiscoveryAgentToken: async (id) => {
+        const res = await api.post(`/data-extractor/discovery/agent/tokens/${id}/revoke`);
+        return unwrap(res);
+    },
+    listDiscoveryAgentJobs: async (params = {}) => {
+        const res = await api.get('/data-extractor/discovery/agent/jobs', { params });
+        return unwrap(res);
+    },
+    createDiscoveryAgentJob: async (payload = {}) => {
+        const res = await api.post('/data-extractor/discovery/agent/jobs', payload);
+        return unwrap(res);
+    },
+    controlDiscoveryAgentJob: async (id, payload = {}) => {
+        const res = await api.post(`/data-extractor/discovery/agent/jobs/${id}/control`, payload);
+        return unwrap(res);
+    },
     simpleLeadSearchListRuns: async (params = {}) => {
         const res = await api.get('/data-extractor/simple-lead-search/runs', { params });
         return unwrap(res);

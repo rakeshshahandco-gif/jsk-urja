@@ -50,7 +50,12 @@ import {
     persistSessionExportArtifacts,
     getSessionExportDownloadUrl,
 } from '../services/dataExtractor/searchCampaign/simpleLeadSearch/simpleLeadSearch.exportS3.service.js';
+import {
+    archiveCampaignRawResults,
+    getCampaignArchive,
+} from '../services/dataExtractor/searchCampaign/simpleLeadSearch/simpleLeadSearch.archiveS3.service.js';
 import { deleteSimpleLeadSearchRunData } from '../services/dataExtractor/searchCampaign/simpleLeadSearch/simpleLeadSearch.deleteRunData.service.js';
+import { transferExtractionDevice } from '../services/dataExtractor/searchCampaign/simpleLeadSearch/simpleLeadSearch.deviceTransfer.service.js';
 import {
     previewCrmLeadFromCapture,
     createCrmLeadFromCapture,
@@ -110,6 +115,7 @@ export const agentStatus = withSafeErrors(async (req, res) => {
         companyId: requireCompany(req),
         user: req.user,
         sessionId: req.query?.sessionId,
+        preferredDeviceId: req.query?.preferredDeviceId,
     });
     res.send(new ApiResponse(200, data, 'Discovery agent status'));
 });
@@ -478,6 +484,38 @@ export const downloadExportArtifact = withSafeErrors(async (req, res) => {
         expiresInSeconds: Number(req.query?.expiresIn) || 300,
     });
     res.send(new ApiResponse(200, data, 'Signed download URL'));
+});
+
+export const archiveCampaign = withSafeErrors(async (req, res) => {
+    const fy = req.body?.financialYearId || req.headers['x-financial-year-id'] || 'none';
+    const data = await archiveCampaignRawResults({
+        companyId: requireCompany(req),
+        user: req.user,
+        campaignId: req.params.campaignId,
+        financialYearId: fy,
+        ownerApproved: Boolean(req.body?.ownerApproved),
+    });
+    res.send(new ApiResponse(200, data, 'Campaign archive verified'));
+});
+
+export const campaignArchiveStatus = withSafeErrors(async (req, res) => {
+    const data = await getCampaignArchive({
+        companyId: requireCompany(req),
+        campaignId: req.params.campaignId,
+    });
+    res.send(new ApiResponse(200, data, 'Campaign archive status'));
+});
+
+export const transferDevice = withSafeErrors(async (req, res) => {
+    const data = await transferExtractionDevice({
+        companyId: requireCompany(req),
+        user: req.user,
+        sessionId: req.params.sessionId,
+        targetDeviceId: req.body?.targetDeviceId,
+        targetAgentTokenId: req.body?.targetAgentTokenId,
+        confirm: Boolean(req.body?.confirm),
+    });
+    res.send(new ApiResponse(200, data, 'Extraction device transferred'));
 });
 
 export const deleteRunData = withSafeErrors(async (req, res) => {

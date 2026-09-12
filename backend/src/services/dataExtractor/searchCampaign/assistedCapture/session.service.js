@@ -187,6 +187,10 @@ export async function createAssistedCaptureSession({ companyId, user, campaignId
         createdBy: actorId,
         createdByName: String(user?.name || user?.fullName || user?.username || '').trim(),
         updatedBy: actorId,
+        assignedAgentTokenId: body?.assignedAgentTokenId || null,
+        assignedAgentId: String(body?.assignedAgentId || '').trim().slice(0, 120),
+        assignedDeviceId: String(body?.assignedDeviceId || '').trim().slice(0, 80),
+        assignedDeviceName: String(body?.assignedDeviceName || '').trim().slice(0, 120),
     });
 
     if (discoveryAgentJob) {

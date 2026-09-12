@@ -365,6 +365,10 @@ export async function openNextGeneratedQuery({ companyId, user, sessionId, heade
             idempotencyKey: `sls-nextq-${cid}-${next._id}-${Date.now()}`.slice(0, 200),
             sourceHint: sourceHintFromPlatform(next.sourceHint || next.selectedCriteria?.sourcePlatform || 'google'),
             sessionTtlMinutes: 120,
+            assignedAgentTokenId: current.assignedAgentTokenId || undefined,
+            assignedAgentId: current.assignedAgentId || undefined,
+            assignedDeviceId: current.assignedDeviceId || undefined,
+            assignedDeviceName: current.assignedDeviceName || undefined,
         },
         headers,
     });
@@ -376,7 +380,7 @@ export async function openNextGeneratedQuery({ companyId, user, sessionId, heade
     );
 
     const session = await AssistedCaptureSession.findById(sessionResult.session._id).lean();
-    const agentStatus = await getAgentStatusForCompany(cid, { sessionId: session._id });
+    const agentStatus = await getAgentStatusForCompany(cid, { sessionId: session._id, user });
     const campaignProgress = await buildCampaignProgress({ companyId: cid, campaignId, session });
 
     return {

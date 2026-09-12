@@ -21,6 +21,7 @@ export default function DataExtractorDiscoveryAgentPage() {
     const [tokens, setTokens] = useState([]);
     const [jobs, setJobs] = useState([]);
     const [newToken, setNewToken] = useState(null);
+    const [deviceName, setDeviceName] = useState('');
     const [busy, setBusy] = useState('');
     const [form, setForm] = useState({
         sourceMode: 'google_visible',
@@ -53,8 +54,15 @@ export default function DataExtractorDiscoveryAgentPage() {
     const createToken = async () => {
         setBusy('token');
         try {
-            const data = await dataExtractorApi.createDiscoveryAgentToken({ name: 'Local Discovery Agent' });
+            const name = deviceName.trim() || 'Local Discovery Agent';
+            const data = await dataExtractorApi.createDiscoveryAgentToken({
+                name,
+                deviceName: name,
+            });
             setNewToken(data);
+            if (data?.deviceId) {
+                try { localStorage.setItem('jsk.de.localDeviceId', data.deviceId); } catch { /* ignore */ }
+            }
             toast.success('Token created — copy it now');
             load();
         } catch (e) {
@@ -126,20 +134,37 @@ export default function DataExtractorDiscoveryAgentPage() {
 
             <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, padding: 16, marginBottom: 16 }}>
                 <h3 style={{ marginTop: 0, fontSize: 14 }}>Agent tokens</h3>
+                <label style={{ display: 'block', fontSize: 13, margin: '10px 0' }}>
+                    This PC name
+                    <input
+                        value={deviceName}
+                        onChange={(e) => setDeviceName(e.target.value)}
+                        placeholder="e.g. JATIN-PC"
+                        style={field}
+                    />
+                </label>
                 <button type="button" style={btn('#0f766e')} disabled={!!busy} onClick={createToken}>
-                    {busy === 'token' ? 'Creating…' : 'Create agent token'}
+                    {busy === 'token' ? 'Creating…' : 'Register this PC'}
                 </button>
                 {newToken?.token ? (
                     <div style={{ marginTop: 12, background: '#ecfdf5', padding: 10, borderRadius: 8, fontSize: 12 }}>
                         <strong>Copy now (shown once):</strong>
                         <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{newToken.token}</pre>
-                        <p style={{ margin: 0 }}>{newToken.warning}</p>
+                        {newToken.deviceId ? (
+                            <p style={{ margin: '8px 0 0' }}>
+                                Add to <code>.env.local</code> / <code>.env.production.local</code>:<br />
+                                DISCOVERY_AGENT_DEVICE_ID={newToken.deviceId}<br />
+                                DISCOVERY_AGENT_DEVICE_NAME={newToken.deviceName || deviceName || 'Windows-PC'}
+                            </p>
+                        ) : null}
+                        <p style={{ margin: '8px 0 0' }}>{newToken.warning}</p>
                     </div>
                 ) : null}
                 <table style={{ width: '100%', marginTop: 12, fontSize: 12, borderCollapse: 'collapse' }}>
                     <thead>
                         <tr style={{ textAlign: 'left', color: '#64748b' }}>
                             <th style={{ padding: 6 }}>Name</th>
+                            <th style={{ padding: 6 }}>Device</th>
                             <th style={{ padding: 6 }}>Prefix</th>
                             <th style={{ padding: 6 }}>Active</th>
                             <th style={{ padding: 6 }}>Last used</th>
@@ -150,6 +175,7 @@ export default function DataExtractorDiscoveryAgentPage() {
                         {(tokens || []).map((t) => (
                             <tr key={t.id} style={{ borderTop: '1px solid #e2e8f0' }}>
                                 <td style={{ padding: 6 }}>{t.name}</td>
+                                <td style={{ padding: 6 }}>{t.deviceName || t.hostname || '—'}</td>
                                 <td style={{ padding: 6 }}><code>{t.tokenPrefix}</code></td>
                                 <td style={{ padding: 6 }}>{t.isActive ? 'Yes' : 'No'}</td>
                                 <td style={{ padding: 6 }}>{t.lastUsedAt ? new Date(t.lastUsedAt).toLocaleString() : '—'}</td>

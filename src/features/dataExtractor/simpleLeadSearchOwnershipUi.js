@@ -53,6 +53,34 @@ export function resolveStartNewDecision({ hasOpenRun, runIsLive } = {}) {
     return 'CLEAN_WORKSPACE';
 }
 
+export const DE_LOCAL_DEVICE_STORAGE_KEY = 'jsk.de.localDeviceId';
+
+export function readLocalDeviceId() {
+    try {
+        return String(globalThis.localStorage?.getItem(DE_LOCAL_DEVICE_STORAGE_KEY) || '').trim();
+    } catch {
+        return '';
+    }
+}
+
+export function writeLocalDeviceId(deviceId) {
+    const id = String(deviceId || '').trim();
+    if (!id) return;
+    try {
+        globalThis.localStorage?.setItem(DE_LOCAL_DEVICE_STORAGE_KEY, id);
+    } catch {
+        /* ignore */
+    }
+}
+
+export function formatExtractionDeviceLine(runOrSession) {
+    const name = runOrSession?.assignedDeviceName
+        || runOrSession?.deviceName
+        || runOrSession?.owner?.deviceName
+        || '';
+    return name ? `Extraction Device: ${name}` : '';
+}
+
 export function formatOwnerBanner(runOrSession, currentUserId) {
     const name = runOrSession?.createdByName
         || runOrSession?.ownerName
@@ -67,6 +95,7 @@ export function formatOwnerBanner(runOrSession, currentUserId) {
         ownerName: name || 'Unknown',
         monitoring: Boolean(monitoring),
         label: name ? `Owner: ${name}` : 'Owner: —',
+        deviceLine: formatExtractionDeviceLine(runOrSession),
     };
 }
 

@@ -1,4 +1,5 @@
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -79,14 +80,24 @@ async function apiWithRetry(method, route, body, options = {}) {
     throw lastErr;
 }
 
+function localDevicePayload() {
+    return {
+        deviceId: String(process.env.DISCOVERY_AGENT_DEVICE_ID || '').trim().slice(0, 80),
+        deviceName: String(process.env.DISCOVERY_AGENT_DEVICE_NAME || os.hostname() || '').trim().slice(0, 120),
+        hostname: String(process.env.COMPUTERNAME || process.env.HOSTNAME || os.hostname() || '').trim().slice(0, 120),
+        version: String(process.env.DISCOVERY_AGENT_VERSION || '0.1.0').slice(0, 40),
+        applicationKey: String(process.env.DISCOVERY_AGENT_APPLICATION_KEY || '').trim().slice(0, 80),
+    };
+}
+
 export const crm = {
-    connect: (agentInstanceId) => api('POST', '/connect', { agentInstanceId }),
+    connect: (agentInstanceId) => api('POST', '/connect', { agentInstanceId, ...localDevicePayload() }),
     getJob: (id) => api('GET', '/jobs/' + id),
     claim: (id, agentInstanceId) => api('POST', '/jobs/' + id + '/claim', { agentInstanceId }),
     heartbeat: (id, payload) => api('POST', '/jobs/' + id + '/heartbeat', payload),
     ingest: (id, payload) => api('POST', '/jobs/' + id + '/records', payload),
 
-    presence: (agentInstanceId) => api('POST', '/presence', { agentInstanceId }),
+    presence: (agentInstanceId) => api('POST', '/presence', { agentInstanceId, ...localDevicePayload() }),
     pollAssisted: () => api('GET', '/assisted-captures/poll'),
     claimAssisted: ({ sessionId, agentInstanceId }) => api('POST', '/assisted-captures/claim', { sessionId, agentInstanceId }),
     assistedBrowserOpened: (sessionId, body, sessionToken) => api('POST', '/assisted-captures/' + sessionId + '/browser-opened', body, { sessionToken }),

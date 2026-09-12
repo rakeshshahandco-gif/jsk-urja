@@ -14,7 +14,7 @@ import {
 } from '../assistedCapture/permissions.util.js';
 import { createAssistedCaptureSession, cancelAssistedCaptureSession, continueAfterManualAction, completeAssistedCaptureSessionByUser } from '../assistedCapture/session.service.js';
 import { getPendingCaptureRequest } from '../assistedCapture/captureRequest.service.js';
-import { getAgentStatusForCompany, SESSION_UI_LABELS } from '../assistedCapture/agentPresence.service.js';
+import { getAgentStatusForCompany, resolveStartDeviceAssignment, SESSION_UI_LABELS } from '../assistedCapture/agentPresence.service.js';
 import { ensureSimpleLeadSearchCampaign } from '../searchCampaign.service.js';
 import { ensureSimpleLeadSearchQuery } from '../searchQuery/searchQuery.service.js';
 import { SearchQuery } from '../../../../models/searchQuery.model.js';
@@ -249,6 +249,13 @@ export async function startSimpleLeadSearch({ companyId, user, body, headers = {
         );
     }
 
+    const deviceAssignment = await resolveStartDeviceAssignment({
+        companyId: cid,
+        user,
+        preferredDeviceId: body?.preferredDeviceId || body?.assignedDeviceId || '',
+        assignedAgentTokenId: body?.assignedAgentTokenId || '',
+    });
+
     const ownLive = await AssistedCaptureSession.findOne({
         companyId: cid,
         createdBy: actorUserId(user),
@@ -423,6 +430,10 @@ export async function startSimpleLeadSearch({ companyId, user, body, headers = {
             sourceHint: sourceHintFromPlatform(selected.sourcePlatform),
             sessionTtlMinutes: body?.sessionTtlMinutes,
             financialYear: body?.financialYear,
+            assignedAgentTokenId: deviceAssignment?.assignedAgentTokenId || undefined,
+            assignedAgentId: deviceAssignment?.assignedAgentId || undefined,
+            assignedDeviceId: deviceAssignment?.assignedDeviceId || undefined,
+            assignedDeviceName: deviceAssignment?.assignedDeviceName || undefined,
         },
         headers,
     });
@@ -434,6 +445,8 @@ export async function startSimpleLeadSearch({ companyId, user, body, headers = {
 
     const agentStatus = await getAgentStatusForCompany(cid, {
         sessionId: sessionResult.session?._id,
+        user,
+        preferredDeviceId: deviceAssignment?.assignedDeviceId || body?.preferredDeviceId || '',
     });
 
     return {
@@ -598,7 +611,11 @@ export async function getSimpleLeadSearchStatus({ companyId, user, sessionId }) 
     session = await enforceOpeningReadyTimeout(session);
 
     const pending = await getPendingCaptureRequest({ companyId: cid, sessionId });
-    const agentStatus = await getAgentStatusForCompany(cid, { sessionId });
+    const agentStatus = await getAgentStatusForCompany(cid, {
+        sessionId,
+        user,
+        preferredDeviceId: session.assignedDeviceId || '',
+    });
 
     const captureMongo = {
         companyId: cid,
@@ -739,6 +756,8 @@ export async function getSimpleLeadSearchStatus({ companyId, user, sessionId }) 
             userId: session.createdBy ? String(session.createdBy) : null,
             name: session.createdByName || '',
             monitoring: Boolean(access.monitoring),
+            deviceId: session.assignedDeviceId || '',
+            deviceName: session.assignedDeviceName || '',
         },
         agentStatus,
         pendingCapture: pending.pendingCapture,
@@ -982,8 +1001,8 @@ export async function stopAndExportSimpleLeadSearch({ companyId, user, sessionId
     return { ...exported, session: stopped.session, sessionEndedMessage: stopped.sessionEndedMessage };
 }
 
-export async function getAgentStatus({ companyId, user, sessionId }) {
+export async function getAgentStatus({ companyId, user, sessionId, preferredDeviceId }) {
     requireCompanyId(companyId);
     assertAssistedCaptureView(user);
-    return getAgentStatusForCompany(companyId, { sessionId });
+    return getAgentStatusForCompany(companyId, { sessionId, user, preferredDeviceId });
 }

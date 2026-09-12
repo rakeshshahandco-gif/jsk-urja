@@ -114,13 +114,23 @@ export async function setAgentControl(companyId, id, command, { message } = {}) 
     return job.toObject();
 }
 
-export async function agentConnect(companyId, agentTokenId, { agentInstanceId = '' } = {}) {
+export async function agentConnect(companyId, agentTokenId, extras = {}) {
+    const { touchAgentPresence } = await import('../../searchCampaign/assistedCapture/agentPresence.service.js');
+    const presence = await touchAgentPresence(
+        companyId,
+        agentTokenId,
+        extras.agentInstanceId || '',
+        extras,
+    );
     return {
         ok: true,
         status: 'WAITING_FOR_TASK',
         companyId: String(companyId),
         agentTokenId: String(agentTokenId),
-        agentInstanceId: String(agentInstanceId || '').slice(0, 120),
+        agentInstanceId: String(extras.agentInstanceId || '').slice(0, 120),
+        deviceId: presence.deviceId || '',
+        deviceName: presence.deviceName || '',
+        userId: presence.userId || null,
         serverTime: new Date().toISOString(),
         policy: {
             cookiesUploadForbidden: true,
