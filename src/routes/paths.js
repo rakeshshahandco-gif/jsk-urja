@@ -457,6 +457,7 @@ export const PATHS = {
         PREVIEW: (jobId) => `/data-extractor/preview/${jobId}`,
         RUN: (sessionId) => `/data-extractor/runs/${sessionId}`,
         SETTINGS: '/data-extractor/settings',
+        DISCOVERY_AGENT: '/data-extractor/discovery-agent',
         QUICK_SEARCH: '/data-extractor/quick-search',
         DISCOVERY: '/data-extractor/quick-search',
         DISCOVERY_JOBS: '/data-extractor/discovery-jobs',

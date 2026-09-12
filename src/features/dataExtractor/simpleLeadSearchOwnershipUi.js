@@ -63,6 +63,12 @@ export function readLocalDeviceId() {
     }
 }
 
+export function formatRegisterPcStatus({ online, deviceName } = {}) {
+    const name = String(deviceName || '').trim();
+    if (online) return name ? `Ready — ${name}` : 'Ready';
+    return name ? `Offline — ${name}` : 'Offline';
+}
+
 export function writeLocalDeviceId(deviceId) {
     const id = String(deviceId || '').trim();
     if (!id) return;

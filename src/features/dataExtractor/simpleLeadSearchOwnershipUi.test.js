@@ -8,10 +8,16 @@ import {
     resolveStartNewDecision,
     formatOwnerBanner,
     formatExtractionDeviceLine,
+    formatRegisterPcStatus,
     deleteConfirmMessage,
 } from './simpleLeadSearchOwnershipUi.js';
 
 describe('Simple Lead Search ownership UI', () => {
+    it('formats Discovery Agent Ready / Offline for Register this PC', () => {
+        assert.equal(formatRegisterPcStatus({ online: false }), 'Offline');
+        assert.equal(formatRegisterPcStatus({ online: true, deviceName: 'JATIN-PC' }), 'Ready — JATIN-PC');
+    });
+
     it('treats admin roles as All Searches capable', () => {
         assert.equal(isDataExtractorAdminUser({ roleName: 'admin' }), true);
         assert.equal(isDataExtractorAdminUser({ roleName: 'staff' }), false);

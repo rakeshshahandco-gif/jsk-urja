@@ -57,6 +57,7 @@ import {
 import SimpleLeadSearchCapturedDataPanel from './SimpleLeadSearchCapturedDataPanel.jsx';
 import SimpleLeadSearchLiveActivityPanel from './SimpleLeadSearchLiveActivityPanel.jsx';
 import DataExtractorActiveRunsPanel from './DataExtractorActiveRunsPanel.jsx';
+import DataExtractorRegisterThisPcPanel from './DataExtractorRegisterThisPcPanel';
 
 class SimpleLeadSearchErrorBoundary extends React.Component {
     constructor(props) {
@@ -2808,6 +2809,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                     Discovery Agent is not connected on this computer. Start the Discovery Agent on this PC to begin extraction.
                 </p>
             ) : null}
+            {!runMode ? <DataExtractorRegisterThisPcPanel compact /> : null}
             {isRunRoute && hideStartForm ? (
                 <div className={styles.card} role="status" style={{ marginBottom: 16 }}>
                     <p style={{ margin: 0, fontWeight: 700, color: '#0f172a' }}>

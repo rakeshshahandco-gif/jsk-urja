@@ -15,7 +15,7 @@ export const MODULE_REGISTRY = [
     { code: 'purchase', label: 'Purchase', group: 'core', menuIds: ['purchase'], permissionModules: ['purchase'] },
     { code: 'inventory', label: 'Inventory', group: 'core', menuIds: ['inventory'], permissionModules: ['inventory'] },
     { code: 'documents', label: 'Documents / Scan', group: 'core', menuIds: ['documents-menu'], permissionModules: ['documents', 'scan_entry', 'import_utility'] },
-    { code: 'data_extractor', label: 'Data Extractor', group: 'core', menuIds: ['data-extractor', 'data-extractor-keyword', 'data-extractor-manual', 'data-extractor-import', 'data-extractor-settings'], permissionModules: ['data_extractor'] },
+    { code: 'data_extractor', label: 'Data Extractor', group: 'core', menuIds: ['data-extractor', 'data-extractor-keyword', 'data-extractor-manual', 'data-extractor-import', 'data-extractor-settings', 'data-extractor-discovery-agent'], permissionModules: ['data_extractor'] },
     { code: 'production', label: 'Production (General)', group: 'core', menuIds: ['production', 'prod-dashboard', 'model-conversion', 'comp-replacement', 'prod-rejection', 'prod-planning', 'workflow-production'], permissionModules: ['production'] },
     { code: 'service', label: 'Service / Complaints', group: 'core', menuIds: ['service'], permissionModules: ['service'] },
     { code: 'accounts', label: 'Accounts / Vouchers', group: 'finance', menuIds: ['accounts', 'voucher-entry', 'account-master-parent'], permissionModules: ['accounts', 'voucher_entry', 'account_master'] },

@@ -14,6 +14,7 @@ const tabs = [
     { to: PATHS.DATA_EXTRACTOR.SAVED_SEARCHES, label: 'Saved Searches' },
     { to: PATHS.DATA_EXTRACTOR.HISTORY, label: 'History' },
     { to: PATHS.DATA_EXTRACTOR.SIMPLE_LEAD_SEARCH, label: 'Simple Lead Search' },
+    { to: PATHS.DATA_EXTRACTOR.DISCOVERY_AGENT, label: 'Discovery Agent' },
     { to: PATHS.DATA_EXTRACTOR.FACEBOOK, label: 'Facebook' },
     { to: PATHS.DATA_EXTRACTOR.INSTAGRAM, label: 'Instagram' },
     { to: PATHS.DATA_EXTRACTOR.LINKEDIN, label: 'LinkedIn' },

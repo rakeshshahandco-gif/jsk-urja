@@ -19,6 +19,11 @@ import { ingestAgentRecords } from '../services/dataExtractor/discovery/agent/ag
 
 const FORBIDDEN_SCOPE_KEYS = ['companyId', 'tenantId', 'company_id', 'tenant_id'];
 
+function isExtractorAdmin(user) {
+    const role = String(user?.roleName || user?.role?.name || '').trim().toLowerCase();
+    return ['superadmin', 'admin', 'system admin', 'systemadmin'].includes(role);
+}
+
 function rejectScopedBody(body = {}) {
     for (const key of FORBIDDEN_SCOPE_KEYS) {
         if (Object.prototype.hasOwnProperty.call(body || {}, key)) {
@@ -44,12 +49,18 @@ export const createToken = asyncHandler(async (req, res) => {
 });
 
 export const listTokens = asyncHandler(async (req, res) => {
-    const data = await listAgentTokens(req.companyId);
+    const data = await listAgentTokens(req.companyId, {
+        userId: req.user?.id,
+        admin: isExtractorAdmin(req.user),
+    });
     res.send(new ApiResponse(200, { tokens: data }, 'Discovery agent tokens'));
 });
 
 export const revokeToken = asyncHandler(async (req, res) => {
-    const data = await revokeAgentToken(req.companyId, req.params.id);
+    const data = await revokeAgentToken(req.companyId, req.params.id, {
+        userId: req.user?.id,
+        admin: isExtractorAdmin(req.user),
+    });
     res.send(new ApiResponse(200, data, 'Token revoked'));
 });
 

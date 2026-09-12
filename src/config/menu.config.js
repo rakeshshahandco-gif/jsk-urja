@@ -199,6 +199,13 @@ export const menuConfig = [
                         permission: 'data_extractor.extractor.view',
                     },
                     {
+                        id: 'data-extractor-discovery-agent',
+                        title: 'Discovery Agent',
+                        path: PATHS.DATA_EXTRACTOR.DISCOVERY_AGENT,
+                        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+                        permission: 'data_extractor.assisted_capture.start',
+                    },
+                    {
                         id: 'data-extractor-settings',
                         title: 'Extractor Settings',
                         path: PATHS.DATA_EXTRACTOR.SETTINGS,

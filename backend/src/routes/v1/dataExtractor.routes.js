@@ -1035,9 +1035,9 @@ router.post('/discovery/results/:id/reject', checkPermission('data_extractor.dis
 router.post('/discovery/results/:id/convert', checkPermission('data_extractor.discovery.convert_lead'), discoveryController.convertResult);
 
 // ---- Discovery Agent (CRM user JWT) ----
-router.post('/discovery/agent/tokens', checkPermission('data_extractor.discovery.use_local_agent'), discoveryAgentController.createToken);
-router.get('/discovery/agent/tokens', checkPermission('data_extractor.discovery.use_local_agent'), discoveryAgentController.listTokens);
-router.post('/discovery/agent/tokens/:id/revoke', checkPermission('data_extractor.discovery.use_local_agent'), discoveryAgentController.revokeToken);
+router.post('/discovery/agent/tokens', checkAnyPermission('data_extractor.discovery.use_local_agent', 'data_extractor.assisted_capture.start'), discoveryAgentController.createToken);
+router.get('/discovery/agent/tokens', checkAnyPermission('data_extractor.discovery.use_local_agent', 'data_extractor.assisted_capture.start'), discoveryAgentController.listTokens);
+router.post('/discovery/agent/tokens/:id/revoke', checkAnyPermission('data_extractor.discovery.use_local_agent', 'data_extractor.assisted_capture.start'), discoveryAgentController.revokeToken);
 router.post('/discovery/agent/jobs', checkPermission('data_extractor.discovery.use_local_agent'), discoveryAgentController.createJob);
 router.get('/discovery/agent/jobs', checkPermission('data_extractor.discovery.view'), discoveryAgentController.listJobs);
 router.get('/discovery/agent/jobs/:id', checkPermission('data_extractor.discovery.view'), discoveryAgentController.getJob);

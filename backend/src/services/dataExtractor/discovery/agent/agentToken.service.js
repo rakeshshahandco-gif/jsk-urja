@@ -61,8 +61,12 @@ export async function createAgentToken({
     };
 }
 
-export async function listAgentTokens(companyId) {
-    const rows = await DiscoveryAgentToken.find({ companyId })
+export async function listAgentTokens(companyId, { userId = null, admin = false } = {}) {
+    const filter = { companyId };
+    if (!admin && userId) {
+        filter.$or = [{ userId }, { createdBy: userId }];
+    }
+    const rows = await DiscoveryAgentToken.find(filter)
         .sort({ createdAt: -1 })
         .select('-tokenHash')
         .lean();
@@ -84,9 +88,15 @@ export async function listAgentTokens(companyId) {
     }));
 }
 
-export async function revokeAgentToken(companyId, tokenId) {
+export async function revokeAgentToken(companyId, tokenId, { userId = null, admin = false } = {}) {
     const doc = await DiscoveryAgentToken.findOne({ _id: tokenId, companyId });
     if (!doc) throw new ApiError(404, 'Agent token not found');
+    if (!admin) {
+        const owner = String(doc.userId || doc.createdBy || '');
+        if (!userId || owner !== String(userId)) {
+            throw new ApiError(403, 'You can only revoke your own Discovery Agent');
+        }
+    }
     doc.revokedAt = new Date();
     doc.isActive = false;
     await doc.save();

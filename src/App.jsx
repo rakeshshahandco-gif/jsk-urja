@@ -175,6 +175,7 @@ import DataExtractorHistoryPage from '@/features/dataExtractor/DataExtractorHist
 import DataExtractorLeadsPage from '@/features/dataExtractor/DataExtractorLeadsPage';
 import DataExtractorPreviewPage from '@/features/dataExtractor/DataExtractorPreviewPage';
 import DataExtractorSettingsPage from '@/features/dataExtractor/DataExtractorSettingsPage';
+import DataExtractorDiscoveryAgentPage from '@/features/dataExtractor/DataExtractorDiscoveryAgentPage';
 import DataExtractorDiscoveryPage from '@/features/dataExtractor/DataExtractorDiscoveryPage';
 import DataExtractorDiscoveryJobsPage from '@/features/dataExtractor/DataExtractorDiscoveryJobsPage';
 import DataExtractorDiscoveryJobPage from '@/features/dataExtractor/DataExtractorDiscoveryJobPage';
@@ -908,6 +909,7 @@ const AppLayout = () => {
                             <Route path="saved-searches" element={<ProtectedRoute requirePermission="data_extractor.extractor.search"><DataExtractorSavedSearchesPage /></ProtectedRoute>} />
                             <Route path="duplicate-review" element={<ProtectedRoute requirePermission="data_extractor.extractor.view"><DataExtractorDuplicateReviewPage /></ProtectedRoute>} />
                             <Route path="simple-lead-search" element={<ProtectedRoute requirePermission="data_extractor.assisted_capture.start"><DataExtractorSimpleLeadSearchPage /></ProtectedRoute>} />
+                            <Route path="discovery-agent" element={<ProtectedRoute requirePermission="data_extractor.assisted_capture.start"><DataExtractorDiscoveryAgentPage /></ProtectedRoute>} />
                             <Route path="facebook" element={<ProtectedRoute requirePermission="data_extractor.assisted_capture.start"><DataExtractorSocialSourcePage platform="facebook" /></ProtectedRoute>} />
                             <Route path="instagram" element={<ProtectedRoute requirePermission="data_extractor.assisted_capture.start"><DataExtractorSocialSourcePage platform="instagram" /></ProtectedRoute>} />
                             <Route path="linkedin" element={<ProtectedRoute requirePermission="data_extractor.assisted_capture.start"><DataExtractorSocialSourcePage platform="linkedin" /></ProtectedRoute>} />

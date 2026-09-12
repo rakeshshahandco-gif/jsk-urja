@@ -23,8 +23,10 @@ let companyA;
 let companyB;
 let adminUser;
 let staffNoPermUser;
+let staffExtractUser;
 let adminBearer;
 let staffBearer;
+let staffExtractBearer;
 let routeImportError = '';
 let dataExtractorRoute;
 let dataExtractorPublicRoute;
@@ -119,8 +121,25 @@ before(async () => {
             },
         },
     });
+    staffExtractUser = await User.create({
+        name: 'JATIN THAKKAR',
+        username: `da.jatin.${TAG}`.toLowerCase().replace(/[^a-z0-9.]/g, ''),
+        email: `da.jatin.${TAG}@t.local`.toLowerCase(),
+        password: 'TestPass123!',
+        roleName: 'staff',
+        allowLogin: true,
+        isActive: true,
+        companyAccessConfigured: false,
+        additionalPermissions: {
+            data_extractor: {
+                discovery: { view: true, use_local_agent: false },
+                assisted_capture: { start: true, view: true },
+            },
+        },
+    });
     adminBearer = sign(adminUser);
     staffBearer = sign(staffNoPermUser);
+    staffExtractBearer = sign(staffExtractUser);
 
     server = http.createServer(buildApp());
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -175,6 +194,28 @@ describe('Discovery Agent token creation HTTP contract', () => {
         });
         assert.equal(res.status, 403);
         assert.match(String(res.json?.message || ''), /use_local_agent/i);
+    });
+
+    it('3b. Staff with assisted_capture.start can register their own PC', async () => {
+        assert.equal(routeImportError, '', routeImportError);
+        const res = await api('POST', '/api/v1/data-extractor/discovery/agent/tokens', {
+            bearer: staffExtractBearer,
+            companyId: companyA._id,
+            body: { name: 'JATIN-PC', deviceName: 'JATIN-PC' },
+        });
+        assert.equal(res.status, 201, JSON.stringify(res.json));
+        const data = res.json?.data || {};
+        assert.ok(data.token);
+        assert.ok(data.deviceId);
+        assert.equal(data.deviceName, 'JATIN-PC');
+        const list = await api('GET', '/api/v1/data-extractor/discovery/agent/tokens', {
+            bearer: staffExtractBearer,
+            companyId: companyA._id,
+        });
+        assert.equal(list.status, 200);
+        const tokens = list.json?.data?.tokens || [];
+        assert.ok(tokens.every((t) => String(t.userId) === String(staffExtractUser._id)));
+        assert.equal(JSON.stringify(list.json).includes(data.token), false);
     });
 
     it('4+5. Valid admin + company creates token without X-Discovery-Agent-Token', async () => {

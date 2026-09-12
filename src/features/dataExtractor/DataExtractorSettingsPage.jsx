@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { dataExtractorApi } from '@/services/dataExtractorApi';
 import DataExtractorUserGuide from './DataExtractorUserGuide';
 import DataExtractorClearHistoryModal, { useCanClearExtractorHistory } from './DataExtractorClearHistoryModal';
+import DataExtractorRegisterThisPcPanel from './DataExtractorRegisterThisPcPanel';
 
 function isSettingsEditor(user, hasRole, hasPermission) {
     const role = String(user?.roleName || user?.role?.name || '').trim().toLowerCase();
@@ -148,6 +149,7 @@ export default function DataExtractorSettingsPage() {
     return (
         <div style={{ padding: 24, maxWidth: 640 }}>
             <h2 style={{ marginTop: 0 }}>Data Extractor Settings</h2>
+            <DataExtractorRegisterThisPcPanel />
             {!isSuperadmin && (
                 <p style={{ color: '#b45309', fontSize: 13, background: '#fffbeb', padding: 12, borderRadius: 8 }}>
                     Only platform superadmin can enable this module for a company.
