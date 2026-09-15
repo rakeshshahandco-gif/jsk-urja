@@ -3,6 +3,12 @@ profiles/
 .env
 .env.local
 *.log
+logs/
+*.pid
 backup/
 .env.production.local
 .env.*.local
+windows/cache/
+windows/payload/
+windows/dist/
+*.exe

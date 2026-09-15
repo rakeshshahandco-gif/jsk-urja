@@ -2,9 +2,30 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { chromium } from 'playwright';
+import { isolatedSourceProfileDir, normalizeExtractionSource } from './sourceProfile.util.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const profilesRoot = path.resolve(__dirname, '..', 'profiles');
+
+function resolveProfilesRoot() {
+    if (process.env.DISCOVERY_AGENT_PROFILE_DIR) {
+        return process.env.DISCOVERY_AGENT_PROFILE_DIR;
+    }
+    const local = process.env.LOCALAPPDATA;
+    if (local && (process.env.JSK_DISCOVERY_AGENT_INSTALLED === '1' || /Program Files/i.test(process.cwd()))) {
+        const legacy = path.join(local, 'JSK URJA', 'Discovery Agent', 'profiles');
+        if (fs.existsSync(legacy)) return legacy;
+        return path.join(local, 'JSK URJA', 'Extraction Agent', 'profiles');
+    }
+    return path.resolve(__dirname, '..', 'profiles');
+}
+
+function resolveIsolatedProfilesRoot() {
+    const local = process.env.LOCALAPPDATA;
+    if (local) return path.join(local, 'JSK URJA', 'Extraction Agent', 'profiles');
+    return path.join(resolveProfilesRoot(), 'isolated');
+}
+
+const profilesRoot = resolveProfilesRoot();
 
 function launchErrorMessage(err) {
     const raw = String(err && err.message ? err.message : err || 'unknown error');
@@ -111,4 +132,63 @@ export async function clearLocalProfile(sourceMode) {
         fs.rmSync(dir, { recursive: true, force: true });
     }
     return { cleared: true, profileDir: dir };
+}
+
+export function isolatedProfileDir(userId, source) {
+    return isolatedSourceProfileDir(resolveIsolatedProfilesRoot(), userId, source);
+}
+
+/** Facebook / Instagram only. Google/web jobs keep openVisibleContext(). */
+export async function openIsolatedSourceContext(userId, source) {
+    const src = normalizeExtractionSource(source);
+    if (src === 'web') {
+        return openVisibleContext('google_visible');
+    }
+    const dir = isolatedProfileDir(userId, src);
+    fs.mkdirSync(dir, { recursive: true });
+    return openVisibleContextAt(dir);
+}
+
+export async function clearIsolatedSourceProfile(userId, source) {
+    const dir = isolatedProfileDir(userId, source);
+    if (fs.existsSync(dir)) {
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
+    return { cleared: true, profileDir: dir };
+}
+
+async function openVisibleContextAt(dir) {
+    fs.mkdirSync(dir, { recursive: true });
+    if (process.env.PLAYWRIGHT_BROWSERS_PATH && /cursor-sandbox-cache/i.test(process.env.PLAYWRIGHT_BROWSERS_PATH)) {
+        delete process.env.PLAYWRIGHT_BROWSERS_PATH;
+    }
+    const headless = String(process.env.DISCOVERY_AGENT_HEADLESS || '').toLowerCase() === 'true';
+    const attempts = [
+        { label: 'chrome', options: { channel: 'chrome' } },
+        { label: 'msedge', options: { channel: 'msedge' } },
+        { label: 'chromium', options: {} },
+    ];
+    let lastErr = null;
+    for (const attempt of attempts) {
+        try {
+            const context = await chromium.launchPersistentContext(dir, {
+                headless,
+                viewport: { width: 1280, height: 900 },
+                args: [
+                    '--disable-blink-features=AutomationControlled',
+                    '--window-position=80,80',
+                    '--window-size=1280,900',
+                ],
+                ...optionalChinaSearchProxy(),
+                ...attempt.options,
+            });
+            const page = context.pages()[0] || await context.newPage();
+            if (!headless) await ensureManagedWindowVisible(context, page);
+            return { context, page, profileDir: dir, browserChannel: attempt.label };
+        } catch (err) {
+            lastErr = err;
+            console.error('Browser launch failed via', attempt.label + ':', launchErrorMessage(err));
+        }
+    }
+    throw new Error(launchErrorMessage(lastErr) || 'Could not open managed Chrome/Edge/Chromium browser');
 }

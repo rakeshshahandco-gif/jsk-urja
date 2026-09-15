@@ -30,12 +30,12 @@ function rejectScopedBody(body = {}) {
 }
 
 export const facebookStatus = asyncHandler(async (req, res) => {
-    const data = getSocialSourceStatus({ platform: 'facebook', companyId: req.companyId });
+    const data = await getSocialSourceStatus({ platform: 'facebook', companyId: req.companyId, user: req.user });
     res.send(new ApiResponse(200, data, 'Facebook source status'));
 });
 
 export const instagramStatus = asyncHandler(async (req, res) => {
-    const data = getSocialSourceStatus({ platform: 'instagram', companyId: req.companyId });
+    const data = await getSocialSourceStatus({ platform: 'instagram', companyId: req.companyId, user: req.user });
     res.send(new ApiResponse(200, data, 'Instagram source status'));
 });
 
@@ -57,11 +57,15 @@ export const facebookStart = asyncHandler(async (req, res) => {
         reviewPriority: req.body.reviewPriority,
         autoReviewAfterDiscovery: req.body.autoReviewAfterDiscovery,
     });
-    res.send(new ApiResponse(200, data, data.started
-        ? 'Automatic Facebook group collection started'
-        : (data.alreadyRunning
-            ? (data.message || 'This group collection is already running.')
-            : (data.ingested ? 'Facebook candidates sent to Processing' : 'No Facebook candidates found'))));
+    res.send(new ApiResponse(200, data, data.waitingForDevice
+        ? (data.message || data.note)
+        : (data.extractionMode === 'DIRECT_AGENT'
+            ? (data.ingested ? 'Facebook candidates sent to Processing' : (data.message || 'Facebook Direct Agent job queued'))
+            : (data.started
+                ? 'Automatic Facebook group collection started'
+                : (data.alreadyRunning
+                    ? (data.message || 'This group collection is already running.')
+                    : (data.ingested ? 'Facebook candidates sent to Processing' : 'No Facebook candidates found'))))));
 });
 
 export const facebookStop = asyncHandler(async (req, res) => {
@@ -75,7 +79,7 @@ export const facebookPause = asyncHandler(async (req, res) => {
 });
 
 export const facebookProgress = asyncHandler(async (req, res) => {
-    const data = facebookExtractProgress({ companyId: req.companyId, user: req.user });
+    const data = await facebookExtractProgress({ companyId: req.companyId, user: req.user });
     res.send(new ApiResponse(200, data, data.running ? 'Facebook extract running' : 'No Facebook extract is running'));
 });
 
@@ -248,12 +252,12 @@ export const instagramCapturesEnrichWebsites = asyncHandler(async (req, res) => 
 });
 
 export const linkedinStatus = asyncHandler(async (req, res) => {
-    const data = getSocialSourceStatus({ platform: 'linkedin', companyId: req.companyId });
+    const data = await getSocialSourceStatus({ platform: 'linkedin', companyId: req.companyId, user: req.user });
     res.send(new ApiResponse(200, data, 'LinkedIn source status'));
 });
 
 export const xStatus = asyncHandler(async (req, res) => {
-    const data = getSocialSourceStatus({ platform: 'x', companyId: req.companyId });
+    const data = await getSocialSourceStatus({ platform: 'x', companyId: req.companyId, user: req.user });
     res.send(new ApiResponse(200, data, 'X source status'));
 });
 

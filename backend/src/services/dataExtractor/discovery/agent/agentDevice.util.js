@@ -20,7 +20,15 @@ export function normalizeDeviceName(value) {
 }
 
 export function normalizeHostname(value) {
-    return String(value || '').trim().replace(/[\r\n]+/g, ' ').slice(0, 120);
+    return String(value || '').trim().replace(/[\r\n]+/g, ' ').replace(/\.local$/i, '').slice(0, 120);
+}
+
+export function normalizeInstallId(value) {
+    return String(value || '').trim().slice(0, 80);
+}
+
+export function hostnameMatchKey(value) {
+    return normalizeHostname(value).toUpperCase();
 }
 
 export function tokenOwnerId(token) {
@@ -80,6 +88,60 @@ export function tokenMayClaimSession(token, session) {
 export function assertTokenMayClaimSession(token, session) {
     if (!tokenMayClaimSession(token, session)) {
         throw new ApiError(403, 'This extraction is assigned to another user or computer');
+    }
+}
+
+export const FACEBOOK_DIRECT_AGENT_SOURCE_MODE = 'facebook_direct_agent';
+
+/**
+ * Strict Facebook Direct Agent claim:
+ * company + user + device + facebook source. Admin PC cannot take another user's job.
+ */
+export function tokenMayClaimFacebookDirectJob(token, job) {
+    if (!token || !job) return false;
+    const mode = String(job.sourceMode || '');
+    const source = String(job.metadata?.source || '').toLowerCase();
+    if (mode !== FACEBOOK_DIRECT_AGENT_SOURCE_MODE && source !== 'facebook') return false;
+    if (String(token.companyId || '') !== String(job.companyId || '')) return false;
+    const tokenUser = String(token.userId || token.createdBy || '');
+    const jobUser = String(job.createdBy || job.metadata?.userId || '');
+    if (!tokenUser || !jobUser || tokenUser !== jobUser) return false;
+    const tokenDevice = normalizeDeviceId(token.deviceId) || fallbackLegacyDeviceId(token);
+    const jobDevice = normalizeDeviceId(job.assignedDeviceId || job.metadata?.assignedDeviceId);
+    if (!tokenDevice || !jobDevice || tokenDevice !== jobDevice) return false;
+    return true;
+}
+
+/**
+ * Staff DPAPI tokens can predate userId binding. Inherit userId only when exactly
+ * one same-company same-device sibling token has an owner. Never guess across users.
+ */
+export function bindFacebookDirectClaimIdentity(token, siblingTokens = []) {
+    if (!token) return token;
+    if (token.userId || token.createdBy) return token;
+    const tokenDevice = normalizeDeviceId(token.deviceId) || fallbackLegacyDeviceId(token);
+    if (!tokenDevice) return token;
+    const owners = [...new Set(
+        (Array.isArray(siblingTokens) ? siblingTokens : [])
+            .filter((s) => s && String(s.companyId || '') === String(token.companyId || ''))
+            .filter((s) => {
+                const d = normalizeDeviceId(s.deviceId) || fallbackLegacyDeviceId(s);
+                return d && d === tokenDevice;
+            })
+            .map((s) => String(s.userId || s.createdBy || ''))
+            .filter(Boolean),
+    )];
+    if (owners.length !== 1) return token;
+    const owner = owners[0];
+    const plain = typeof token.toObject === 'function' ? token.toObject() : { ...token };
+    plain.userId = owner;
+    if (!plain.createdBy) plain.createdBy = owner;
+    return plain;
+}
+
+export function assertTokenMayClaimFacebookDirectJob(token, job) {
+    if (!tokenMayClaimFacebookDirectJob(token, job)) {
+        throw new ApiError(403, 'This Facebook job is assigned to another user or computer');
     }
 }
 

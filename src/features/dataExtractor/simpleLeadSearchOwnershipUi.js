@@ -69,6 +69,32 @@ export function formatRegisterPcStatus({ online, deviceName } = {}) {
     return name ? `Offline — ${name}` : 'Offline';
 }
 
+export function formatDiscoveryAgentHeadline({ online, deviceName, installed = true } = {}) {
+    const name = String(deviceName || '').trim();
+    if (online) return name ? `JSK Extraction Agent: Ready — ${name}` : 'JSK Extraction Agent: Ready';
+    if (!installed) return 'JSK Extraction Agent';
+    return name ? `JSK Extraction Agent Offline — ${name}` : 'JSK Extraction Agent Offline';
+}
+
+export function crmApiBaseUrl() {
+    // Vite only replaces import.meta.env.VITE_* (not import.meta?.env).
+    // Local 4173 must never fall back to page-origin /api (Vite proxies that to :5000).
+    const viteUrl =
+        typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL
+            ? String(import.meta.env.VITE_API_URL).trim().replace(/\/$/, '')
+            : '';
+    if (/^https?:\/\//i.test(viteUrl)) return viteUrl;
+    if (typeof window !== 'undefined') {
+        const host = String(window.location?.hostname || '');
+        if (host.endsWith('.onrender.com') && window.location?.origin) {
+            return `${window.location.origin}/api/v1`;
+        }
+    }
+    return 'http://127.0.0.1:5100/api/v1';
+}
+
+export const LOCAL_DISCOVERY_AGENT_ORIGIN = 'http://127.0.0.1:17373';
+
 export function writeLocalDeviceId(deviceId) {
     const id = String(deviceId || '').trim();
     if (!id) return;

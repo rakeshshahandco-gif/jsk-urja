@@ -10,6 +10,7 @@ const discoveryAgentTokenSchema = new mongoose.Schema(
         userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null, index: true },
         userName: { type: String, trim: true, default: '', maxlength: 160 },
         deviceId: { type: String, trim: true, default: '', maxlength: 80, index: true },
+        installId: { type: String, trim: true, default: '', maxlength: 80, index: true },
         deviceName: { type: String, trim: true, default: '', maxlength: 120 },
         hostname: { type: String, trim: true, default: '', maxlength: 120 },
         applicationKey: { type: String, trim: true, default: '', maxlength: 80 },
@@ -28,6 +29,7 @@ const discoveryAgentTokenSchema = new mongoose.Schema(
 discoveryAgentTokenSchema.index({ companyId: 1, isActive: 1 });
 discoveryAgentTokenSchema.index({ companyId: 1, userId: 1, isActive: 1 });
 discoveryAgentTokenSchema.index({ companyId: 1, deviceId: 1 });
+discoveryAgentTokenSchema.index({ companyId: 1, userId: 1, installId: 1 });
 
 const DiscoveryAgentToken = mongoose.models.DiscoveryAgentToken
     || mongoose.model('DiscoveryAgentToken', discoveryAgentTokenSchema);

@@ -207,10 +207,25 @@ export default function DataExtractorSocialSourcePage({ platform }) {
         setBusy('connect');
         try {
             const data = await cfg.connect();
-            toast.success(data?.status === 'connected' ? `${label} connected` : 'Login not completed');
+            if (data?.localConnectRequired && (platform === 'facebook' || platform === 'instagram')) {
+                const pairRes = await fetch(`${data.localPairOrigin || 'http://127.0.0.1:17373'}/sources/${platform}/connect`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: data.userId }),
+                });
+                const pairJson = await pairRes.json().catch(() => ({}));
+                if (!pairRes.ok || pairJson?.ok === false) {
+                    throw new Error(pairJson?.message || 'Complete login in the local browser window');
+                }
+                toast.success(`${label}: Connected`);
+            } else {
+                toast.success(data?.status === 'connected' || data?.directLogin?.status === 'connected'
+                    ? `${label} connected`
+                    : (data?.localConnectRequired ? `Finish ${label} login on this PC` : 'Login not completed'));
+            }
             await loadStatus();
         } catch (e) {
-            toast.error(e?.response?.data?.message || 'Connect failed');
+            toast.error(e?.response?.data?.message || e.message || 'Connect failed');
         } finally {
             setBusy('');
         }
@@ -219,7 +234,18 @@ export default function DataExtractorSocialSourcePage({ platform }) {
     const onDisconnect = async () => {
         setBusy('disconnect');
         try {
-            await cfg.disconnect();
+            const data = await cfg.disconnect();
+            if (data?.localLogoutRequired && (platform === 'facebook' || platform === 'instagram')) {
+                try {
+                    await fetch(`${data.localPairOrigin || 'http://127.0.0.1:17373'}/sources/${platform}/logout`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ userId: data.userId }),
+                    });
+                } catch {
+                    /* local agent may be closed */
+                }
+            }
             toast.success(`${label} disconnected`);
             await loadStatus();
         } catch (e) {
@@ -247,7 +273,31 @@ export default function DataExtractorSocialSourcePage({ platform }) {
         setResult(null);
         try {
             const payload = { mode, keyword: keyword.trim(), location: location.trim(), searchType };
-            const data = await cfg.extract(payload);
+            let data = await cfg.extract(payload);
+            if (platform === 'facebook' && data?.extractionMode === 'DIRECT_AGENT' && !data?.ingested) {
+                for (let i = 0; i < 45; i += 1) {
+                    setResult({
+                        ...data,
+                        note: data.waitMessage || data.note || data.message,
+                    });
+                    await new Promise((r) => setTimeout(r, 2000));
+                    const prog = await dataExtractorApi.facebookExtractProgress();
+                    const da = prog?.directAgent;
+                    if (!da) continue;
+                    data = {
+                        ...data,
+                        ingested: da.ingested || 0,
+                        note: da.message || da.waitMessage || data.note,
+                        waitingForDevice: da.waitingForDevice,
+                        errors: da.expired ? [da.message] : data.errors,
+                    };
+                    setResult(data);
+                    if (da.expired) throw new Error(da.message || 'Facebook session expired');
+                    if (da.status === 'FAILED') throw new Error(da.message || 'Facebook Direct Agent job failed');
+                    if (da.status === 'COMPLETED' || Number(da.ingested || 0) > 0) break;
+                    if (da.status === 'MANUAL_ACTION_REQUIRED') break;
+                }
+            }
             setResult(data);
             if (platform === 'instagram') {
                 setCaptureCampaignId('');
@@ -255,6 +305,8 @@ export default function DataExtractorSocialSourcePage({ platform }) {
             }
             if (platform === 'facebook') setCaptureReload((n) => n + 1);
             if (data?.ingested) toast.success(`${data.ingested} candidate(s) sent to Processing`);
+            else if (data?.waitingForDevice) toast(data.message || data.note || 'Waiting for assigned PC');
+            else if (data?.extractionMode === 'DIRECT_AGENT') toast(data.message || data.note || 'Facebook Direct Agent job queued');
             else toast(data?.errors?.[0] || 'No candidates found');
         } catch (e) {
             const timedOut = e?.code === 'ECONNABORTED' || /timeout/i.test(String(e?.message || ''));
@@ -620,6 +672,22 @@ export default function DataExtractorSocialSourcePage({ platform }) {
                 <div style={{ marginTop: 6, color: '#64748b' }}>
                     Official API: {status?.officialApi?.message || 'Not configured'}
                 </div>
+                {(platform === 'facebook' || platform === 'instagram') ? (
+                    <div style={{ marginTop: 8, color: '#334155' }}>
+                        {platform === 'facebook' && mode === 'public_search' && searchType === 'pages' ? (
+                            <>
+                                <div><strong>Collection Mode: Unlimited — Until Exhausted / Stopped</strong></div>
+                                <div style={{ marginTop: 4 }}>
+                                    Public Search stays login-free. Queries and provider pages continue until accessible results are exhausted. Direct Facebook Login is a separate optional source.
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <strong>No fixed campaign limit.</strong> Accessible results continue in batches until exhaustion, you stop, the session expires, or the platform requires a pause. Dedupe does not stop discovery.
+                            </>
+                        )}
+                    </div>
+                ) : null}
             </div>
 
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Keyword</label>
@@ -802,6 +870,7 @@ export default function DataExtractorSocialSourcePage({ platform }) {
                             Facebook Displayed Members: <strong>{selectedGroup?.members || memberCampaign?.summary?.displayedMembers || fbProgress?.progress?.displayedMemberCount || '—'}</strong>
                             <div style={{ color: '#64748b', fontSize: 12 }}>Facebook displayed total — not extracted count</div>
                         </div>
+                        <div style={{ fontSize: 13 }}>Collected: <strong>{memberCampaign?.summary?.uniqueDiscovered ?? fbProgress?.progress?.uniqueMembersCollected ?? liveMemberTotal ?? 0}</strong></div>
                         <div style={{ fontSize: 13 }}>Unique Members Discovered: <strong>{memberCampaign?.summary?.uniqueDiscovered ?? fbProgress?.progress?.uniqueMembersCollected ?? liveMemberTotal ?? 0}</strong></div>
                         <div style={{ fontSize: 13 }}>New This Run: <strong>{memberCampaign?.summary?.newThisRun ?? fbProgress?.newThisRun ?? 0}</strong></div>
                         <div style={{ fontSize: 13 }}>Profiles Pending Review: <strong>{memberCampaign?.summary?.pendingReview ?? memberCampaign?.awaitingReview ?? 0}</strong></div>
@@ -818,6 +887,13 @@ export default function DataExtractorSocialSourcePage({ platform }) {
                         <div style={{ fontSize: 13 }}>Current Internal Batch: <strong>{memberCampaign?.summary?.currentBatch ?? 0}</strong></div>
                         <div style={{ fontSize: 13 }}>
                             Last Activity: <strong>{memberCampaign?.summary?.lastActivity ? new Date(memberCampaign.summary.lastActivity).toLocaleString() : '—'}</strong>
+                        </div>
+                        <div style={{ fontSize: 13 }}>
+                            Last Checkpoint: <strong>{
+                                memberCampaign?.checkpoint?.lastSuccessfulAt
+                                    ? new Date(memberCampaign.checkpoint.lastSuccessfulAt).toLocaleString()
+                                    : (memberCampaign?.summary?.lastActivity ? new Date(memberCampaign.summary.lastActivity).toLocaleString() : '—')
+                            }</strong>
                         </div>
                         <div style={{ fontSize: 13 }}>
                             Run Time: <strong>{Math.floor((memberCampaign?.summary?.runTimeMs || fbProgress?.runTimeMs || (autoJobRunning ? elapsedSec * 1000 : 0)) / 1000)}s</strong>
@@ -949,7 +1025,9 @@ export default function DataExtractorSocialSourcePage({ platform }) {
                 <button type="button" disabled={!!busy} style={btn('#1d4ed8')} onClick={onStart}>
                     {busy === 'extract'
                         ? (mode === 'direct_login'
-                            ? `Running in Chrome… ${elapsedSec}s`
+                            ? (platform === 'facebook' && searchType === 'pages'
+                                ? `Running on this PC — JSK Extraction Agent… ${elapsedSec}s`
+                                : `Running in Chrome… ${elapsedSec}s`)
                             : `Searching… ${elapsedSec}s`)
                         : (cfg.extractLabel || `START ${label.toUpperCase()} EXTRACTION`)}
                 </button>
@@ -970,7 +1048,9 @@ export default function DataExtractorSocialSourcePage({ platform }) {
             ) : null}
             {((busy === 'extract' && mode === 'direct_login') || autoJobRunning) ? (
                 <p style={{ fontSize: 12, color: '#9a3412', marginTop: 8 }}>
-                    Keep the Chrome window open. The Facebook job continues on the backend if you leave this screen. Counts update automatically without reloading the page.
+                    {platform === 'facebook' && searchType === 'pages' && mode === 'direct_login'
+                        ? 'Facebook opens on this PC through JSK Extraction Agent. Cookies stay on this computer. Keep the agent running.'
+                        : 'Keep the Chrome window open. The Facebook job continues on the backend if you leave this screen. Counts update automatically without reloading the page.'}
                 </p>
             ) : null}
 
@@ -980,6 +1060,13 @@ export default function DataExtractorSocialSourcePage({ platform }) {
                     <div>Status: <strong>Loading more</strong></div>
                 </div>
             ) : null}
+            {platform === 'facebook' && mode === 'public_search' && searchType === 'pages' && busy === 'extract' ? (
+                <div style={{ marginTop: 12, border: '1px solid #e2e8f0', borderRadius: 8, padding: 10, fontSize: 13, background: '#fff' }}>
+                    <div><strong>Collection Mode: Unlimited — Until Exhausted / Stopped</strong></div>
+                    <div>Status: <strong>Searching public Facebook businesses/pages…</strong></div>
+                    <div style={{ color: '#64748b', marginTop: 4 }}>First page size is not the campaign maximum. More queries and provider pages continue automatically.</div>
+                </div>
+            ) : null}
 
             {result ? (
                 <div style={{ marginTop: 16, border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: 8, padding: 12, fontSize: 13 }}>
@@ -987,7 +1074,9 @@ export default function DataExtractorSocialSourcePage({ platform }) {
                     <p>Ingested: <strong>{result.ingested || 0}</strong>{result.duplicate ? ' (existing URL updated)' : ''}{result.testOnly ? ' · testOnly' : ''}{result.mode ? ` · ${result.mode}` : ''}</p>
                     {platform === 'instagram' && result.instagramRun ? (
                         <div style={{ margin: '8px 0' }}>
-                            <div>Batch size: <strong>{result.instagramRun.batchSize}</strong></div>
+                            <div>No fixed campaign limit</div>
+                            <div>Collected: <strong>{result.instagramRun.totalCaptured}</strong></div>
+                            <div>Batch size: <strong>{result.instagramRun.batchSize}</strong> (operational only)</div>
                             <div>Total captured: <strong>{result.instagramRun.totalCaptured}</strong></div>
                             <div>New this batch: <strong>{result.instagramRun.newThisBatch}</strong></div>
                             <div>Already known: <strong>{result.instagramRun.alreadyKnown}</strong></div>
@@ -998,6 +1087,29 @@ export default function DataExtractorSocialSourcePage({ platform }) {
                                     Batch {b.index} → {b.newCount} profile(s)
                                 </div>
                             ))}
+                        </div>
+                    ) : null}
+                    {platform === 'facebook' && result.extractionMode === 'DIRECT_AGENT' ? (
+                        <div style={{ margin: '8px 0' }}>
+                            <div><strong>Mode: Direct Agent (this PC)</strong></div>
+                            <div>Device: <strong>{result.deviceName || '—'}</strong></div>
+                            <div>Server Puppeteer: <strong>not used</strong></div>
+                            {result.waitingForDevice ? <div>{result.message || result.note}</div> : null}
+                        </div>
+                    ) : null}
+                        <div style={{ margin: '8px 0' }}>
+                            <div><strong>Collection Mode: {result.facebookPublicRun.collectionMode}</strong></div>
+                            <div>Source Results Found: <strong>{result.facebookPublicRun.sourceResultsFound}</strong></div>
+                            <div>Unique Businesses: <strong>{result.facebookPublicRun.uniqueBusinesses}</strong></div>
+                            <div>Current Query: <strong>{result.facebookPublicRun.currentQuery || '—'}</strong></div>
+                            <div>{result.facebookPublicRun.queryProgressLabel || `Query ${result.facebookPublicRun.queryIndex || 0} of ${result.facebookPublicRun.queryTotal || 0}`}</div>
+                            <div>Current Provider: <strong>{result.facebookPublicRun.currentProvider || '—'}</strong></div>
+                            <div>Current Result Page: <strong>{result.facebookPublicRun.currentResultPage || 0}</strong></div>
+                            <div>Last Successful Page: <strong>{result.facebookPublicRun.lastSuccessfulPage || 0}</strong></div>
+                            <div>Next Page: <strong>{result.facebookPublicRun.nextPage || 1}</strong> (window {result.facebookPublicRun.pageWindow || 5}, not a total cap)</div>
+                            <div>Pending Queries: <strong>{result.facebookPublicRun.pendingQueries ?? 0}</strong></div>
+                            <div>Last Page Advance: <strong>{result.facebookPublicRun.lastPageAdvanceAt ? new Date(result.facebookPublicRun.lastPageAdvanceAt).toLocaleString() : '—'}</strong></div>
+                            <div>Stop reason: <strong>{result.facebookPublicRun.stopReason || result.stopReason || '—'}</strong></div>
                         </div>
                     ) : null}
                     {platform === 'facebook' && result.facebookCommunityRun ? (

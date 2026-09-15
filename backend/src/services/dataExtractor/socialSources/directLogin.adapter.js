@@ -1779,9 +1779,10 @@ async function discoverFacebookDirect(page, {
     }
     metrics.hydration = 'ok';
 
+    const campaignCap = Number(maxResults) > 0 ? Number(maxResults) : 0;
     const scrollTarget = FACEBOOK_COMMUNITY_SEARCH_TYPES.includes(searchType)
         ? 80
-        : Math.max((Number(maxResults) || 20) * 3, 15);
+        : (campaignCap > 0 ? Math.max(campaignCap * 3, 15) : 80);
     const emitGroupTick = searchType === 'groups'
         ? (visible) => {
             for (const card of visible || []) {
@@ -1840,7 +1841,7 @@ async function discoverFacebookDirect(page, {
             });
             records.push(rec);
             onGroupFound?.(rec);
-            if (records.length >= maxResults) break;
+            if (campaignCap > 0 && records.length >= campaignCap) break;
         }
         metrics.validBusinessCandidates = records.length;
         return { records, errors, groupMeta, rejectedNoise };
@@ -2058,7 +2059,7 @@ async function discoverFacebookDirect(page, {
             platform: 'facebook', keyword, location, searchType,
             title, snippet, website,
         }));
-        if (records.length >= maxResults) break;
+        if (campaignCap > 0 && records.length >= campaignCap) break;
     }
     metrics.validBusinessCandidates = records.length;
     return { records, errors, groupMeta, rejectedNoise };
@@ -2414,7 +2415,7 @@ export async function discoverWithDirectLogin({
     keyword,
     location = '',
     searchType,
-    maxResults = 20,
+    maxResults = 0,
     seenKeys,
     shouldStop,
     batchSize,

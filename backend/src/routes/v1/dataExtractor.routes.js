@@ -1038,6 +1038,11 @@ router.post('/discovery/results/:id/convert', checkPermission('data_extractor.di
 router.post('/discovery/agent/tokens', checkAnyPermission('data_extractor.discovery.use_local_agent', 'data_extractor.assisted_capture.start'), discoveryAgentController.createToken);
 router.get('/discovery/agent/tokens', checkAnyPermission('data_extractor.discovery.use_local_agent', 'data_extractor.assisted_capture.start'), discoveryAgentController.listTokens);
 router.post('/discovery/agent/tokens/:id/revoke', checkAnyPermission('data_extractor.discovery.use_local_agent', 'data_extractor.assisted_capture.start'), discoveryAgentController.revokeToken);
+router.post('/discovery/agent/pairing-codes', checkAnyPermission('data_extractor.discovery.use_local_agent', 'data_extractor.assisted_capture.start'), discoveryAgentController.createPairing);
+router.get('/discovery/agent/pairing-config', checkAnyPermission('data_extractor.discovery.use_local_agent', 'data_extractor.assisted_capture.start'), discoveryAgentController.pairingClientConfig);
+router.get('/discovery/agent/windows-setup', checkAnyPermission('data_extractor.discovery.use_local_agent', 'data_extractor.assisted_capture.start'), discoveryAgentController.downloadWindowsSetup);
+router.post('/discovery/agent/source-connect', checkAnyPermission('data_extractor.discovery.use_local_agent', 'data_extractor.assisted_capture.start'), discoveryAgentController.requestSourceConnectSession);
+router.post('/discovery/agent/source-logout', checkAnyPermission('data_extractor.discovery.use_local_agent', 'data_extractor.assisted_capture.start'), discoveryAgentController.requestSourceLogoutSession);
 router.post('/discovery/agent/jobs', checkPermission('data_extractor.discovery.use_local_agent'), discoveryAgentController.createJob);
 router.get('/discovery/agent/jobs', checkPermission('data_extractor.discovery.view'), discoveryAgentController.listJobs);
 router.get('/discovery/agent/jobs/:id', checkPermission('data_extractor.discovery.view'), discoveryAgentController.getJob);
@@ -1061,12 +1066,15 @@ router.post('/discovery/compare', checkAnyPermission('data_extractor.discovery.v
 // management stays on the protect + checkPermission router and falls through
 // when no agent route matches.
 const agentRouter = express.Router();
-agentRouter.post('/connect', protectDiscoveryAgent, discoveryAgentController.connect);
-agentRouter.get('/jobs/:id', protectDiscoveryAgent, discoveryAgentController.agentGetJob);
+agentRouter.post('/pair', discoveryAgentController.exchangePairing);
+    agentRouter.post('/connect', protectDiscoveryAgent, discoveryAgentController.connect);
+    agentRouter.get('/jobs/poll', protectDiscoveryAgent, discoveryAgentController.pollJobs);
+    agentRouter.get('/jobs/:id', protectDiscoveryAgent, discoveryAgentController.agentGetJob);
 agentRouter.post('/jobs/:id/claim', protectDiscoveryAgent, discoveryAgentController.claimJob);
 agentRouter.post('/jobs/:id/heartbeat', protectDiscoveryAgent, discoveryAgentController.heartbeat);
 agentRouter.post('/jobs/:id/records', protectDiscoveryAgent, discoveryAgentController.ingest);
 agentRouter.post('/presence', protectDiscoveryAgent, assistedCaptureController.presence);
+agentRouter.post('/source-status', protectDiscoveryAgent, discoveryAgentController.reportAgentSourceStatus);
 agentRouter.get('/assisted-captures/poll', protectDiscoveryAgent, assistedCaptureController.pollQueued);
 agentRouter.post('/assisted-captures/claim', protectDiscoveryAgent, assistedCaptureController.claim);
 agentRouter.post('/assisted-captures/:sessionId/browser-opened', protectDiscoveryAgent, assistedCaptureController.browserOpened);

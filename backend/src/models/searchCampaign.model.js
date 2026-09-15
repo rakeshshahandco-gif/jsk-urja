@@ -93,6 +93,8 @@ const searchCampaignSchema = new mongoose.Schema(
         },
         /** Embedded Facebook Group Member Collector checkpoint. Not a new collection. */
         facebookMemberCollector: { type: mongoose.Schema.Types.Mixed, default: undefined },
+        /** Embedded Facebook Public Business/Pages page-window checkpoint. Not a new collection. */
+        facebookPublicPages: { type: mongoose.Schema.Types.Mixed, default: undefined },
     },
     {
         timestamps: true,

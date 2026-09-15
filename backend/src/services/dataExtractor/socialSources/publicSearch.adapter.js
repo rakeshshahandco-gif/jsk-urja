@@ -8,6 +8,18 @@ import {
     isAlreadySeen,
     resolveInstagramStopReason,
 } from './instagramBatch.util.js';
+import { FACEBOOK_PUBLIC_PROVIDER_PAGE } from './unlimitedExtraction.util.js';
+import {
+    FACEBOOK_PUBLIC_PAGE_DELAY_MS,
+    FACEBOOK_PUBLIC_PAGE_WINDOW,
+    FACEBOOK_PUBLIC_QUERY_DELAY_MS,
+    FACEBOOK_PUBLIC_WINDOW_DELAY_MS,
+    facebookPublicPagesResumePoint,
+    isFacebookPublicPagesSearch,
+    mergeFacebookPublicPagesCheckpoint,
+    publicContactHints,
+    summarizeFacebookPublicRun,
+} from './facebookPublicPages.util.js';
 
 /** Unwrap Bing/Duck redirect wrappers so facebook.com / instagram.com URLs can be classified. */
 export function unwrapPublicResultLink(raw) {
@@ -46,33 +58,226 @@ function toCandidate(classified, item, { keyword, location, mode, searchType, pl
             `keyword=${keyword}`,
             loc ? `location=${loc}` : '',
             `evidenceUrl=${classified.pageUrl}`,
+            item.category ? `category=${String(item.category).slice(0, 120)}` : '',
+            item.phone ? `phone=${item.phone}` : '',
+            item.email ? `email=${item.email}` : '',
+            item.website ? `website=${item.website}` : '',
             `extractedAt=${new Date().toISOString()}`,
         ].filter(Boolean).join('; ').slice(0, 2000),
     };
 }
 
-export async function discoverFacebookPublic({ keyword, location, searchType = 'pages', maxResults = 20 }) {
-    const queries = facebookPublicQueries({ keyword, location, searchType });
-    const seen = new Set();
+export async function discoverFacebookPublic({
+    keyword,
+    location,
+    searchType = 'pages',
+    maxResults,
+    searchImpl,
+    shouldStop,
+    checkpoint,
+    onCheckpoint,
+    queries: queryOverride,
+} = {}) {
+    const queries = Array.isArray(queryOverride) && queryOverride.length
+        ? queryOverride
+        : facebookPublicQueries({ keyword, location, searchType });
+    const pagesMode = isFacebookPublicPagesSearch(searchType);
+    const resume = pagesMode ? facebookPublicPagesResumePoint(checkpoint) : facebookPublicPagesResumePoint();
+    const seen = new Set(resume.seenKeys);
     const records = [];
     const errors = [];
-    for (const query of queries) {
-        const result = await searchWithPublicHtml({ query, maxResults });
-        if (result.error && !result.items.length) errors.push(result.error);
-        for (const item of result.items || []) {
+    let stopReason = '';
+    let sourceResultsFound = Number(checkpoint?.sourceResultsFound || 0);
+    let pagesFetched = 0;
+    let currentProvider = resume.currentProvider;
+    let currentResultPage = Math.max(0, Number(checkpoint?.lastSuccessfulPage || 0));
+    let lastSuccessfulPage = currentResultPage;
+    let nextPage = Math.max(1, Number(checkpoint?.nextPage || 1));
+    let currentQuery = resume.currentQuery;
+    let queryIndex = resume.queryIndex;
+    let lastPageAdvanceAt = checkpoint?.updatedAt || null;
+    const checkpoints = [];
+    const searcher = typeof searchImpl === 'function' ? searchImpl : searchWithPublicHtml;
+    const providerPage = Math.min(
+        FACEBOOK_PUBLIC_PROVIDER_PAGE,
+        Math.max(1, Number(maxResults) > 0 && Number(maxResults) < FACEBOOK_PUBLIC_PROVIDER_PAGE
+            ? Number(maxResults)
+            : FACEBOOK_PUBLIC_PROVIDER_PAGE),
+    );
+
+    const persist = async (status, reason = '') => {
+        const next = mergeFacebookPublicPagesCheckpoint(checkpoint, {
+            currentQuery,
+            queryIndex,
+            queryTotal: queries.length,
+            currentProvider,
+            lastSuccessfulPage,
+            nextPage,
+            seenKeys: [...seen],
+            sourceResultsFound,
+            uniqueBusinesses: records.length,
+            stopReason: reason || stopReason,
+            status,
+        });
+        checkpoints.push(next);
+        if (typeof onCheckpoint === 'function') {
+            await onCheckpoint(next);
+        }
+        return next;
+    };
+
+    const absorbItems = (items) => {
+        let accepted = 0;
+        for (const item of items || []) {
             const classified = classifyFacebookUrl(unwrapPublicResultLink(item.link), searchType);
             if (!classified) continue;
+            if (pagesMode && classified.resultTypeHint === 'facebook_group') continue;
             const key = classified.pageUrl.toLowerCase();
             if (seen.has(key)) continue;
             seen.add(key);
-            records.push(toCandidate(classified, item, {
+            const hints = publicContactHints(`${item.title || ''} ${item.snippet || ''}`);
+            records.push(toCandidate(classified, {
+                ...item,
+                ...hints,
+            }, {
                 keyword, location, mode: 'public_search', searchType, platform: 'facebook',
             }));
-            if (records.length >= maxResults) break;
+            accepted += 1;
         }
-        if (records.length >= maxResults) break;
+        return accepted;
+    };
+
+    if (!pagesMode) {
+        for (const query of queries) {
+            if (shouldStop?.()) {
+                stopReason = 'user_stop';
+                break;
+            }
+            queryIndex += 1;
+            currentQuery = query;
+            const result = await searcher({
+                query,
+                maxResults: providerPage,
+                maxPages: 1,
+            });
+            currentProvider = result.providerName || currentProvider;
+            currentResultPage = Number(result.pagesFetched || 1);
+            lastSuccessfulPage = currentResultPage;
+            nextPage = currentResultPage + 1;
+            pagesFetched += Number(result.pagesFetched || 1);
+            sourceResultsFound += (result.items || []).length;
+            if (result.error && !result.items.length) errors.push(result.error);
+            if (result.statusCode === 'BLOCKED' || result.statusCode === 'RATE_LIMITED') {
+                errors.push(result.error || result.statusCode);
+                stopReason = 'source_safety_pause';
+                if (!result.items.length) break;
+            }
+            absorbItems(result.items);
+            if (stopReason === 'user_stop' || stopReason === 'source_safety_pause') break;
+        }
+        if (!stopReason) stopReason = 'source_exhausted';
+    } else {
+        let startQueryPos = 0;
+        let pageIndex = 0;
+        if (resume.currentQuery) {
+            const idx = queries.indexOf(resume.currentQuery);
+            startQueryPos = idx >= 0 ? idx : Math.max(0, resume.queryIndex - 1);
+            pageIndex = resume.startPageIndex;
+        }
+
+        for (let qi = startQueryPos; qi < queries.length; qi += 1) {
+            if (shouldStop?.()) {
+                stopReason = 'user_stop';
+                break;
+            }
+            const query = queries[qi];
+            queryIndex = qi + 1;
+            currentQuery = query;
+            if (qi !== startQueryPos) pageIndex = 0;
+            if (qi > startQueryPos && FACEBOOK_PUBLIC_QUERY_DELAY_MS > 0 && searcher === searchWithPublicHtml) {
+                await new Promise((r) => setTimeout(r, FACEBOOK_PUBLIC_QUERY_DELAY_MS));
+            }
+
+            let queryExhausted = false;
+            while (!queryExhausted && !stopReason) {
+                const windowStart = pageIndex;
+                for (let w = 0; w < FACEBOOK_PUBLIC_PAGE_WINDOW; w += 1) {
+                    if (shouldStop?.()) {
+                        stopReason = 'user_stop';
+                        break;
+                    }
+                    const result = await searcher({
+                        query,
+                        maxResults: providerPage,
+                        maxPages: 1,
+                        startPage: pageIndex,
+                        pageDelayMs: FACEBOOK_PUBLIC_PAGE_DELAY_MS,
+                        providerHint: currentProvider,
+                    });
+                    currentProvider = result.providerName || currentProvider;
+                    pagesFetched += Number(result.pagesFetched || 1);
+                    sourceResultsFound += (result.items || []).length;
+                    if (result.error && !result.items.length) errors.push(result.error);
+                    if (result.statusCode === 'BLOCKED' || result.statusCode === 'RATE_LIMITED') {
+                        errors.push(result.error || result.statusCode);
+                        stopReason = 'source_safety_pause';
+                        break;
+                    }
+                    if (!(result.items || []).length) {
+                        queryExhausted = true;
+                        break;
+                    }
+                    absorbItems(result.items);
+                    lastSuccessfulPage = pageIndex + 1;
+                    currentResultPage = lastSuccessfulPage;
+                    nextPage = lastSuccessfulPage + 1;
+                    lastPageAdvanceAt = new Date().toISOString();
+                    pageIndex += 1;
+                    if (stopReason === 'user_stop') break;
+                }
+                await persist(
+                    stopReason === 'user_stop' || stopReason === 'source_safety_pause' ? 'paused' : 'window_complete',
+                    stopReason,
+                );
+                if (stopReason === 'user_stop' || stopReason === 'source_safety_pause') break;
+                if (queryExhausted) break;
+                if (pageIndex === windowStart) {
+                    queryExhausted = true;
+                    break;
+                }
+                if (searcher === searchWithPublicHtml && FACEBOOK_PUBLIC_WINDOW_DELAY_MS > 0) {
+                    await new Promise((r) => setTimeout(r, FACEBOOK_PUBLIC_WINDOW_DELAY_MS));
+                }
+            }
+            if (stopReason === 'user_stop' || stopReason === 'source_safety_pause') break;
+        }
+        if (!stopReason) stopReason = 'source_exhausted';
+        await persist(stopReason === 'source_exhausted' ? 'exhausted' : 'paused', stopReason);
     }
-    return { records, errors, queries };
+
+    const facebookPublicRun = summarizeFacebookPublicRun({
+        sourceResultsFound,
+        uniqueBusinesses: records.length,
+        currentQuery,
+        queryIndex,
+        queryTotal: queries.length,
+        currentProvider,
+        currentResultPage,
+        lastSuccessfulPage,
+        nextPage,
+        lastPageAdvanceAt,
+        pagesFetched,
+        stopReason,
+        queries,
+    });
+    return {
+        records,
+        errors,
+        queries,
+        stopReason,
+        facebookPublicRun,
+        checkpoint: checkpoints[checkpoints.length - 1] || null,
+    };
 }
 
 export async function discoverInstagramPublic({

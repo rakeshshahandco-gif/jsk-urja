@@ -171,6 +171,35 @@ export async function testPublicHtmlSearch() {
     };
 }
 
+export function publicHtmlPageUrl(provider, query, pageIndex = 0) {
+    const q = encodeURIComponent(String(query || '').trim());
+    const page = Math.max(0, Number(pageIndex) || 0);
+    if (provider === 'ddg_lite') {
+        return `https://lite.duckduckgo.com/lite/?q=${q}${page > 0 ? `&s=${page * 10}` : ''}`;
+    }
+    if (provider === 'ddg_html') {
+        return `https://html.duckduckgo.com/html/?q=${q}${page > 0 ? `&s=${page * 30}` : ''}`;
+    }
+    if (provider === 'bing') {
+        return `https://www.bing.com/search?q=${q}&setlang=en-IN${page > 0 ? `&first=${page * 10 + 1}` : ''}`;
+    }
+    return '';
+}
+
+function mergeUniqueItems(target, incoming, pageSize) {
+    const seen = new Set(target.map((i) => String(i.link || '').toLowerCase()));
+    let added = 0;
+    for (const row of incoming || []) {
+        if (pageSize > 0 && added >= pageSize) break;
+        const key = String(row.link || '').toLowerCase();
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        target.push(row);
+        added += 1;
+    }
+    return added;
+}
+
 /**
  * @returns {{ items: Array<{link:string,title:string,snippet:string}>, error: string, providerName: string, statusCode: string, pagesFetched: number }}
  */
@@ -178,27 +207,120 @@ export async function searchWithPublicHtml({
     query,
     maxResults = 10,
     timeoutMs,
+    maxPages = 1,
+    startPage = 0,
+    pageDelayMs = 0,
+    providerHint = '',
 } = {}) {
     void timeoutMs;
     const q = String(query || '').trim();
     if (!q) {
         return { items: [], error: 'Search query is empty', providerName: 'public_web', statusCode: 'FAILED', pagesFetched: 0 };
     }
-    const cap = Math.min(20, Math.max(1, Number(maxResults) || 10));
+    const pageSize = Math.min(20, Math.max(1, Number(maxResults) || 10));
+    const pagesWanted = Math.max(1, Number(maxPages) || 1);
+    const start = Math.max(0, Number(startPage) || 0);
+    const useBing = /bing/i.test(String(providerHint || ''));
 
-    const ddgLite = `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(q)}`;
+    if (start > 0) {
+        const items = [];
+        let pagesFetched = 0;
+        let lastError = '';
+        let lastStatus = '';
+        let providerName = useBing ? 'bing_html' : 'duckduckgo_html';
+        for (let page = start; page < start + pagesWanted; page += 1) {
+            if (pageDelayMs > 0 && page > start) {
+                await new Promise((r) => setTimeout(r, pageDelayMs));
+            }
+            const next = useBing
+                ? await searchBingHtml(q, pageSize, page)
+                : await searchDdgLitePage(q, pageSize, page);
+            pagesFetched += next.pagesFetched || 1;
+            providerName = next.providerName || providerName;
+            if (next.statusCode === 'BLOCKED' || next.statusCode === 'RATE_LIMITED') {
+                return {
+                    items,
+                    error: next.error || lastError,
+                    providerName,
+                    statusCode: next.statusCode,
+                    pagesFetched,
+                };
+            }
+            const added = mergeUniqueItems(items, next.items, pageSize);
+            lastError = next.error || lastError;
+            lastStatus = next.statusCode || lastStatus;
+            if (!added) break;
+        }
+        return {
+            items,
+            error: items.length ? '' : lastError,
+            providerName,
+            statusCode: items.length ? '' : lastStatus,
+            pagesFetched,
+        };
+    }
+
+    const first = await searchPublicHtmlFirstPage(q, pageSize);
+    if (pagesWanted <= 1 || first.statusCode === 'BLOCKED' || first.statusCode === 'RATE_LIMITED') {
+        return first;
+    }
+    if (!first.items.length && first.error) {
+        return first;
+    }
+
+    const items = [...first.items];
+    let pagesFetched = first.pagesFetched || 1;
+    let lastError = first.error || '';
+    let lastStatus = first.statusCode || '';
+    const provider = first.providerName || 'duckduckgo_html';
+    const nextProvider = /bing/i.test(provider) ? 'bing' : 'ddg_lite';
+
+    for (let page = 1; page < pagesWanted; page += 1) {
+        if (pageDelayMs > 0) {
+            await new Promise((r) => setTimeout(r, pageDelayMs));
+        }
+        const next = nextProvider === 'bing'
+            ? await searchBingHtml(q, pageSize, page)
+            : await searchDdgLitePage(q, pageSize, page);
+        pagesFetched += next.pagesFetched || 1;
+        if (next.statusCode === 'BLOCKED' || next.statusCode === 'RATE_LIMITED') {
+            return {
+                items,
+                error: next.error || lastError,
+                providerName: next.providerName || provider,
+                statusCode: next.statusCode,
+                pagesFetched,
+            };
+        }
+        const added = mergeUniqueItems(items, next.items, pageSize);
+        lastError = next.error || lastError;
+        lastStatus = next.statusCode || lastStatus;
+        if (!added) break;
+    }
+
+    return {
+        items,
+        error: items.length ? '' : lastError,
+        providerName: provider,
+        statusCode: items.length ? '' : lastStatus,
+        pagesFetched,
+    };
+}
+
+async function searchPublicHtmlFirstPage(q, cap) {
+    const ddgLite = publicHtmlPageUrl('ddg_lite', q, 0);
     const lite = await fetchHtml(ddgLite);
     if (lite.error && !lite.status) {
         // network — try next provider
     } else if (BLOCKED_STATUSES.has(lite.status) || /captcha|unusual traffic/i.test(lite.body || '')) {
         const classified = classifyHttp(lite.status || 403, lite.body);
-        const bingTry = await searchBingHtml(q, cap);
+        const bingTry = await searchBingHtml(q, cap, 0);
         if (bingTry.items.length) return bingTry;
         return { items: [], error: classified.error, providerName: 'duckduckgo_html', statusCode: classified.statusCode, pagesFetched: 1 };
     } else if (lite.ok) {
         let items = parseDuckDuckGoLite(lite.body).slice(0, cap);
         if (items.length < 3) {
-            const htmlUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`;
+            const htmlUrl = publicHtmlPageUrl('ddg_html', q, 0);
             const html = await fetchHtml(htmlUrl);
             if (html.ok) {
                 const extra = parseDuckDuckGoHtml(html.body);
@@ -216,11 +338,31 @@ export async function searchWithPublicHtml({
         }
     }
 
-    return searchBingHtml(q, cap);
+    return searchBingHtml(q, cap, 0);
 }
 
-async function searchBingHtml(query, cap) {
-    const url = `https://www.bing.com/search?q=${encodeURIComponent(query)}&setlang=en-IN`;
+async function searchDdgLitePage(query, cap, pageIndex) {
+    const url = publicHtmlPageUrl('ddg_lite', query, pageIndex);
+    const res = await fetchHtml(url);
+    if (res.error && !res.status) {
+        return { items: [], error: res.error, providerName: 'duckduckgo_html', statusCode: 'FAILED', pagesFetched: 1 };
+    }
+    if (BLOCKED_STATUSES.has(res.status) || /captcha|unusual traffic/i.test(res.body || '')) {
+        const classified = classifyHttp(res.status || 403, res.body);
+        return { items: [], error: classified.error, providerName: 'duckduckgo_html', statusCode: classified.statusCode, pagesFetched: 1 };
+    }
+    const items = parseDuckDuckGoLite(res.body || '').slice(0, cap);
+    return {
+        items,
+        error: items.length ? '' : 'Public web discovery returned no additional results for this page.',
+        providerName: 'duckduckgo_html',
+        statusCode: '',
+        pagesFetched: 1,
+    };
+}
+
+async function searchBingHtml(query, cap, pageIndex = 0) {
+    const url = publicHtmlPageUrl('bing', query, pageIndex);
     const res = await fetchHtml(url);
     if (res.error && !res.status) {
         return { items: [], error: `Website bing.com did not respond within timeout. Candidate retained for later review.`, providerName: 'bing_html', statusCode: 'FAILED', pagesFetched: 0 };

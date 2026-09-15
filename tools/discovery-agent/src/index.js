@@ -2,9 +2,10 @@
 import crypto from 'crypto';
 import os from 'os';
 import { crm } from './crmClient.js';
-import { openVisibleContext, clearLocalProfile } from './browserSession.js';
+import { openVisibleContext, openIsolatedSourceContext, clearLocalProfile } from './browserSession.js';
 import { runGoogleVisible } from './sources/googleVisible.js';
 import { runFacebookPublicVisible } from './sources/facebookPublic.js';
+import { runFacebookDirectAgent } from './sources/facebookDirectAgent.js';
 import { runInstagramPublicVisible } from './sources/instagramPublic.js';
 import { runManualDirectory } from './sources/manualDirectory.js';
 import { runAssistedGoogleCapture } from './sources/assistedGoogleCapture.js';
@@ -12,7 +13,9 @@ import { runAssistedBaiduCapture } from './sources/assistedBaiduCapture.js';
 import { runAssisted1688Capture } from './sources/assisted1688Capture.js';
 import { runAssistedSogouCapture } from './sources/assistedSogouCapture.js';
 import { runAssisted360Capture } from './sources/assisted360Capture.js';
-import { stripSecrets } from './safety.js';
+import { stripSecrets, sleep } from './safety.js';
+import { startLocalPairServer } from './localPairServer.js';
+import { applyCredentialsToEnv, hasStoredCredentials } from './credentialStore.js';
 
 // Cursor may inject an empty Playwright browsers cache; prefer system Chrome/Edge via browserSession.
 if (process.env.PLAYWRIGHT_BROWSERS_PATH && /cursor-sandbox-cache/i.test(process.env.PLAYWRIGHT_BROWSERS_PATH)) {
@@ -25,10 +28,6 @@ function arg(name, fallback = '') {
     const i = process.argv.indexOf('--' + name);
     if (i >= 0 && process.argv[i + 1]) return process.argv[i + 1];
     return fallback;
-}
-
-function sleep(ms) {
-    return new Promise((r) => setTimeout(r, ms));
 }
 
 async function cmdConnect() {
@@ -57,6 +56,68 @@ async function cmdClearProfile() {
     const mode = arg('source', 'google_visible');
     const r = await clearLocalProfile(mode);
     console.log('Cleared local profile', r.profileDir);
+}
+
+async function runFacebookDirectJob(jobId, job) {
+    const userId = String(job.metadata?.userId || process.env.DISCOVERY_AGENT_USER_ID || '').trim();
+    if (!userId) throw new Error('Facebook Direct job is missing userId');
+    let stopFlag = false;
+    const shouldStop = () => stopFlag;
+    const { context, page } = await openIsolatedSourceContext(userId, 'facebook');
+
+    const onRecords = async (records, currentPageUrl) => {
+        const safe = (records || []).map(stripSecrets);
+        for (const r of safe) {
+            if (r.cookies || r.password || r.storageState) {
+                throw new Error('Refusing to upload browser secrets');
+            }
+        }
+        const res = await crm.ingest(jobId, {
+            records: safe,
+            currentPageUrl,
+            extractedCount: safe.length,
+        });
+        console.log('Facebook Direct Agent ingested:', res.accepted, res.note || '');
+    };
+
+    try {
+        const result = await runFacebookDirectAgent(page, context, job, {
+            onRecords,
+            onExpired: async () => {
+                await crm.heartbeat(jobId, {
+                    status: 'FACEBOOK_SESSION_EXPIRED',
+                    code: 'FACEBOOK_SESSION_EXPIRED',
+                    agentInstanceId,
+                });
+            },
+            onManual: async (message) => {
+                await crm.heartbeat(jobId, {
+                    status: 'MANUAL_ACTION_REQUIRED',
+                    manualActionMessage: message,
+                    currentPageUrl: page.url(),
+                    agentInstanceId,
+                });
+                stopFlag = true;
+            },
+            shouldStop,
+        });
+
+        if (!result.expired) {
+            await crm.heartbeat(jobId, {
+                status: result.stopped ? 'MANUAL_ACTION_REQUIRED' : 'COMPLETED',
+                currentPageUrl: page.url(),
+                extractedCount: (result.collected || []).length,
+                agentInstanceId,
+                usedServerPuppeteer: false,
+            });
+        }
+        console.log('Facebook Direct Agent finished', jobId, 'collected=', (result.collected || []).length, 'expired=', Boolean(result.expired));
+    } catch (err) {
+        await crm.heartbeat(jobId, { status: 'FAILED', error: err.message, agentInstanceId }).catch(() => {});
+        throw err;
+    } finally {
+        await context.close().catch(() => {});
+    }
 }
 
 async function runStandardJob(jobId, job) {
@@ -219,6 +280,11 @@ async function cmdRunJob() {
     const job = claimed.job || (await crm.getJob(jobId)).job;
     console.log('Running agent job', jobId, 'mode=', job.sourceMode);
 
+    if (job.sourceMode === 'facebook_direct_agent' || job.metadata?.extractionMode === 'DIRECT_AGENT') {
+        await runFacebookDirectJob(jobId, job);
+        return;
+    }
+
     if (job.sourceMode === 'assisted_google_capture') {
         const meta = job.metadata || {};
         const assistedSessionId = arg('session') || meta.assistedCaptureSessionId;
@@ -241,7 +307,26 @@ async function cmdAssistedCapture() {
  * Listen mode (Checkpoint 5B): presence + poll queued sessions; max one at a time.
  * Keeps terminal `capture` working inside runAssistedGoogleCapture.
  */
+async function cmdStaff() {
+    applyCredentialsToEnv();
+    let resolvePaired;
+    const paired = new Promise((resolve) => { resolvePaired = resolve; });
+    startLocalPairServer({
+        onPaired: () => {
+            applyCredentialsToEnv();
+            if (resolvePaired) resolvePaired();
+        },
+    });
+    if (!hasStoredCredentials() && !process.env.DISCOVERY_AGENT_TOKEN) {
+        console.log('JSK Discovery Agent installed. Waiting for Connect This PC in CRM...');
+        await paired;
+    }
+    await cmdListen();
+}
+
 async function cmdListen() {
+    applyCredentialsToEnv();
+    startLocalPairServer();
     let stop = false;
     let busy = false;
     let backoffMs = 2000;
@@ -266,10 +351,11 @@ async function cmdListen() {
     // Retry CRM connect — brief backend reloads must not kill the agent permanently
     for (let attempt = 1; attempt <= 10; attempt += 1) {
         try {
-            await crm.connect(agentInstanceId);
+            const connected = await crm.connect(agentInstanceId);
+            if (connected?.userId) process.env.DISCOVERY_AGENT_USER_ID = String(connected.userId);
             await crm.presence(agentInstanceId);
             lastPresence = Date.now();
-            console.log('CRM connect/presence OK (attempt', attempt + ') base=', (process.env.CRM_BASE_URL || '').replace(/\/$/, ''));
+            console.log('JSK Extraction Agent connect/presence OK (attempt', attempt + ') base=', (process.env.CRM_BASE_URL || '').replace(/\/$/, ''));
             break;
         } catch (err) {
             console.error('CRM connect failed (attempt', attempt + '):', err && err.message ? err.message : err);
@@ -283,6 +369,25 @@ async function cmdListen() {
             if (now - lastPresence >= presenceEveryMs) {
                 await crm.presence(agentInstanceId);
                 lastPresence = now;
+            }
+
+            if (!busy) {
+                const fbPoll = await crm.pollFacebookDirect().catch(() => ({ job: null }));
+                const fbJob = fbPoll?.job || null;
+                if (fbJob && fbJob._id) {
+                    busy = true;
+                    console.log('Claiming Facebook Direct Agent job', String(fbJob._id));
+                    try {
+                        const claimed = await crm.claim(String(fbJob._id), agentInstanceId);
+                        await runFacebookDirectJob(String(fbJob._id), claimed.job || fbJob);
+                        backoffMs = 2000;
+                    } catch (err) {
+                        console.error('Facebook Direct Agent job error:', err && err.message ? err.message : err);
+                        backoffMs = Math.min(maxBackoff, Math.floor(backoffMs * 1.5));
+                    } finally {
+                        busy = false;
+                    }
+                }
             }
 
             if (!busy) {
@@ -343,11 +448,12 @@ const map = {
     'clear-profile': cmdClearProfile,
     'assisted-capture': cmdAssistedCapture,
     listen: cmdListen,
+    staff: cmdStaff,
 };
 
 async function main() {
     if (!map[cmd]) {
-        console.log('Commands: connect | run-job --job <id> | clear-profile --source <mode> | assisted-capture --session <id> | listen');
+        console.log('Commands: connect | run-job --job <id> | clear-profile --source <mode> | assisted-capture --session <id> | listen | staff');
         process.exitCode = 1;
         return;
     }

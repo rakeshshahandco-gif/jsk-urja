@@ -31,8 +31,11 @@ export function isDiscoveryAgentFacingPath(req) {
     if (!p.startsWith('/data-extractor/discovery/agent')) return false;
     if (p.startsWith('/data-extractor/discovery/agent/tokens')) return false;
 
+    if (p === '/data-extractor/discovery/agent/pair' && m === 'POST') return true;
     if (p === '/data-extractor/discovery/agent/connect' && m === 'POST') return true;
     if (p === '/data-extractor/discovery/agent/presence' && m === 'POST') return true;
+    if (p === '/data-extractor/discovery/agent/source-status' && m === 'POST') return true;
+    if (p === '/data-extractor/discovery/agent/jobs/poll' && m === 'GET') return true;
     if (p.startsWith('/data-extractor/discovery/agent/assisted-captures')) return true;
     if (
         m === 'POST'

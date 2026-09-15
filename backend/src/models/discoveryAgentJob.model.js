@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 
-export const AGENT_SOURCES = ['google_visible', 'facebook_public_visible', 'instagram_public_visible', 'manual_directory', 'assisted_google_capture'];
+export const AGENT_SOURCES = ['google_visible', 'facebook_public_visible', 'instagram_public_visible', 'manual_directory', 'assisted_google_capture', 'facebook_direct_agent'];
 export const AGENT_JOB_STATUSES = [
     'DRAFT', 'WAITING_CONNECT', 'RUNNING', 'PAUSED', 'MANUAL_ACTION_REQUIRED',
     'STOPPED', 'COMPLETED', 'FAILED', 'CANCELLED',
@@ -13,6 +13,7 @@ const discoveryAgentJobSchema = new mongoose.Schema(
         createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
         discoveryJobId: { type: mongoose.Schema.Types.ObjectId, ref: 'DiscoveryJob', default: null },
         agentTokenId: { type: mongoose.Schema.Types.ObjectId, ref: 'DiscoveryAgentToken', default: null },
+        assignedDeviceId: { type: String, trim: true, default: '', maxlength: 80, index: true },
         sourceMode: { type: String, enum: AGENT_SOURCES, required: true },
         status: { type: String, enum: AGENT_JOB_STATUSES, default: 'DRAFT', index: true },
         keyword: { type: String, trim: true, default: '' },

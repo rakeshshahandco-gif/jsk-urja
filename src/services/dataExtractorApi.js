@@ -189,6 +189,22 @@ export const dataExtractorApi = {
         const res = await api.post(`/data-extractor/discovery/agent/tokens/${id}/revoke`);
         return unwrap(res);
     },
+    createDiscoveryAgentPairing: async () => {
+        const res = await api.post('/data-extractor/discovery/agent/pairing-codes', {});
+        return unwrap(res);
+    },
+    requestExtractionSourceConnect: async (source) => {
+        const res = await api.post('/data-extractor/discovery/agent/source-connect', { source });
+        return unwrap(res);
+    },
+    requestExtractionSourceLogout: async (source) => {
+        const res = await api.post('/data-extractor/discovery/agent/source-logout', { source });
+        return unwrap(res);
+    },
+    downloadDiscoveryAgentSetup: async () => {
+        const res = await api.get('/data-extractor/discovery/agent/windows-setup', { responseType: 'blob' });
+        return res.data;
+    },
     listDiscoveryAgentJobs: async (params = {}) => {
         const res = await api.get('/data-extractor/discovery/agent/jobs', { params });
         return unwrap(res);

@@ -2,12 +2,13 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { applyCredentialsToEnv } from './credentialStore.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
 
-function loadEnvLocal() {
-    const p = path.join(root, '.env.local');
+function loadEnvFile(name) {
+    const p = path.join(root, name);
     if (!fs.existsSync(p)) return;
     const lines = fs.readFileSync(p, 'utf8').split(/\r?\n/);
     for (const line of lines) {
@@ -17,12 +18,21 @@ function loadEnvLocal() {
     }
 }
 
+function loadEnvLocal() {
+    // Developer/admin fallback only. Staff pairing uses Windows protected storage.
+    loadEnvFile('.env.local');
+    loadEnvFile('.env.production.local');
+}
+
 loadEnvLocal();
+try { applyCredentialsToEnv(); } catch { /* unpaired or unreadable store */ }
 
 export function getConfig() {
     const baseUrl = (process.env.CRM_BASE_URL || 'http://127.0.0.1:5100/api/v1').replace(/\/$/, '');
     const token = process.env.DISCOVERY_AGENT_TOKEN || '';
-    if (!token) throw new Error('DISCOVERY_AGENT_TOKEN missing. Set tools/discovery-agent/.env.local');
+    if (!token) {
+        throw new Error('Discovery Agent is not connected on this PC. Open CRM and click Connect This PC.');
+    }
     return { baseUrl, token };
 }
 
@@ -85,7 +95,7 @@ function localDevicePayload() {
         deviceId: String(process.env.DISCOVERY_AGENT_DEVICE_ID || '').trim().slice(0, 80),
         deviceName: String(process.env.DISCOVERY_AGENT_DEVICE_NAME || os.hostname() || '').trim().slice(0, 120),
         hostname: String(process.env.COMPUTERNAME || process.env.HOSTNAME || os.hostname() || '').trim().slice(0, 120),
-        version: String(process.env.DISCOVERY_AGENT_VERSION || '0.1.0').slice(0, 40),
+        version: String(process.env.DISCOVERY_AGENT_VERSION || process.env.JSK_EXTRACTION_AGENT_VERSION || '1.1.1').slice(0, 40),
         applicationKey: String(process.env.DISCOVERY_AGENT_APPLICATION_KEY || '').trim().slice(0, 80),
     };
 }
@@ -97,8 +107,10 @@ export const crm = {
     heartbeat: (id, payload) => api('POST', '/jobs/' + id + '/heartbeat', payload),
     ingest: (id, payload) => api('POST', '/jobs/' + id + '/records', payload),
 
-    presence: (agentInstanceId) => api('POST', '/presence', { agentInstanceId, ...localDevicePayload() }),
+    presence: (agentInstanceId, extras = {}) => api('POST', '/presence', { agentInstanceId, ...localDevicePayload(), ...extras }),
+    reportSourceStatus: (source, patch = {}) => api('POST', '/source-status', { source, ...patch }),
     pollAssisted: () => api('GET', '/assisted-captures/poll'),
+    pollFacebookDirect: () => api('GET', '/jobs/poll'),
     claimAssisted: ({ sessionId, agentInstanceId }) => api('POST', '/assisted-captures/claim', { sessionId, agentInstanceId }),
     assistedBrowserOpened: (sessionId, body, sessionToken) => api('POST', '/assisted-captures/' + sessionId + '/browser-opened', body, { sessionToken }),
     assistedHeartbeat: (sessionId, body, sessionToken) => api('POST', '/assisted-captures/' + sessionId + '/heartbeat', body, { sessionToken }),

@@ -1,14 +1,15 @@
 {
-  "name": "jsk-esarthi-discovery-agent",
-  "version": "0.1.0",
+  "name": "jsk-extraction-agent",
+  "version": "1.1.1",
   "private": true,
   "type": "module",
-  "description": "Local Windows Discovery Agent for JSK E-SARTHI (visible Chromium). Does not run on Render.",
+  "description": "Local Windows JSK Extraction Agent (Web / Facebook / Instagram). Does not run on Render.",
   "bin": {
     "jsk-discovery-agent": "./src/index.js"
   },
   "scripts": {
-    "start": "node src/index.js",
+    "start": "node src/index.js staff",
+    "staff": "node src/index.js staff",
     "connect": "node src/index.js connect",
     "run-job": "node src/index.js run-job",
     "listen": "node src/index.js listen",

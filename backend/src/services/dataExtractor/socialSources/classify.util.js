@@ -3,6 +3,7 @@
  * Does not log in and does not enumerate private members/followers.
  */
 import { FACEBOOK_NAV_PATH_RE, INSTAGRAM_RESERVED_PATHS, unwrapSocialHref } from './directLogin.quality.util.js';
+import { facebookPublicPageQueries, isFacebookPublicPagesSearch } from './facebookPublicPages.util.js';
 
 function safeUrl(raw) {
     try {
@@ -145,6 +146,9 @@ export function facebookPublicQueries({ keyword, location, searchType }) {
     }
     if (searchType === 'posts') {
         return [`site:facebook.com ${base} posts`, `site:facebook.com ${base}`];
+    }
+    if (isFacebookPublicPagesSearch(searchType)) {
+        return facebookPublicPageQueries({ keyword: kw, location: loc });
     }
     return [
         `site:facebook.com ${base} pages`,

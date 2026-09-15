@@ -116,7 +116,24 @@ import {
     officialApiStatus,
 } from './constants.js';
 import { isSocialSessionIsolatedFromWhatsApp } from './sessionStore.util.js';
+import {
+    findUserAgentToken,
+    requestSourceConnect,
+    requestSourceLogout,
+    sourceStatusFromToken,
+} from '../discovery/agent/sourceConnect.service.js';
+import {
+    getFacebookDirectAgentProgress,
+    isFacebookDirectAgentSearchType,
+    startFacebookDirectAgentExtraction,
+} from '../discovery/agent/facebookDirectAgent.service.js';
 import { buildPublicUrlTestCandidate, PUBLIC_URL_TEST_MODE } from './linkedinX.publicUrl.util.js';
+import { isFalseCompleteFromProvider } from './unlimitedExtraction.util.js';
+import { RAW_CAPTURE_BATCH_MAX } from '../searchCampaign/rawCapture/constants.js';
+import {
+    emptyFacebookPublicPagesCheckpoint,
+    isFacebookPublicPagesSearch,
+} from './facebookPublicPages.util.js';
 
 function actorId(user) {
     return user?._id || user?.id || null;
@@ -417,10 +434,8 @@ function defaultSearchType(platform) {
     return 'pages';
 }
 
-export function getSocialSourceStatus({ platform, companyId }) {
+export function socialSourceLimitations(platform) {
     const p = normalizeExtractPlatform(platform);
-    const login = getSocialLoginStatus({ platform: p, companyId });
-    const api = officialApiStatus(p);
     const limitations = {
         facebook: [
             'Facebook Groups API / group member permissions were deprecated from Graph API v19 (22 Apr 2024). Group Intelligence only uses information visible to the authenticated session — it does not enumerate every member.',
@@ -430,17 +445,32 @@ export function getSocialSourceStatus({ platform, companyId }) {
         linkedin: ['LinkedIn is used for company and professional discovery. Private emails, mobile numbers, and hidden connections are not extracted. Company websites are preferred for contact enrichment.'],
         x: ['X posts are treated as evidence for the author/business account, not as separate CRM companies. System routes such as /home and /explore are rejected.'],
     };
+    return limitations[p] || [];
+}
+
+export async function getSocialSourceStatus({ platform, companyId, user }) {
+    const p = normalizeExtractPlatform(platform);
+    const login = getSocialLoginStatus({ platform: p, companyId });
+    const token = user ? await findUserAgentToken(companyId, actorId(user)) : null;
+    const agentLogin = token ? sourceStatusFromToken(token, p) : null;
+    const useAgentTruth = Boolean(token) && (p === 'facebook' || p === 'instagram');
+    const chosen = useAgentTruth ? agentLogin : login;
+    const api = officialApiStatus(p);
     return {
         platform: p,
         publicSearch: { available: true, status: 'connected', message: `Uses public web discovery (DuckDuckGo/Bing). No ${platformLabel(p)} login.` },
         directLogin: {
-            status: login.status,
-            connectedAt: login.connectedAt,
-            note: login.note,
+            status: chosen.status,
+            connectedAt: chosen.connectedAt,
+            lastVerifiedAt: useAgentTruth ? (agentLogin.lastVerifiedAt || agentLogin.lastSeen || null) : (login.lastCheckedAt || null),
+            note: chosen.note || '',
             isolatedFromWhatsApp: isSocialSessionIsolatedFromWhatsApp(),
+            boundToDevice: Boolean(token?.deviceId),
+            deviceName: token?.deviceName || token?.hostname || '',
+            ...(useAgentTruth ? { sourceOfTruth: 'extraction_agent' } : {}),
         },
         officialApi: api,
-        limitations: limitations[p] || [],
+        limitations: socialSourceLimitations(p),
     };
 }
 
@@ -616,7 +646,17 @@ async function bridgeCompanyWebsites(records = []) {
     return records;
 }
 
-async function discover({ platform, mode, keyword, location, searchType, companyId, maxResults }) {
+async function discover({
+    platform,
+    mode,
+    keyword,
+    location,
+    searchType,
+    companyId,
+    maxResults,
+    checkpoint,
+    onCheckpoint,
+}) {
     if (mode === 'official_api') {
         const api = officialApiStatus(platform);
         if (!api.configured) {
@@ -636,7 +676,14 @@ async function discover({ platform, mode, keyword, location, searchType, company
     if (platform === 'x') {
         return discoverXPublic({ keyword, location, searchType, maxResults });
     }
-    return discoverFacebookPublic({ keyword, location, searchType, maxResults });
+    return discoverFacebookPublic({
+        keyword,
+        location,
+        searchType,
+        maxResults,
+        checkpoint,
+        onCheckpoint,
+    });
 }
 
 async function loadInstagramSeenKeys({ companyId, keyword }) {
@@ -696,6 +743,41 @@ async function ingestInstagramBatches({
         });
     }
     return { batchesMeta, ingestedCount, ingestedIds, stoppedEarly: Boolean(shouldStop?.()) };
+}
+
+/** Write-batch only. Does not cap campaign total. */
+async function ingestSocialRecordsInChunks({
+    companyId,
+    user,
+    campaignId,
+    queryId,
+    source,
+    mode,
+    records,
+}) {
+    const list = toIngestRecords(records);
+    const writeBatch = RAW_CAPTURE_BATCH_MAX;
+    let acceptedCount = 0;
+    let lastBatch = null;
+    for (let i = 0; i < list.length; i += writeBatch) {
+        const chunk = list.slice(i, i + writeBatch);
+        const ingest = await ingestRawCaptures({
+            companyId,
+            user,
+            campaignId,
+            body: {
+                queryId: String(queryId),
+                source,
+                querySourceHint: source,
+                captureMethod: mode === 'direct_login' ? 'assisted_visible' : 'api_batch',
+                idempotencyKey: `social-${source}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}-${i}`,
+                records: chunk,
+            },
+        });
+        acceptedCount += Number(ingest?.acceptedCount || 0);
+        lastBatch = ingest?.batch || lastBatch;
+    }
+    return { acceptedCount, batch: lastBatch };
 }
 
 async function runInstagramExtraction({
@@ -814,7 +896,7 @@ async function runInstagramExtraction({
         return {
             ingested: ingestWrap.ingestedCount,
             batch: null,
-            records: found.records,
+            records: (found.records || []).slice(0, 8),
             errors: found.errors || [],
             queries: found.queries || [],
             campaignId: String(campaign._id),
@@ -822,7 +904,7 @@ async function runInstagramExtraction({
             sessionId: String(sessionWrap.session?._id || ''),
             processingUrl: sessionWrap.session?._id ? `/data-extractor/runs/${sessionWrap.session._id}` : '/data-extractor/simple-lead-search',
             note: 'Candidates were ingested into the existing Processing → Verified Data pipeline. Open Processing to enrich, qualify, verify, export, or Convert to Lead. Highly Relevant is never auto-converted.',
-            limitations: getSocialSourceStatus({ platform: 'instagram', companyId }).limitations,
+            limitations: socialSourceLimitations('instagram'),
             groupMeta: found.groupMeta || null,
             metrics: found.metrics || null,
             instagramRun: summarizeInstagramRun({
@@ -867,18 +949,23 @@ export function pauseFacebookExtraction({ companyId, user }) {
     return requestFacebookExtractPause(companyId);
 }
 
-export function facebookExtractProgress({ companyId, user }) {
+export async function facebookExtractProgress({ companyId, user }) {
     assertCanViewCaptures(user);
     const live = getFacebookExtractProgress(companyId);
     const startedAt = live.startedAt || live.progress?.updatedAt || 0;
     const search = getFacebookGroupSearchProgress(companyId);
+    const directAgent = await getFacebookDirectAgentProgress({ companyId, userId: actorId(user) });
+    const waiting = Boolean(directAgent?.waitingForDevice);
     return {
         ...live,
+        running: Boolean(live.running || (directAgent && ['WAITING_CONNECT', 'RUNNING'].includes(directAgent.status))),
         runTimeMs: live.running && startedAt ? Date.now() - startedAt : 0,
-        currentStage: live.progress?.currentStage || live.progress?.status || '',
-        attentionRequired: Boolean(live.progress?.attentionRequired),
+        currentStage: live.progress?.currentStage || live.progress?.status || directAgent?.status || '',
+        attentionRequired: Boolean(live.progress?.attentionRequired || directAgent?.expired),
         groupSearch: search,
         activity: live.activity || search.activity || [],
+        directAgent,
+        waitMessage: waiting ? directAgent.waitMessage : '',
     };
 }
 
@@ -2173,6 +2260,17 @@ export async function startSocialExtraction({
             searchType: st,
         });
     }
+    if (p === 'facebook' && m === 'direct_login' && isFacebookDirectAgentSearchType(st)) {
+        return startFacebookDirectAgentExtraction({
+            companyId,
+            user,
+            headers,
+            keyword: kw,
+            location,
+            searchType: st,
+        });
+    }
+
     if (p === 'facebook' && FACEBOOK_COMMUNITY_SEARCH_TYPES.includes(st)) {
         if (isFullAutomaticCollectorMode(collectorMode) && st === 'group_intelligence') {
             return startFacebookFullAutomaticRun({
@@ -2214,6 +2312,13 @@ export async function startSocialExtraction({
         });
     }
 
+    let pagesCampaign = null;
+    let pagesCheckpoint = null;
+    if (p === 'facebook' && m === 'public_search' && isFacebookPublicPagesSearch(st)) {
+        pagesCampaign = await ensureSocialCampaign({ companyId, user, platform: p, keyword: kw, city: location });
+        pagesCheckpoint = pagesCampaign.facebookPublicPages || emptyFacebookPublicPagesCheckpoint();
+    }
+
     const found = await discover({
         platform: p,
         mode: m,
@@ -2221,12 +2326,24 @@ export async function startSocialExtraction({
         location,
         searchType: st,
         companyId,
-        maxResults: Math.min(40, Math.max(5, Number(maxResults) || 20)),
+        maxResults: (p === 'facebook' || p === 'instagram') ? 0 : Math.min(40, Math.max(5, Number(maxResults) || 20)),
+        checkpoint: pagesCheckpoint,
+        onCheckpoint: pagesCampaign?._id
+            ? async (next) => {
+                await SearchCampaign.updateOne(
+                    { _id: pagesCampaign._id, companyId },
+                    { $set: { facebookPublicPages: next } },
+                );
+            }
+            : undefined,
     });
 
     if (m === 'direct_login' && found.records.length) {
         await bridgeCompanyWebsites(found.records);
     }
+
+    const providerPause = isFalseCompleteFromProvider(found.stopReason)
+        || (found.errors || []).some((e) => /rate.?limit|temporarily blocked|challenge|captcha/i.test(String(e)));
 
     if (!found.records.length) {
         return {
@@ -2237,13 +2354,17 @@ export async function startSocialExtraction({
             processingUrl: '',
             sessionId: '',
             campaignId: '',
-            note: 'Nothing was sent to Processing because no candidates were found.',
+            stopReason: found.stopReason || (providerPause ? 'source_safety_pause' : ''),
+            note: providerPause
+                ? 'Collection paused because the provider rate-limited, challenged, or blocked this request. This is not a completed campaign — resume after the pause.'
+                : 'Nothing was sent to Processing because no candidates were found.',
             groupMeta: found.groupMeta || null,
             metrics: found.metrics || null,
+            facebookPublicRun: found.facebookPublicRun || null,
         };
     }
 
-    const campaign = await ensureSocialCampaign({ companyId, user, platform: p, keyword: kw, city: location });
+    const campaign = pagesCampaign || await ensureSocialCampaign({ companyId, user, platform: p, keyword: kw, city: location });
     const query = await ensureSimpleLeadSearchQuery({
         companyId,
         user,
@@ -2254,19 +2375,29 @@ export async function startSocialExtraction({
         selectedCriteria: { socialMode: m, socialSearchType: st },
     });
 
-    const ingest = await ingestRawCaptures({
-        companyId,
-        user,
-        campaignId: campaign._id,
-        body: {
-            queryId: String(query._id),
+    const ingest = p === 'facebook'
+        ? await ingestSocialRecordsInChunks({
+            companyId,
+            user,
+            campaignId: campaign._id,
+            queryId: query._id,
             source: p,
-            querySourceHint: p,
-            captureMethod: m === 'direct_login' ? 'assisted_visible' : 'api_batch',
-            idempotencyKey: `social-${p}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`,
-            records: toIngestRecords(found.records).slice(0, 100),
-        },
-    });
+            mode: m,
+            records: found.records,
+        })
+        : await ingestRawCaptures({
+            companyId,
+            user,
+            campaignId: campaign._id,
+            body: {
+                queryId: String(query._id),
+                source: p,
+                querySourceHint: p,
+                captureMethod: m === 'direct_login' ? 'assisted_visible' : 'api_batch',
+                idempotencyKey: `social-${p}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`,
+                records: toIngestRecords(found.records).slice(0, 100),
+            },
+        });
 
     const sessionWrap = await createAssistedCaptureSession({
         companyId,
@@ -2280,7 +2411,7 @@ export async function startSocialExtraction({
     return {
         ingested: ingest?.acceptedCount ?? found.records.length,
         batch: ingest?.batch || null,
-        records: found.records,
+        records: p === 'facebook' ? found.records.slice(0, 8) : found.records,
         errors: found.errors || [],
         queries: found.queries || [],
         campaignId: String(campaign._id),
@@ -2288,9 +2419,11 @@ export async function startSocialExtraction({
         sessionId: String(sessionWrap.session?._id || ''),
         processingUrl: sessionWrap.session?._id ? `/data-extractor/runs/${sessionWrap.session._id}` : '/data-extractor/simple-lead-search',
         note: 'Candidates were ingested into the existing Processing → Verified Data pipeline. Open Processing to enrich, qualify, verify, export, or Convert to Lead. Highly Relevant is never auto-converted.',
-        limitations: getSocialSourceStatus({ platform: p, companyId }).limitations,
+        limitations: socialSourceLimitations(p),
         groupMeta: found.groupMeta || null,
         metrics: found.metrics || null,
+        stopReason: found.stopReason || (providerPause ? 'source_safety_pause' : ''),
+        facebookPublicRun: found.facebookPublicRun || null,
     };
 }
 
@@ -2502,10 +2635,26 @@ export async function ingestPublicSocialUrl({
 export async function connectDirect({ companyId, user, platform }) {
     assertCanExtract(user);
     void mongoose;
-    return connectSocialLogin({ platform, companyId });
+    const p = normalizeExtractPlatform(platform);
+    if (p === 'facebook' || p === 'instagram') {
+        return requestSourceConnect({
+            companyId,
+            userId: actorId(user),
+            source: p,
+        });
+    }
+    return connectSocialLogin({ platform: p, companyId });
 }
 
 export async function disconnectDirect({ companyId, user, platform }) {
     assertCanExtract(user);
-    return disconnectSocialLogin({ platform, companyId });
+    const p = normalizeExtractPlatform(platform);
+    if (p === 'facebook' || p === 'instagram') {
+        return requestSourceLogout({
+            companyId,
+            userId: actorId(user),
+            source: p,
+        });
+    }
+    return disconnectSocialLogin({ platform: p, companyId });
 }
