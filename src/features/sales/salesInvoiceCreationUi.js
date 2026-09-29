@@ -14,6 +14,25 @@ export function newIdempotencyKey() {
     return `si-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+/**
+ * Prefill invoice qty from SO remaining qty.
+ * remaining > 0 → remaining
+ * remaining <= 0 or missing → blank (never fall back to original ordered qty)
+ */
+export function prefillInvoiceQtyFromRemaining(remaining) {
+    const n = Number(remaining);
+    if (Number.isFinite(n) && n > 0) return n;
+    return '';
+}
+
+export function isUncertainInvoiceCreateFailure(err) {
+    if (!err) return false;
+    if (err.code === 'ECONNABORTED') return true;
+    if (!err.response) return true;
+    const status = Number(err.response.status);
+    return status >= 500;
+}
+
 export function newRequestId() {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
         return `si-req-${crypto.randomUUID()}`;

@@ -298,6 +298,7 @@ export const menuConfig = [
             { id: 'customer-price-lists', title: 'Customer Price List', path: PATHS.SALES.CUSTOMER_PRICE_LISTS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'sales.sales_orders.view' },
             { id: 'sales-invoices', title: 'Tax Invoices (GST)', path: PATHS.SALES.INVOICES, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'sales.sales_invoices.view' },
             { id: 'sales-invoice-creation-audit', title: 'Invoice Creation Audit', path: PATHS.SALES.CREATION_AUDIT, roles: [ROLES.ADMIN, ROLES.SUPERADMIN], permission: 'sales.sales_invoices.view' },
+            { id: 'sales-document-audit', title: 'Sales Document Audit', path: PATHS.SALES.DOCUMENT_AUDIT, roles: [ROLES.ADMIN, ROLES.SUPERADMIN], permission: 'sales.sales_invoices.view' },
             { id: 'eway-bills', title: 'E-Way Bill Tracking', path: PATHS.EWAY_BILL.LIST, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'sales.sales_invoices.view' },
             { id: 'e-invoices', title: 'E-Invoice / IRN Tracking', path: PATHS.E_INVOICE.LIST, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'sales.sales_invoices.view' },
             { id: 'logistics-master', title: 'Logistics & Courier Master', path: PATHS.TRANSPORTERS.LIST, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'sales.sales_invoices.view' },

@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { SalesInvoice } from '../models/salesInvoice.model.js';
+import { SalesOrder } from '../models/salesOrder.model.js';
 import { StockLedger } from '../models/stockLedger.model.js';
 import { rollbackStockLedger, recalculateStockLedger } from '../utils/stockUtils.js';
 import { Item } from '../models/item.model.js';
@@ -37,6 +38,14 @@ import {
 } from '../utils/salesOrderBilling.utils.js';
 import { buildSalesInvoiceCreationAuditFields } from '../utils/salesInvoiceCreationAudit.util.js';
 import { SI_DUPLICATE_ATTEMPT_AUDIT } from '../constants/salesInvoiceCreation.constants.js';
+import {
+    recordFromRequest,
+    recordSoBillingRecalcIfChanged,
+    markInvoiceCreateInFlight,
+    clearInvoiceCreateInFlight,
+    SALES_DOC_AUDIT_ACTIONS,
+} from '../services/salesDocumentAudit.service.js';
+import { attachRequestId, snapshotSalesOrderBillingLink } from '../utils/salesDocumentAudit.util.js';
 import logger from '../utils/logger.js';
 import { isGstr1PeriodFiled } from '../services/gstr1InvoiceCorrection.service.js';
 import { Gstr3bAdjustment } from '../models/gstr3bAdjustment.model.js';
@@ -85,6 +94,28 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
             soNumber: body.soNumber || '',
         });
         const idemKey = creationAudit.idempotencyKey;
+        req.salesRequestId = creationAudit.requestId;
+        attachRequestId(res, creationAudit.requestId);
+        const soBillingBefore = linkedSoId
+            ? snapshotSalesOrderBillingLink(await SalesOrder.findById(linkedSoId).select('status invoiceId soNumber').lean())
+            : null;
+        if (linkedSoId) {
+            const inflight = markInvoiceCreateInFlight(linkedSoId, creationAudit.requestId);
+            if (inflight.concurrent) {
+                await recordFromRequest(req, body, {
+                    action: SALES_DOC_AUDIT_ACTIONS.SI_DUPLICATE_ATTEMPT,
+                    sourceModule: 'salesInvoice',
+                    creationSource: creationAudit.creationSource,
+                    salesOrderId: linkedSoId,
+                    salesOrderNumber: body.soNumber || '',
+                    idempotencyKey: idemKey || '',
+                    details: {
+                        concurrentInFlight: true,
+                        otherRequestId: inflight.otherRequestId,
+                    },
+                });
+            }
+        }
 
         if (idemKey) {
             const existingByKey = await SalesInvoice.findOne({
@@ -93,10 +124,22 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
             }).session(session).lean();
             if (existingByKey && existingByKey.status !== 'Cancelled') {
                 await session.abortTransaction();
+                await recordFromRequest(req, body, {
+                    action: SALES_DOC_AUDIT_ACTIONS.SI_IDEMPOTENT_REPLAY,
+                    sourceModule: 'salesInvoice',
+                    creationSource: creationAudit.creationSource,
+                    salesInvoiceId: existingByKey._id,
+                    invoiceNumber: existingByKey.displayInvoiceNumber || existingByKey.invoiceNumber,
+                    salesOrderId: existingByKey.soId || linkedSoId || null,
+                    salesOrderNumber: existingByKey.soNumber || body.soNumber || '',
+                    idempotencyKey: idemKey,
+                    details: { replay: true, existingInvoiceId: String(existingByKey._id) },
+                });
                 return res.status(httpStatus.OK).json({
                     success: true,
                     data: existingByKey,
                     idempotentReplay: true,
+                    requestId: creationAudit.requestId,
                 });
             }
             const prior = await AuditLog.findOne({
@@ -108,10 +151,22 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
                 const existingInv = await SalesInvoice.findById(prior.resourceId).lean();
                 if (existingInv && existingInv.isDeleted !== true && existingInv.status !== 'Cancelled') {
                     await session.abortTransaction();
+                    await recordFromRequest(req, body, {
+                        action: SALES_DOC_AUDIT_ACTIONS.SI_IDEMPOTENT_REPLAY,
+                        sourceModule: 'salesInvoice',
+                        creationSource: creationAudit.creationSource,
+                        salesInvoiceId: existingInv._id,
+                        invoiceNumber: existingInv.displayInvoiceNumber || existingInv.invoiceNumber,
+                        salesOrderId: existingInv.soId || linkedSoId || null,
+                        salesOrderNumber: existingInv.soNumber || body.soNumber || '',
+                        idempotencyKey: idemKey,
+                        details: { replay: true, existingInvoiceId: String(existingInv._id), via: 'auditLog' },
+                    });
                     return res.status(httpStatus.OK).json({
                         success: true,
                         data: existingInv,
                         idempotentReplay: true,
+                        requestId: creationAudit.requestId,
                     });
                 }
             }
@@ -144,6 +199,19 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
                     ipAddress: req.ip,
                     userAgent: req.headers?.['user-agent'],
                 });
+                await recordFromRequest(req, body, {
+                    action: SALES_DOC_AUDIT_ACTIONS.SI_DUPLICATE_ATTEMPT,
+                    sourceModule: 'salesInvoice',
+                    creationSource: creationAudit.creationSource,
+                    salesOrderId: linkedSoId,
+                    salesOrderNumber: soPrepared.soNumber || body.soNumber || '',
+                    idempotencyKey: idemKey || '',
+                    details: {
+                        blockCode: qtyBlock.code,
+                        requestedQty: qtyBlock.requestedQty,
+                        remainingQty: qtyBlock.remainingQty,
+                    },
+                });
                 const blockErr = new ApiError(httpStatus.CONFLICT, qtyBlock.message);
                 blockErr.code = qtyBlock.code;
                 blockErr.details = {
@@ -153,6 +221,7 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
                     requestedQty: qtyBlock.requestedQty,
                     remainingQty: qtyBlock.remainingQty,
                     warnings: qtyBlock.warnings,
+                    requestId: creationAudit.requestId,
                 };
                 throw blockErr;
             }
@@ -580,12 +649,38 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
         }], { session });
 
         await session.commitTransaction();
-        const payload = { success: true, data: invoice };
+        const payload = { success: true, data: invoice, requestId: creationAudit.requestId };
         if (soOverInvoice?.overInvoiced) {
             payload.soOverInvoice = soOverInvoice;
             payload.warning =
                 soOverInvoice.warnings?.[0]?.message ||
                 'Warning: Invoice quantity exceeds Sales Order remaining quantity.';
+        }
+        await recordFromRequest(req, body, {
+            action: SALES_DOC_AUDIT_ACTIONS.SI_CREATE,
+            sourceModule: 'salesInvoice',
+            creationSource: invoice.creationSource || creationAudit.creationSource,
+            salesInvoiceId: invoice._id,
+            invoiceNumber: invoice.displayInvoiceNumber || invoice.invoiceNumber,
+            salesOrderId: invoice.soId || linkedSoId || null,
+            salesOrderNumber: invoice.soNumber || creationAudit.sourceDocumentNumber || '',
+            relatedInvoiceId: invoice._id,
+            relatedInvoiceNumber: invoice.displayInvoiceNumber || invoice.invoiceNumber,
+            idempotencyKey: idemKey || '',
+            details: {
+                creationRoute: invoice.creationRoute || creationAudit.creationRoute,
+            },
+        });
+        if (invoice.soId) {
+            const soAfter = await SalesOrder.findById(invoice.soId).select('status invoiceId soNumber').lean();
+            await recordSoBillingRecalcIfChanged({
+                req,
+                body,
+                before: soBillingBefore,
+                after: soAfter,
+                relatedInvoiceId: invoice._id,
+                relatedInvoiceNumber: invoice.displayInvoiceNumber || invoice.invoiceNumber,
+            });
         }
         res.status(httpStatus.CREATED).json(payload);
 
@@ -599,10 +694,21 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
                     isDeleted: { $ne: true },
                 }).lean();
                 if (existingInv && existingInv.status !== 'Cancelled') {
+                    await recordFromRequest(req, req.body, {
+                        action: SALES_DOC_AUDIT_ACTIONS.SI_IDEMPOTENT_REPLAY,
+                        sourceModule: 'salesInvoice',
+                        salesInvoiceId: existingInv._id,
+                        invoiceNumber: existingInv.displayInvoiceNumber || existingInv.invoiceNumber,
+                        salesOrderId: existingInv.soId || null,
+                        salesOrderNumber: existingInv.soNumber || '',
+                        idempotencyKey: replayKey,
+                        details: { replay: true, via: 'duplicateKey' },
+                    });
                     return res.status(httpStatus.OK).json({
                         success: true,
                         data: existingInv,
                         idempotentReplay: true,
+                        requestId: req.salesRequestId || replayKey,
                     });
                 }
             }
@@ -610,6 +716,7 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
         logger.error(`[createSalesInvoice] aborted: ${error.message}`, { stack: error.stack });
         throw error;
     } finally {
+        clearInvoiceCreateInFlight(resolveSalesOrderId(req.body), req.salesRequestId);
         session.endSession();
     }
 });
@@ -828,6 +935,9 @@ export const restoreSalesInvoice = asyncHandler(async (req, res) => {
         const inv = await SalesInvoice.findById(req.params.id).session(session);
         if (!inv) throw new ApiError(httpStatus.NOT_FOUND, 'Invoice not found');
         if (inv.status !== 'Cancelled') throw new ApiError(httpStatus.BAD_REQUEST, 'Invoice is not cancelled');
+        const soBillingBeforeRestore = inv.soId
+            ? snapshotSalesOrderBillingLink(await SalesOrder.findById(inv.soId).select('status invoiceId soNumber').lean())
+            : null;
 
         inv.status = 'Confirmed';
         inv.paymentStatus = 'Unpaid';
@@ -879,7 +989,26 @@ export const restoreSalesInvoice = asyncHandler(async (req, res) => {
         }
 
         await session.commitTransaction();
-        res.json({ success: true, data: inv });
+        await recordFromRequest(req, req.body, {
+            action: SALES_DOC_AUDIT_ACTIONS.SI_RESTORE,
+            sourceModule: 'salesInvoice',
+            salesInvoiceId: inv._id,
+            invoiceNumber: inv.displayInvoiceNumber || inv.invoiceNumber,
+            salesOrderId: inv.soId || null,
+            salesOrderNumber: inv.soNumber || '',
+        });
+        if (inv.soId) {
+            const soAfter = await SalesOrder.findById(inv.soId).select('status invoiceId soNumber').lean();
+            await recordSoBillingRecalcIfChanged({
+                req,
+                body: req.body,
+                before: soBillingBeforeRestore,
+                after: soAfter,
+                relatedInvoiceId: inv._id,
+                relatedInvoiceNumber: inv.displayInvoiceNumber || inv.invoiceNumber,
+            });
+        }
+        res.json({ success: true, data: inv, requestId: req.salesRequestId });
     } catch (error) {
         await session.abortTransaction();
         throw error;
@@ -908,6 +1037,9 @@ export const cancelSalesInvoice = asyncHandler(async (req, res) => {
         if (!inv) throw new ApiError(httpStatus.NOT_FOUND, 'Invoice not found');
         if (inv.isDeleted) throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot cancel a deleted invoice');
         if (inv.status === 'Cancelled') throw new ApiError(httpStatus.BAD_REQUEST, 'Invoice is already cancelled');
+        const soBillingBeforeCancel = inv.soId
+            ? snapshotSalesOrderBillingLink(await SalesOrder.findById(inv.soId).select('status invoiceId soNumber').lean())
+            : null;
 
         if (inv.paidAmount > 0) {
             throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot cancel with payments recorded. Please delete payments first.');
@@ -959,10 +1091,31 @@ export const cancelSalesInvoice = asyncHandler(async (req, res) => {
         }
 
         await session.commitTransaction();
+        await recordFromRequest(req, req.body, {
+            action: SALES_DOC_AUDIT_ACTIONS.SI_CANCEL,
+            sourceModule: 'salesInvoice',
+            salesInvoiceId: inv._id,
+            invoiceNumber: invoiceNo,
+            salesOrderId: inv.soId || null,
+            salesOrderNumber: inv.soNumber || '',
+            details: { reason },
+        });
+        if (inv.soId) {
+            const soAfter = await SalesOrder.findById(inv.soId).select('status invoiceId soNumber').lean();
+            await recordSoBillingRecalcIfChanged({
+                req,
+                body: req.body,
+                before: soBillingBeforeCancel,
+                after: soAfter,
+                relatedInvoiceId: inv._id,
+                relatedInvoiceNumber: invoiceNo,
+            });
+        }
         res.json({
             success: true,
             data: inv,
             hasEwayBill,
+            requestId: req.salesRequestId,
             message: `Invoice ${invoiceNo} cancelled. This number will not be reused.`,
         });
     } catch (error) {
@@ -985,6 +1138,9 @@ export const deleteSalesInvoice = asyncHandler(async (req, res) => {
         const inv = await SalesInvoice.findById(req.params.id).session(session);
         if (!inv) throw new ApiError(httpStatus.NOT_FOUND, 'Invoice not found');
         if (inv.isDeleted) throw new ApiError(httpStatus.BAD_REQUEST, 'Invoice is already deleted');
+        const soBillingBeforeDelete = inv.soId
+            ? snapshotSalesOrderBillingLink(await SalesOrder.findById(inv.soId).select('status invoiceId soNumber').lean())
+            : null;
 
         // Backend-verified Estimate series only (never trust frontend listMode / documentType).
         let seriesDoc = null;
@@ -1098,8 +1254,29 @@ export const deleteSalesInvoice = asyncHandler(async (req, res) => {
         }
 
         await session.commitTransaction();
+        await recordFromRequest(req, req.body, {
+            action: SALES_DOC_AUDIT_ACTIONS.SI_DELETE,
+            sourceModule: 'salesInvoice',
+            salesInvoiceId: inv._id,
+            invoiceNumber: invoiceNo,
+            salesOrderId: inv.soId || null,
+            salesOrderNumber: inv.soNumber || '',
+            details: { reason: deleteReason, documentType: isEstimateDoc ? 'Estimate' : 'SalesInvoice' },
+        });
+        if (inv.soId) {
+            const soAfter = await SalesOrder.findById(inv.soId).select('status invoiceId soNumber').lean();
+            await recordSoBillingRecalcIfChanged({
+                req,
+                body: req.body,
+                before: soBillingBeforeDelete,
+                after: soAfter,
+                relatedInvoiceId: inv._id,
+                relatedInvoiceNumber: invoiceNo,
+            });
+        }
         res.json({
             success: true,
+            requestId: req.salesRequestId,
             documentType: isEstimateDoc ? 'Estimate' : 'SalesInvoice',
             converted: convertedRef,
             conversionWarning: convertedRef

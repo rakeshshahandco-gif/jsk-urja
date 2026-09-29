@@ -9,8 +9,15 @@ import { AuditLog } from '../models/auditLog.model.js';
 import mongoose from 'mongoose';
 import { getFYFromDate } from '../utils/fyUtils.js';
 import { getNextNumberFromSeries } from '../utils/numberingUtils.js';
-import { assertSalesOrderCanBeUpdated, getSalesOrderBillingSnapshot, prepareSalesOrderForInvoiceCreation } from '../utils/salesOrderBilling.utils.js';
+import { assertSalesOrderCanBeUpdated, getSalesOrderBillingSnapshot } from '../utils/salesOrderBilling.utils.js';
 import { checkUserPermission } from '../utils/permissionUtils.js';
+import { recordFromRequest, SALES_DOC_AUDIT_ACTIONS } from '../services/salesDocumentAudit.service.js';
+import {
+    attachRequestId,
+    ensureSalesRequestId,
+    snapshotSalesOrderManual,
+    diffSalesOrderManual,
+} from '../utils/salesDocumentAudit.util.js';
 
 function assertSeriesAllowedOnSalesOrder(series) {
     const documentType = String(series?.documentType || '').trim();
@@ -227,7 +234,17 @@ export const createSO = asyncHandler(async (req, res) => {
         userAgent: req.headers['user-agent']
     });
 
-    res.status(httpStatus.CREATED).json({ success: true, data: so });
+    const requestId = ensureSalesRequestId(req, body);
+    attachRequestId(res, requestId);
+    await recordFromRequest(req, body, {
+        action: SALES_DOC_AUDIT_ACTIONS.SO_CREATE,
+        sourceModule: 'salesOrder',
+        salesOrderId: so._id,
+        salesOrderNumber: so.soNumber,
+        relatedInvoiceId: so.invoiceId || null,
+    });
+
+    res.status(httpStatus.CREATED).json({ success: true, data: so, requestId });
 });
 
 // ------- LIST SALES ORDERS -------
@@ -317,7 +334,16 @@ export const createTaxInvoiceFromSalesOrder = asyncHandler(async (req, res, next
         throw new ApiError(httpStatus.BAD_REQUEST, 'Sales Order is deleted and cannot be invoiced');
     }
 
-    const soPrepared = await prepareSalesOrderForInvoiceCreation(soId);
+    if (soDoc.status === 'Draft') {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Sales Order must be Confirmed before creating a Tax Invoice');
+    }
+    if (['Cancelled', 'Closed', 'Completed'].includes(soDoc.status)) {
+        throw new ApiError(
+            httpStatus.BAD_REQUEST,
+            `Sales Order ${soDoc.soNumber || ''} is ${soDoc.status} and cannot be invoiced`
+        );
+    }
+    const soPrepared = soDoc;
     const billing = await getSalesOrderBillingSnapshot(soPrepared);
 
     if (!soPrepared.customerId && !soPrepared.customerName) {
@@ -442,11 +468,14 @@ export const createTaxInvoiceFromSalesOrder = asyncHandler(async (req, res, next
 
 // ------- UPDATE SO -------
 export const updateSO = asyncHandler(async (req, res) => {
+    const requestId = ensureSalesRequestId(req, req.body);
+    attachRequestId(res, requestId);
     const session = await mongoose.startSession();
     session.startTransaction();
     try {
         const so = await SalesOrder.findById(req.params.id).session(session);
         if (!so) throw new ApiError(httpStatus.NOT_FOUND, 'Sales Order not found');
+        const beforeSnap = snapshotSalesOrderManual(so.toObject());
         await assertSalesOrderCanBeUpdated(so, session);
 
         const body = req.body;
@@ -541,7 +570,19 @@ export const updateSO = asyncHandler(async (req, res) => {
 
         await session.commitTransaction();
         session.endSession();
-        res.json({ success: true, data: so });
+        const afterSnap = snapshotSalesOrderManual(so.toObject());
+        const changedFields = diffSalesOrderManual(beforeSnap, afterSnap);
+        if (changedFields.length) {
+            await recordFromRequest(req, req.body, {
+                action: SALES_DOC_AUDIT_ACTIONS.SO_UPDATE,
+                sourceModule: 'salesOrder',
+                salesOrderId: so._id,
+                salesOrderNumber: so.soNumber,
+                relatedInvoiceId: so.invoiceId || null,
+                changedFields,
+            });
+        }
+        res.json({ success: true, data: so, requestId });
     } catch (error) {
         await session.abortTransaction();
         session.endSession();
@@ -649,7 +690,18 @@ export const cancelSO = asyncHandler(async (req, res) => {
         userAgent: req.headers['user-agent']
     });
 
-    res.json({ success: true, data: so });
+    const requestId = ensureSalesRequestId(req, req.body);
+    attachRequestId(res, requestId);
+    await recordFromRequest(req, req.body, {
+        action: SALES_DOC_AUDIT_ACTIONS.SO_CANCEL,
+        sourceModule: 'salesOrder',
+        salesOrderId: so._id,
+        salesOrderNumber: so.soNumber,
+        relatedInvoiceId: so.invoiceId || null,
+        changedFields: [{ field: 'status', from: 'Draft', to: 'Cancelled' }],
+    });
+
+    res.json({ success: true, data: so, requestId });
 });
 
 // ------- DELETE SO -------
@@ -679,13 +731,27 @@ export const deleteSO = asyncHandler(async (req, res) => {
         userAgent: req.headers['user-agent']
     });
 
-    res.json({ success: true, message: 'Sales Order soft-deleted successfully', data: so });
+    const requestId = ensureSalesRequestId(req, req.body);
+    attachRequestId(res, requestId);
+    await recordFromRequest(req, req.body, {
+        action: SALES_DOC_AUDIT_ACTIONS.SO_DELETE,
+        sourceModule: 'salesOrder',
+        salesOrderId: so._id,
+        salesOrderNumber: so.soNumber,
+        relatedInvoiceId: so.invoiceId || null,
+        details: { reason: so.deleteReason },
+    });
+
+    res.json({ success: true, message: 'Sales Order soft-deleted successfully', data: so, requestId });
 });
 
 // ------- RESTORE SO -------
 export const restoreSO = asyncHandler(async (req, res) => {
     const so = await SalesOrder.findById(req.params.id);
     if (!so) throw new ApiError(httpStatus.NOT_FOUND, 'Sales Order not found');
+    const beforeSnap = snapshotSalesOrderManual(so.toObject());
+    const wasDeleted = so.isDeleted === true;
+    const priorStatus = so.status;
 
     const isAdmin = ['admin', 'superadmin'].includes(req.user.roleName);
 
@@ -721,6 +787,19 @@ export const restoreSO = asyncHandler(async (req, res) => {
         userAgent: req.headers['user-agent']
     });
 
-    res.json({ success: true, message: 'Sales Order restored successfully', data: so });
+    const requestId = ensureSalesRequestId(req, req.body);
+    attachRequestId(res, requestId);
+    const afterSnap = snapshotSalesOrderManual(so.toObject());
+    await recordFromRequest(req, req.body, {
+        action: SALES_DOC_AUDIT_ACTIONS.SO_RESTORE,
+        sourceModule: 'salesOrder',
+        salesOrderId: so._id,
+        salesOrderNumber: so.soNumber,
+        relatedInvoiceId: so.invoiceId || null,
+        changedFields: diffSalesOrderManual(beforeSnap, afterSnap),
+        details: { wasDeleted, priorStatus, reason: req.body.reason || 'Restored by user' },
+    });
+
+    res.json({ success: true, message: 'Sales Order restored successfully', data: so, requestId });
 });
 

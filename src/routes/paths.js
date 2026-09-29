@@ -216,6 +216,7 @@ export const PATHS = {
         INVOICES: '/sales/invoices',
         NEW_INVOICE: '/sales/invoices/new',
         CREATION_AUDIT: '/sales/invoices/creation-audit',
+        DOCUMENT_AUDIT: '/sales/document-audit',
         ESTIMATES: '/sales/estimates',
         NEW_ESTIMATE: '/sales/estimates/new',
         INVOICE_DETAIL: (id) => `/sales/invoices/${id}`,

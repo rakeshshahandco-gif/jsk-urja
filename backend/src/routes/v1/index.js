@@ -32,6 +32,7 @@ import paymentEntryRoute from './paymentEntry.routes.js';
 import salesOrderRoute from './salesOrder.routes.js';
 import customerPriceListRoute from './customerPriceList.routes.js';
 import salesInvoiceRoute from './salesInvoice.routes.js';
+import salesDocumentAuditRoute from './salesDocumentAudit.routes.js';
 import accountReportRoutes from './accountReport.routes.js';
 import accountingReportRoutes from './accountingReport.routes.js';
 import gpAnalysisRoutes from './gpAnalysis.routes.js';
@@ -325,6 +326,10 @@ const defaultRoutes = [
     {
         path: '/sales-invoices',
         route: salesInvoiceRoute,
+    },
+    {
+        path: '/sales-document-audit',
+        route: salesDocumentAuditRoute,
     },
     {
         path: '/credit-debit-notes',

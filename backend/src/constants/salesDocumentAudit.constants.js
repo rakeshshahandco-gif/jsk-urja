@@ -1,0 +1,22 @@
+/** Append-only Sales Document forensic actions. Logging only — not business rules. */
+export const SALES_DOC_AUDIT_ACTIONS = Object.freeze({
+    SI_CREATE: 'SI_CREATE',
+    SI_CANCEL: 'SI_CANCEL',
+    SI_RESTORE: 'SI_RESTORE',
+    SI_DELETE: 'SI_DELETE',
+    SI_IDEMPOTENT_REPLAY: 'SI_IDEMPOTENT_REPLAY',
+    SI_DUPLICATE_ATTEMPT: 'SI_DUPLICATE_ATTEMPT',
+    SO_CREATE: 'SO_CREATE',
+    SO_UPDATE: 'SO_UPDATE',
+    SO_CANCEL: 'SO_CANCEL',
+    SO_RESTORE: 'SO_RESTORE',
+    SO_DELETE: 'SO_DELETE',
+    SO_BILLING_RECALC: 'SO_BILLING_RECALC',
+});
+
+export const SALES_DOC_ACTOR_TYPES = Object.freeze({
+    USER: 'USER',
+    SYSTEM: 'SYSTEM',
+});
+
+export const SO_BILLING_RECALC_REASON = 'INVOICE_BILLING_RECALCULATION';

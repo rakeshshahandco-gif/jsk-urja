@@ -22,6 +22,8 @@ import {
     formatInvoiceCreatedToast,
     newIdempotencyKey,
     newRequestId,
+    prefillInvoiceQtyFromRemaining,
+    isUncertainInvoiceCreateFailure,
     resolveWebCreationSource,
 } from '@/features/sales/salesInvoiceCreationUi';
 
@@ -173,6 +175,7 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
     const scanEntryEnabled = isFeatureEnabled('accounting.enableAiSmartImport');
     const soId = searchParams.get('soId') || searchParams.get('sold');
     const [saving, setSaving] = useState(false);
+    const [checkingCreate, setCheckingCreate] = useState(false);
     const [gstWarning, setGstWarning] = useState(null);
     const [gstSnapshot, setGstSnapshot] = useState(null);
     const [gstBusy, setGstBusy] = useState(false);
@@ -184,6 +187,7 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
     /** Sales Order series to apply once Tax Invoice series list is ready */
     const soSeriesPrefRef = useRef({ id: '', name: '' });
     const idempotencyKeyRef = useRef(newIdempotencyKey());
+    const requestIdRef = useRef(newRequestId());
     const createdInvoiceIdRef = useRef(null);
     const submitLockRef = useRef(false);
 
@@ -401,7 +405,7 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                     additionalNotes: i.additionalNotes || i.itemNotes || i.notes || i.addNotes || i.remark || '', 
                     hsnCode: i.hsnCode || '', 
                     uom: i.uom || 'NOS', 
-                    qty: remaining > 0 ? remaining : (i.qty || ''),
+                    qty: prefillInvoiceQtyFromRemaining(remaining),
                     rate: i.rate || '', 
                     gstRate: so.gstApplicable === false ? 0 : (i.gstRate || 18), 
                     discountPercent: 0,
@@ -418,7 +422,7 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                         const remaining = lineBilling != null
                             ? Number(lineBilling.remainingQty)
                             : Number(i.qty) || 0;
-                        const qty = remaining > 0 ? remaining : (i.qty || '');
+                        const qty = prefillInvoiceQtyFromRemaining(remaining);
                         return { itemId: i.itemId, qty };
                     })
                     .filter((row) => Number(row.qty) > 0)
@@ -684,7 +688,7 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
     };
 
     const handleSubmit = async () => {
-        if (submitLockRef.current || saving) return;
+        if (submitLockRef.current || saving || checkingCreate) return;
         if (createdInvoiceIdRef.current) {
             toast.error('This invoice was already created. Open the invoice instead of creating another.');
             navigate(PATHS.SALES.INVOICE_DETAIL(createdInvoiceIdRef.current), { replace: true });
@@ -733,7 +737,7 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
         }
 
         try {
-            const requestId = newRequestId();
+            const requestId = requestIdRef.current;
             const payload = {
                 ...form,
                 gstApplicable: isEstimate ? false : gstApplicable,
@@ -787,10 +791,19 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                 roundOff: Number((roundedTotal - grandTotal).toFixed(2)),
                 amountInWords: numberToWords(roundedTotal)
             };
-            const resBody = await createSalesInvoice(payload, {
+            const postOnce = () => createSalesInvoice(payload, {
                 idempotencyKey: idempotencyKeyRef.current,
-                requestId,
+                requestId: requestIdRef.current,
             });
+            let resBody;
+            try {
+                resBody = await postOnce();
+            } catch (firstErr) {
+                if (!isUncertainInvoiceCreateFailure(firstErr)) throw firstErr;
+                setCheckingCreate(true);
+                toast('Checking whether the invoice was created...', { icon: '🔎', duration: 6000 });
+                resBody = await postOnce();
+            }
             const inv = resBody?.data || resBody;
             if (inv?._id) createdInvoiceIdRef.current = inv._id;
             if (resBody?.soOverInvoice?.overInvoiced) {
@@ -829,17 +842,27 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
             }
             navigate(PATHS.SALES.INVOICE_DETAIL(inv._id), { replace: true });
         } catch (e) {
-            const msg = e.code === 'ECONNABORTED'
-                ? 'Request timed out — the invoice may still have been created. Check the invoice list.'
-                : (e.response?.data?.message || 'Create failed');
-            toast.error(msg, { duration: 8000 });
-            if (e.response?.status === 409) {
-                createdInvoiceIdRef.current = createdInvoiceIdRef.current || e.response?.data?.details?.existingInvoiceId || null;
+            if (isUncertainInvoiceCreateFailure(e)) {
+                toast.error(
+                    'Could not confirm whether the invoice was created. This request will be reused — check the invoice list before creating another.',
+                    { duration: 10000 },
+                );
+            } else {
+                const msg = e.response?.data?.message || 'Create failed';
+                toast.error(msg, { duration: 8000 });
+                if (e.response?.status === 409) {
+                    createdInvoiceIdRef.current = createdInvoiceIdRef.current || e.response?.data?.details?.existingInvoiceId || null;
+                }
+                if (!createdInvoiceIdRef.current) {
+                    idempotencyKeyRef.current = newIdempotencyKey();
+                    requestIdRef.current = newRequestId();
+                }
             }
         }
         finally {
             submitLockRef.current = false;
             setSaving(false);
+            setCheckingCreate(false);
         }
     };
 
@@ -878,9 +901,11 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                             </label>
                         )}
                         <button onClick={() => { if (window.confirm('Discard changes?')) navigate(-1); }} style={{ padding: '8px 16px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 7, cursor: 'pointer', fontWeight: 600, color: '#374151', fontSize: 13 }}>Cancel</button>
-                        <button onClick={handleSubmit} disabled={saving} style={{ padding: '8px 20px', background: '#0d9488', color: '#fff', border: 'none', borderRadius: 7, cursor: saving ? 'wait' : 'pointer', fontWeight: 700, fontSize: 13 }}>
-                            {saving
-                                ? 'Creating invoice...'
+                        <button onClick={handleSubmit} disabled={saving || checkingCreate} style={{ padding: '8px 20px', background: '#0d9488', color: '#fff', border: 'none', borderRadius: 7, cursor: (saving || checkingCreate) ? 'wait' : 'pointer', fontWeight: 700, fontSize: 13 }}>
+                            {checkingCreate
+                                ? 'Checking whether the invoice was created...'
+                                : saving
+                                ? 'Creating Invoice...'
                                 : (soId ? 'Create Tax Invoice' : '✓ Create Invoice')}
                         </button>
                     </div>

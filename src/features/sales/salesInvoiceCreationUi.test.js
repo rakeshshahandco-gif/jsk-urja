@@ -5,6 +5,8 @@ import {
     resolveWebCreationSource,
     formatInvoiceCreatedToast,
     formatCreationAudit,
+    prefillInvoiceQtyFromRemaining,
+    isUncertainInvoiceCreateFailure,
 } from './salesInvoiceCreationUi.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -43,13 +45,33 @@ describe('Sales Invoice creation UI helpers', () => {
         assert.equal(audit.idempotencyKey, 'key-1');
     });
 
+    it('never prefills original ordered qty when remaining is zero or negative', () => {
+        assert.equal(prefillInvoiceQtyFromRemaining(10), 10);
+        assert.equal(prefillInvoiceQtyFromRemaining(0), '');
+        assert.equal(prefillInvoiceQtyFromRemaining(-2), '');
+        assert.equal(prefillInvoiceQtyFromRemaining(null), '');
+        const page = fs.readFileSync(path.join(__dirname, './SalesInvoiceFormPage.jsx'), 'utf8');
+        assert.equal(page.includes('remaining > 0 ? remaining : (i.qty'), false);
+        assert.equal(page.includes('remaining > 0 ? remaining : originalQty'), false);
+        assert.match(page, /prefillInvoiceQtyFromRemaining/);
+    });
+
+    it('treats timeout and missing response as uncertain create, not a new submission', () => {
+        assert.equal(isUncertainInvoiceCreateFailure({ code: 'ECONNABORTED' }), true);
+        assert.equal(isUncertainInvoiceCreateFailure({ response: undefined }), true);
+        assert.equal(isUncertainInvoiceCreateFailure({ response: { status: 500 } }), true);
+        assert.equal(isUncertainInvoiceCreateFailure({ response: { status: 400 } }), false);
+    });
+
     it('locks Create Tax Invoice on first click and navigates away after success', () => {
         const page = fs.readFileSync(path.join(__dirname, './SalesInvoiceFormPage.jsx'), 'utf8');
         assert.match(page, /submitLockRef/);
-        assert.match(page, /Creating invoice\.\.\./);
+        assert.match(page, /Creating Invoice\.\.\./);
+        assert.match(page, /Checking whether the invoice was created/);
         assert.match(page, /Create Tax Invoice/);
         assert.match(page, /replace:\s*true/);
         assert.match(page, /idempotencyKeyRef/);
+        assert.match(page, /requestIdRef/);
         assert.match(page, /createdInvoiceIdRef/);
         assert.match(page, /formatInvoiceCreatedToast/);
     });

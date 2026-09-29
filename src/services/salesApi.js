@@ -47,12 +47,19 @@ export const createSalesInvoice = (data, config = {}) =>
 export const getSalesInvoiceCreationAudit = (params = {}) =>
     apiClient.get('/sales-invoices/creation-audit', { params }).then((r) => r.data);
 
+export const getSalesDocumentAudits = (params = {}) =>
+    apiClient.get('/sales-document-audit', { params }).then((r) => r.data);
+
+export const getSalesDocumentAuditById = (id) =>
+    apiClient.get(`/sales-document-audit/${id}`).then((r) => r.data);
+
 export const createTaxInvoiceFromSalesOrder = (soId, data, config = {}) =>
     apiClient.post(`/sales-orders/${soId}/create-tax-invoice`, data, {
         timeout: 120000,
-        headers: config.idempotencyKey
-            ? { 'Idempotency-Key': config.idempotencyKey }
-            : undefined,
+        headers: {
+            ...(config.idempotencyKey ? { 'Idempotency-Key': config.idempotencyKey } : {}),
+            ...(config.requestId ? { 'X-Request-Id': config.requestId } : {}),
+        },
     }).then(r => r.data.data);
 
 export const cancelSalesInvoice = (id, data) =>

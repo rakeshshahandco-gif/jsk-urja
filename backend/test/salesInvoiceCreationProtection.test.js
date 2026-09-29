@@ -9,8 +9,6 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
     SI_CREATION_SOURCES,
-    SO_FULLY_INVOICED_MESSAGE,
-    SO_QTY_EXCEEDS_REMAINING_MESSAGE,
 } from '../src/constants/salesInvoiceCreation.constants.js';
 import { resolveSalesInvoiceCreationSource } from '../src/utils/salesInvoiceCreationAudit.util.js';
 import { shouldBlockInvoiceForRemainingQty } from '../src/utils/salesOrderBilling.utils.js';
@@ -39,7 +37,7 @@ describe('Sales Invoice creation source', () => {
     });
 });
 
-describe('Remaining qty hard block — partial OK, full duplicate blocked', () => {
+describe('Remaining qty — partial OK, over-invoice not hard-blocked', () => {
     const lineId = 'line-1';
     const so = { items: [{ _id: lineId, itemId: 'item-1', itemName: 'LED', qty: 100 }] };
 
@@ -67,23 +65,22 @@ describe('Remaining qty hard block — partial OK, full duplicate blocked', () =
         assert.equal(second.blocked, false);
     });
 
-    it('blocks a second full invoice of the same 100 qty', () => {
-        const result = shouldBlockInvoiceForRemainingQty(so, [{ salesOrderLineId: lineId, qty: 100 }], {
+    it('does not hard-block a second invoice after remaining is 0 (intentional over-invoice)', () => {
+        const result = shouldBlockInvoiceForRemainingQty(so, [{ salesOrderLineId: lineId, qty: 2 }], {
             fullyInvoiced: true, anyInvoiced: true, activeInvoices: [{ _id: 'inv1' }],
             lines: [{ lineId, orderedQty: 100, invoicedQty: 100, remainingQty: 0 }],
         });
-        assert.equal(result.blocked, true);
-        assert.equal(result.message, SO_FULLY_INVOICED_MESSAGE);
-        assert.equal(result.code, 'SO_ALREADY_INVOICED');
+        assert.equal(result.blocked, false);
+        assert.equal(result.overInvoiced, true);
     });
 
-    it('blocks qty that exceeds remaining on a partial SO', () => {
+    it('does not hard-block qty that exceeds remaining; warning only', () => {
         const result = shouldBlockInvoiceForRemainingQty(so, [{ salesOrderLineId: lineId, qty: 60 }], {
             fullyInvoiced: false, anyInvoiced: true, activeInvoices: [{ _id: 'inv1' }],
             lines: [{ lineId, orderedQty: 100, invoicedQty: 50, remainingQty: 50 }],
         });
-        assert.equal(result.blocked, true);
-        assert.equal(result.message, SO_QTY_EXCEEDS_REMAINING_MESSAGE);
+        assert.equal(result.blocked, false);
+        assert.equal(result.overInvoiced, true);
     });
 });
 
