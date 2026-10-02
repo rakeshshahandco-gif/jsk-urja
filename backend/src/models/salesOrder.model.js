@@ -113,6 +113,7 @@ salesOrderSchema.index({ soNumber: 1 });
 salesOrderSchema.index({ customerId: 1, soDate: -1 });
 salesOrderSchema.index({ status: 1 });
 salesOrderSchema.index({ isDeleted: 1 });
+salesOrderSchema.index({ companyId: 1, isDeleted: 1, soDate: -1 });
 salesOrderSchema.index({ financialYear: 1 });
 
 const SalesOrder = mongoose.model('SalesOrder', salesOrderSchema);

@@ -265,6 +265,7 @@ salesInvoiceSchema.index({ customerId: 1, invoiceDate: -1 });
 salesInvoiceSchema.index({ paymentStatus: 1 });
 salesInvoiceSchema.index({ soId: 1 });
 salesInvoiceSchema.index({ isDeleted: 1 });
+salesInvoiceSchema.index({ companyId: 1, isDeleted: 1, invoiceDate: -1 });
 salesInvoiceSchema.index({ financialYear: 1 });
 salesInvoiceSchema.index({ idempotencyKey: 1 }, { unique: true, sparse: true });
 salesInvoiceSchema.index({ requestId: 1 });

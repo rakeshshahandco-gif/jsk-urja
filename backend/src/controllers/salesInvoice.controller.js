@@ -721,11 +721,36 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
     }
 });
 
+// List-view fields only. Detail/edit/print still use getSalesInvoiceById (full document).
+const SI_LIST_SELECT = [
+    'invoiceNumber',
+    'displayInvoiceNumber',
+    'invoiceDate',
+    'customerName',
+    'customerId',
+    'soId',
+    'soNumber',
+    'seriesId',
+    'roundedTotal',
+    'grandTotal',
+    'status',
+    'paymentStatus',
+    'paidAmount',
+    'isDeleted',
+    'numberLocked',
+    'sequenceNumber',
+    'createdAt',
+    'financialYear',
+    'items.itemCode',
+    'items.itemName',
+    'items.qty',
+    'items.uom',
+].join(' ');
+
 export const getSalesInvoices = asyncHandler(async (req, res) => {
     const { search, customerId, paymentStatus, paymentType, dateFrom, dateTo, limit = 50, page = 1, view, series } = req.query;
-    console.log(`[SalesInvoices] Fetching with filter:`, { search, customerId, paymentStatus, series, view });
-    
-    const filter = { isDeleted: { $ne: true } };
+
+    const filter = { isDeleted: false };
 
     if (view === 'archived') {
         filter.isDeleted = true;
@@ -804,16 +829,15 @@ export const getSalesInvoices = asyncHandler(async (req, res) => {
         if (dateTo) filter.invoiceDate.$lte = new Date(dateTo);
     }
 
-    console.log(`[SalesInvoices] Final MongoDB Filter:`, JSON.stringify(filter));
-
     const skip = (Number(page) - 1) * Number(limit);
     const [invoices, total] = await Promise.all([
         SalesInvoice.find(filter)
+            .select(SI_LIST_SELECT)
             .populate('seriesId', 'seriesName isEstimate documentType')
-            .populate('createdBy', 'name mobile')
             .sort({ invoiceDate: -1 })
             .skip(skip)
-            .limit(Number(limit)),
+            .limit(Number(limit))
+            .lean(),
         SalesInvoice.countDocuments(filter),
     ]);
    res.json({ success: true, invoices, total });

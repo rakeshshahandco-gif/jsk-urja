@@ -247,10 +247,31 @@ export const createSO = asyncHandler(async (req, res) => {
     res.status(httpStatus.CREATED).json({ success: true, data: so, requestId });
 });
 
+// List-view fields only. Detail/edit/print still use getSOById (full document).
+const SO_LIST_SELECT = [
+    'soNumber',
+    'soDate',
+    'customerPO',
+    'customerName',
+    'customerEmail',
+    'customerPhone',
+    'customerId',
+    'paymentType',
+    'status',
+    'isDeleted',
+    'roundedTotal',
+    'grandTotal',
+    'totalQty',
+    'deliveryDate',
+    'items.itemName',
+    'items.qty',
+    'items.uom',
+].join(' ');
+
 // ------- LIST SALES ORDERS -------
 export const getSOs = asyncHandler(async (req, res) => {
     const { search, status, dateFrom, dateTo, limit = 50, page = 1, includeDeleted, view } = req.query;
-    const filter = { isDeleted: { $ne: true } };
+    const filter = { isDeleted: false };
     
     if (view === 'archived') {
         filter.isDeleted = true;
@@ -273,7 +294,12 @@ export const getSOs = asyncHandler(async (req, res) => {
 
     const skip = (Number(page) - 1) * Number(limit);
     const [salesOrders, total] = await Promise.all([
-        SalesOrder.find(filter).populate('createdBy', 'name mobile').sort({ soDate: -1 }).skip(skip).limit(Number(limit)),
+        SalesOrder.find(filter)
+            .select(SO_LIST_SELECT)
+            .sort({ soDate: -1 })
+            .skip(skip)
+            .limit(Number(limit))
+            .lean(),
         SalesOrder.countDocuments(filter),
     ]);
 
