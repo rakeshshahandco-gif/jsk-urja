@@ -44,7 +44,7 @@ export const LONG_AGENT_OFFLINE_MS = 4 * 60 * 1000;
 export const DISCOVERY_AGENT_OFFLINE = 'DISCOVERY_AGENT_OFFLINE';
 export const OWNER_PAUSE = 'OWNER_PAUSE';
 export const PAUSED_STATUS = 'paused';
-export const AGENT_SLEEP_PAUSE_MESSAGE = 'Discovery Agent is offline. Your progress is saved. When the computer/agent is available again, click Resume Campaign to continue from the saved position.';
+export const AGENT_SLEEP_PAUSE_MESSAGE = 'Discovery Agent is offline. Your progress is saved. Extraction will continue automatically from the saved position when the agent is back.';
 const GENUINE_COMPLETE_REASONS = new Set([
     'owner_stop',
     'capture_target_reached',
@@ -808,17 +808,16 @@ async function waitForAgentReconnect(session, message = '') {
     session.autoCollection = session.autoCollection || defaultAuto();
     const ac = session.autoCollection;
     if (isLongAgentOfflinePause(session)) {
-        return { deferred: true, requiresManualResume: true };
+        ac.requiresManualResume = false;
+        ac.status = 'running';
+        ac.enabled = true;
+        ac.discoveryStatus = 'waiting_for_agent';
+        ac.pauseReason = 'agent_offline';
+        ac.lastErrorCode = 'agent_offline';
+        ac.lastErrorMessage = String(message || AGENT_OFFLINE_WAIT_MESSAGE).slice(0, 500);
+        ac.providerState = 'Provider temporarily unavailable';
     }
     if (!ac.agentWaitStartedAt) ac.agentWaitStartedAt = new Date();
-    const waitedMs = Date.now() - new Date(ac.agentWaitStartedAt).getTime();
-    const heartbeatAt = session.lastHeartbeatAt;
-    const heartbeatAge = heartbeatAt ? (Date.now() - new Date(heartbeatAt).getTime()) : 0;
-    if (waitedMs >= LONG_AGENT_OFFLINE_MS || heartbeatAge >= LONG_AGENT_OFFLINE_MS) {
-        await persistCheckpoint(session);
-        await pauseForLongAgentOffline(session);
-        return { deferred: true, requiresManualResume: true };
-    }
     const alreadyWaiting = isAgentOfflineWait(session);
     const nextAt = ac.nextActionAt ? new Date(ac.nextActionAt).getTime() : 0;
     if (alreadyWaiting && nextAt > Date.now()) {
@@ -833,6 +832,7 @@ async function waitForAgentReconnect(session, message = '') {
     ac.lastErrorCode = 'agent_offline';
     ac.providerState = 'Provider temporarily unavailable';
     ac.lastErrorMessage = String(message || AGENT_OFFLINE_WAIT_MESSAGE).slice(0, 500);
+    ac.requiresManualResume = false;
     ac.agentWaitAttempt = attempt + 1;
     ac.nextActionAt = new Date(Date.now() + delaySec * 1000);
     ac.lastDiscoveryAt = new Date();
@@ -854,6 +854,7 @@ function clearAgentWait(session) {
     ac.providerState = 'Running';
     ac.agentWaitAttempt = 0;
     ac.agentWaitStartedAt = null;
+    ac.requiresManualResume = false;
     ac.nextActionAt = null;
     ac.lastDiscoveryAt = new Date();
 }
@@ -1159,9 +1160,7 @@ async function runPhase(session, user, cid) {
         const last = ac.lastDiscoveryAt || ac.lastPageAdvancementAt || session.lastCaptureAt;
         const gapMs = last ? (Date.now() - new Date(last).getTime()) : 0;
         if (gapMs >= LONG_AGENT_OFFLINE_MS) {
-            await persistCheckpoint(session);
-            await pauseForLongAgentOffline(session);
-            return {};
+            return waitForAgentReconnect(session, AGENT_OFFLINE_WAIT_MESSAGE);
         }
         const heartbeatAt = session.lastHeartbeatAt || ac.lastDiscoveryAt;
         const heartbeatAge = heartbeatAt ? (Date.now() - new Date(heartbeatAt).getTime()) : gapMs;
@@ -1597,7 +1596,7 @@ export async function tickAutoCollection({ companyId, user, sessionId }) {
             stopped: true,
         };
     }
-    if (probe && (isInvalidCompletedCollection(probe) || isLongAgentOfflinePause(probe))) {
+    if (probe && isInvalidCompletedCollection(probe) && !isLongAgentOfflinePause(probe)) {
         const live = await loadOwnedSession(cid, sessionId);
         if (isInvalidCompletedCollection(live) && !isLongAgentOfflinePause(live)) {
             await persistCheckpoint(live);
@@ -1616,6 +1615,25 @@ export async function tickAutoCollection({ companyId, user, sessionId }) {
             skipped: true,
             requiresManualResume: true,
         };
+    }
+    if (probe && isLongAgentOfflinePause(probe) && !isOwnerStopped(probe)) {
+        await AssistedCaptureSession.updateOne(
+            { _id: sessionId, companyId: cid, 'autoCollection.stopRequested': { $ne: true } },
+            {
+                $set: {
+                    'autoCollection.status': 'running',
+                    'autoCollection.enabled': true,
+                    'autoCollection.discoveryStatus': 'waiting_for_agent',
+                    'autoCollection.pauseReason': 'agent_offline',
+                    'autoCollection.requiresManualResume': false,
+                    'autoCollection.lastErrorCode': 'agent_offline',
+                    'autoCollection.lastErrorMessage': AGENT_OFFLINE_WAIT_MESSAGE,
+                    'autoCollection.providerState': 'Provider temporarily unavailable',
+                    'autoCollection.nextActionAt': new Date(),
+                    'autoCollection.tickLockUntil': null,
+                },
+            },
+        );
     }
     if (probe) {
         const accepted = Math.max(
@@ -1676,6 +1694,10 @@ export async function tickAutoCollection({ companyId, user, sessionId }) {
                         {
                             'autoCollection.status': 'paused_owner',
                             'autoCollection.pauseReason': 'agent_offline',
+                        },
+                        {
+                            'autoCollection.status': PAUSED_STATUS,
+                            'autoCollection.pauseReason': DISCOVERY_AGENT_OFFLINE,
                         },
                     ],
                 },
@@ -1815,29 +1837,12 @@ export async function tickAutoCollection({ companyId, user, sessionId }) {
     } else {
         const agentStatus = await getAgentStatusForCompany(cid, { sessionId: session._id });
         const clearlyOffline = agentStatus && (agentStatus.online === false || agentStatus.connected === false || agentStatus.agentOnline === false);
-        if (isLongAgentOfflinePause(session)) {
-            await persistCheckpoint(session);
-            await session.save();
-        } else if (clearlyOffline) {
-            const heartbeatAt = session.lastHeartbeatAt;
-            const heartbeatAge = heartbeatAt ? (Date.now() - new Date(heartbeatAt).getTime()) : 0;
-            if (heartbeatAge >= LONG_AGENT_OFFLINE_MS) {
-                await persistCheckpoint(session);
-                await pauseForLongAgentOffline(session);
-            } else {
-                await waitForAgentReconnect(session, AGENT_OFFLINE_WAIT_MESSAGE);
-            }
+        if (clearlyOffline) {
+            await waitForAgentReconnect(session, AGENT_OFFLINE_WAIT_MESSAGE);
         } else {
-            if (isAgentOfflineWait(session) || session.autoCollection?.pauseReason === 'agent_offline') {
-                const started = session.autoCollection?.agentWaitStartedAt;
-                const waitedMs = started ? (Date.now() - new Date(started).getTime()) : 0;
-                if (waitedMs >= LONG_AGENT_OFFLINE_MS) {
-                    await persistCheckpoint(session);
-                    await pauseForLongAgentOffline(session);
-                } else {
-                    clearAgentWait(session);
-                    await session.save();
-                }
+            if (isLongAgentOfflinePause(session) || isAgentOfflineWait(session) || session.autoCollection?.pauseReason === 'agent_offline') {
+                clearAgentWait(session);
+                await session.save();
             }
             try {
                 const outcome = await runPhase(session, user, cid);

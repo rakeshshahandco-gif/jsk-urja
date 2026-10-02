@@ -36,10 +36,13 @@ export function tokenOwnerId(token) {
 }
 
 export function isAgentTokenOnline(token, now = Date.now()) {
-    const hb = token?.lastHeartbeatAt || token?.lastUsedAt;
-    if (!hb) return false;
-    const ts = new Date(hb).getTime();
-    return Number.isFinite(ts) && (now - ts) <= AGENT_PRESENCE_WINDOW_MS;
+    const hbTs = token?.lastHeartbeatAt ? new Date(token.lastHeartbeatAt).getTime() : 0;
+    const usedTs = token?.lastUsedAt ? new Date(token.lastUsedAt).getTime() : 0;
+    const ts = Math.max(
+        Number.isFinite(hbTs) ? hbTs : 0,
+        Number.isFinite(usedTs) ? usedTs : 0,
+    );
+    return ts > 0 && (now - ts) <= AGENT_PRESENCE_WINDOW_MS;
 }
 
 export function fallbackLegacyDeviceId(token) {

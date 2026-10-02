@@ -3210,7 +3210,7 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                         {longAgentOffline && (
                             <div className={styles.manualBanner} role="status" style={{ marginBottom: 12 }}>
                                 <div>
-                                    <h3>Paused — Discovery Agent was offline. Click Resume Campaign to continue.</h3>
+                                    <h3>Waiting — Discovery Agent is offline. Collection will continue automatically when the agent is Ready.</h3>
                                     <p>{AGENT_SLEEP_PAUSE_MESSAGE}</p>
                                 </div>
                             </div>
@@ -3518,8 +3518,8 @@ export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = n
                                     Resume Campaign
                                     <span>{longAgentOffline
                                         ? (agentStatus?.online || agentStatus?.connected
-                                            ? 'Continue from the saved query and Google page.'
-                                            : 'Available when Discovery Agent is Ready.')
+                                            ? 'Continue from the saved query and Google page (also resumes automatically).'
+                                            : 'Waiting for Discovery Agent — collection resumes automatically when Ready.')
                                         : (waitingAgent
                                             ? 'Fallback: continue from the last checkpoint after the agent reconnects.'
                                             : 'Continue unfinished records only (no duplicates).')}</span>

@@ -348,8 +348,10 @@ async function cmdListen() {
         process.env.HOSTNAME = os.hostname();
     }
     console.log('Listen mode started. agentInstanceId=', agentInstanceId, 'device=', process.env.DISCOVERY_AGENT_DEVICE_NAME || os.hostname());
-    // Retry CRM connect — brief backend reloads must not kill the agent permanently
-    for (let attempt = 1; attempt <= 10; attempt += 1) {
+    // Retry CRM connect forever — Render restarts / brief offline must not kill the agent
+    let attempt = 0;
+    while (!stop) {
+        attempt += 1;
         try {
             const connected = await crm.connect(agentInstanceId);
             if (connected?.userId) process.env.DISCOVERY_AGENT_USER_ID = String(connected.userId);
@@ -359,10 +361,16 @@ async function cmdListen() {
             break;
         } catch (err) {
             console.error('CRM connect failed (attempt', attempt + '):', err && err.message ? err.message : err);
-            if (attempt === 10) throw err;
-            await sleep(Math.min(1000 * attempt, 5000));
+            if (err && (Number(err.status) === 401 || Number(err.status) === 403)) {
+                throw err;
+            }
+            const delays = [5000, 10000, 15000, 30000, 60000];
+            const delay = delays[Math.min(attempt - 1, delays.length - 1)];
+            console.error('CRM unreachable — retrying in', delay / 1000, 'sec. Agent stays running.');
+            await sleep(delay);
         }
     }
+    if (stop) return;
     while (!stop) {
         try {
             const now = Date.now();

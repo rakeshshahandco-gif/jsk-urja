@@ -85,7 +85,7 @@ export const AGENT_OFFLINE_WAIT_MESSAGE = 'Discovery Agent temporarily offline â
 export const DISCOVERY_AGENT_OFFLINE = 'DISCOVERY_AGENT_OFFLINE';
 export const OWNER_PAUSE = 'OWNER_PAUSE';
 export const AGENT_SLEEP_PAUSE_MESSAGE =
-    'Discovery Agent is offline. Your progress is saved. When the computer/agent is available again, click Resume Campaign to continue from the saved position.';
+    'Discovery Agent is offline. Your progress is saved. Extraction will continue automatically from the saved position when the agent is back.';
 
 export function isLongAgentOfflinePause(autoCollection = {}) {
     const ac = autoCollection || {};

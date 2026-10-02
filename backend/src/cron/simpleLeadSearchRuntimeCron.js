@@ -41,6 +41,10 @@ async function tickOnce() {
                                     'autoCollection.status': 'paused_owner',
                                     'autoCollection.pauseReason': 'agent_offline',
                                 },
+                                {
+                                    'autoCollection.status': 'paused',
+                                    'autoCollection.pauseReason': 'DISCOVERY_AGENT_OFFLINE',
+                                },
                             ],
                         },
                         { 'autoCollection.stopRequested': { $ne: true } },
@@ -100,7 +104,9 @@ async function tickOnce() {
                         || s.autoCollection?.stopRequested === true;
                     const waitingAgent = s.autoCollection?.status === 'running'
                         || (s.autoCollection?.status === 'paused_owner'
-                            && s.autoCollection?.pauseReason === 'agent_offline');
+                            && s.autoCollection?.pauseReason === 'agent_offline')
+                        || (s.autoCollection?.status === 'paused'
+                            && s.autoCollection?.pauseReason === 'DISCOVERY_AGENT_OFFLINE');
                     const needsSleepReclaim = ['completed', 'expired', 'failed'].includes(s.status)
                         && s.autoCollection?.pauseReason !== 'DISCOVERY_AGENT_OFFLINE';
                     if (!ownerStopped && (waitingAgent || needsSleepReclaim)) {
