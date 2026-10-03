@@ -32,6 +32,8 @@ export default function SalesInvoiceCancelDeleteModal({
     amount,
     soId,
     soNumber,
+    /** Cancelled tax invoice: delete frees the blocked number. Cancel itself still blocks it. */
+    numberCurrentlyBlocked = false,
 }) {
     const [reason, setReason] = useState('');
     const [convertedAck, setConvertedAck] = useState(false);
@@ -72,7 +74,9 @@ export default function SalesInvoiceCancelDeleteModal({
 
     const title = isCancel
         ? (isEstimate ? 'Cancel Estimate' : 'Cancel Invoice')
-        : (isEstimate ? 'Delete Estimate?' : 'Delete Invoice');
+        : numberCurrentlyBlocked
+            ? 'Delete Invoice (Frees Number)'
+            : (isEstimate ? 'Delete Estimate?' : 'Delete Invoice');
     const confirmLabel = isCancel
         ? (isEstimate ? 'Confirm Cancel' : 'Confirm Cancel')
         : (isEstimate ? 'Confirm Delete Estimate' : 'Confirm Delete');
@@ -123,6 +127,10 @@ export default function SalesInvoiceCancelDeleteModal({
                             This Estimate will be deleted. Later Estimate numbers will remain unchanged, and a numbering gap is allowed.
                         </p>
                     </div>
+                ) : numberCurrentlyBlocked && !isCancel ? (
+                    <p style={{ fontSize: 13, color: '#475569', lineHeight: 1.55, margin: '0 0 16px' }}>
+                        Deleting this invoice will free invoice number <strong>{invoiceNumber}</strong> for reuse, subject to sequence rules. Cancelling keeps the number permanently blocked.
+                    </p>
                 ) : (
                     <p style={{ fontSize: 13, color: '#475569', lineHeight: 1.55, margin: '0 0 16px' }}>
                         {isCancel ? (

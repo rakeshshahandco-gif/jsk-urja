@@ -417,16 +417,20 @@ export default function SalesInvoiceDetailPage() {
                                  </button>
                              )}
 
-                             {notCancelled && canDeleteInvoice && (
+                             {canDeleteInvoice && (
                                  <button
                                      onClick={() => setCancelDeleteModal('delete')}
                                      disabled={cancelling}
                                      style={{ padding: '9px 18px', borderRadius: 8, background: '#ef4444', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
-                                     title={isEstimateSeriesVerified ? 'Delete Estimate' : 'Delete Invoice (Frees Number, Latest Only)'}
+                                     title={!notCancelled && !isEstimateSeriesVerified
+                                         ? 'Delete Invoice (Frees Number)'
+                                         : (isEstimateSeriesVerified ? 'Delete Estimate' : 'Delete Invoice (Frees Number, Latest Only)')}
                                  >
                                      {cancelling
                                          ? 'Processing...'
-                                         : (isEstimateSeriesVerified ? '🗑️ Delete Estimate' : '🗑️ Delete Invoice')}
+                                         : !notCancelled && !isEstimateSeriesVerified
+                                             ? '🗑️ Delete Invoice (Frees Number)'
+                                             : (isEstimateSeriesVerified ? '🗑️ Delete Estimate' : '🗑️ Delete Invoice')}
                                  </button>
                              )}
                             {/* Receive Payment */}
@@ -923,6 +927,7 @@ export default function SalesInvoiceDetailPage() {
                 amount={inv.roundedTotal || inv.grandTotal}
                 soId={inv.soId}
                 soNumber={inv.soNumber}
+                numberCurrentlyBlocked={!notCancelled && !isEstimateSeriesVerified}
                 onClose={() => setCancelDeleteModal(null)}
                 onConfirm={handleCancelDeleteConfirm}
                 submitting={cancelling}
