@@ -23,10 +23,10 @@ export const MODULE_REGISTRY = [
     { code: 'tds', label: 'TDS', group: 'finance', menuIds: ['tds'], permissionModules: ['tds'] },
     { code: 'tcs', label: 'TCS', group: 'finance', menuIds: ['tcs'], permissionModules: ['tds'] },
     { code: 'reports', label: 'Reports / MIS', group: 'core', menuIds: ['reports', 'mis', 'mis-reports'], permissionModules: ['reports', 'mis', 'accounts_reports'] },
-    { code: 'fixed_assets', label: 'Fixed Assets', group: 'finance', menuIds: ['fixed-assets-parent'], permissionModules: ['accounts'] },
+    { code: 'fixed_assets', label: 'Fixed Assets', group: 'finance', menuIds: ['fixed-assets-parent', 'fixed-assets-list', 'asset-categories', 'asset-locations', 'depreciation', 'depreciation-schedule'], permissionModules: ['accounts'] },
     { code: 'china_sourcing', label: 'China Sourcing / WeChat', group: 'core', menuIds: ['china-supplier', 'cs-dashboard', 'cs-products', 'cs-contacts', 'cs-groups', 'cs-prices', 'cs-samples', 'cs-reports'], permissionModules: ['wechat'] },
     { code: 'hr', label: 'HR / Payroll', group: 'core', menuIds: ['hr'], permissionModules: ['hr'] },
-    { code: 'rd', label: 'R&D / PRD', group: 'electronics', menuIds: ['rd', 'prd', 'rd-samples'], permissionModules: ['prd', 'rd_samples'] },
+    { code: 'rd', label: 'R&D / PRD', group: 'electronics', menuIds: ['rd', 'prd', 'prd-dashboard', 'prd-projects', 'prd-parameters', 'rd-samples', 'rd-projects-samples', 'rd-sample-list', 'rd-comparison'], permissionModules: ['prd', 'rd_samples'] },
     { code: 'payroll', label: 'Payroll', group: 'finance', menuIds: ['payroll'], permissionModules: ['hr'] },
     { code: 'admin', label: 'Admin / Settings', group: 'admin', menuIds: ['admin', 'super-admin', 'feature-configuration', 'company-module-allocation'], permissionModules: ['admin'] },
     { code: 'bom', label: 'BOM', group: 'electronics', menuIds: ['bom-master'], permissionModules: ['inventory', 'production'] },
@@ -106,7 +106,7 @@ const ROUTE_PREFIX_TO_MODULE = [
     ['/admin/home', 'admin'],
     ['/data-extractor', 'data_extractor'],
     ['/china-supplier', 'china_sourcing'], ['/wechat', 'china_sourcing'],
-    ['/complaints', 'service'], ['/prd-', 'rd'], ['/rd-samples', 'rd'],
+    ['/complaints', 'service'], ['/prd-', 'rd'], ['/prd', 'rd'], ['/rd-samples', 'rd'],
     ['/fixed-assets', 'fixed_assets'], ['/depreciation', 'fixed_assets'],
 ];
 
