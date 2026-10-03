@@ -385,6 +385,31 @@ export const createWorkOrder = asyncHandler(async (req, res) => {
     res.status(201).json(new ApiResponse(201, wo, 'Work Order created successfully'));
 });
 
+// List/card/kanban/picker fields only. Detail keeps the full document.
+const WORK_ORDER_LIST_SELECT = [
+    '_id',
+    'woNumber',
+    'status',
+    'priority',
+    'targetQty',
+    'finishedProductName',
+    'finishedProductId',
+    'plannedEnd',
+    'woKind',
+    'bomSectionName',
+    'supervisor',
+    'stages.status',
+    'materialStatus.shortQty',
+    'materialStatus.isMandatory',
+    'materialStatus.bomIsMandatory',
+    'textile.designNo',
+    'textile.requiredFabricMeter',
+    'textile.processRoute',
+    'textile.assignedVendorWorker',
+    'wip.isOnHold',
+    'wip.holdReason',
+].join(' ');
+
 // ────────────────────────────────────────────────────────────────────────────
 // GET /work-orders  – List Work Orders
 // ────────────────────────────────────────────────────────────────────────────
@@ -414,12 +439,12 @@ export const getWorkOrders = asyncHandler(async (req, res) => {
     const skip = (Number(page) - 1) * Number(limit);
     const total = await WorkOrder.countDocuments(query);
     const wos = await WorkOrder.find(query)
+        .select(WORK_ORDER_LIST_SELECT)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(Number(limit))
         .populate('finishedProductId', 'itemName itemCode')
-        .populate('createdBy', 'name')
-        .populate('parentWorkOrderId', 'woNumber');
+        .lean();
 
     let sectionCountByParent = {};
     if (kind !== 'section' && !parentWorkOrderId && wos.length) {
@@ -431,11 +456,10 @@ export const getWorkOrders = asyncHandler(async (req, res) => {
         sectionCountByParent = Object.fromEntries(counts.map((c) => [String(c._id), c.count]));
     }
 
-    const workOrders = wos.map((w) => {
-        const json = w.toObject();
-        json.sectionWoCount = sectionCountByParent[String(w._id)] || 0;
-        return json;
-    });
+    const workOrders = wos.map((w) => ({
+        ...w,
+        sectionWoCount: sectionCountByParent[String(w._id)] || 0,
+    }));
 
     res.json(new ApiResponse(200, {
         workOrders,
